@@ -123,7 +123,12 @@ if [ -x "$(command -v apt-get)" ]; then
         sudo dpkg --add-architecture i386
         i386="libc6:i386"
     fi
-    sudo apt-get -q update && sudo apt-get install -y axel imagemagick xxd python3 python3-venv python3-pip bc rsync curl zip unzip wget ffmpeg lvm2 libfuse2 dosfstools e2fsprogs libc-bin exfatprogs exfat-fuse util-linux fdisk parted bchunk build-essential libicu-dev pkg-config ffmpegthumbnailer binfmt-support unrar-free dmsetup $i386 2>&1 | tee -a "${LOG_FILE}"
+    # python3-dev carries Python.h, which PyICU needs when pip has to build it
+    # rather than fetch a wheel. A distribution whose Python is newer than the
+    # newest PyICU wheel builds from source and stops at "Python.h: No such
+    # file or directory" without it. The Fedora list below has always had its
+    # equivalent, python3-devel.
+    sudo apt-get -q update && sudo apt-get install -y axel imagemagick xxd python3 python3-venv python3-pip python3-dev bc rsync curl zip unzip wget ffmpeg lvm2 libfuse2 dosfstools e2fsprogs libc-bin exfatprogs exfat-fuse util-linux fdisk parted bchunk build-essential libicu-dev pkg-config ffmpegthumbnailer binfmt-support unrar-free dmsetup $i386 2>&1 | tee -a "${LOG_FILE}"
 # Or if user is on Fedora-based system, do this instead
 elif [ -x "$(command -v dnf)" ]; then
     if [[ "$arch" = "x86_64" ]]; then
