@@ -517,3 +517,4 @@ POL_SELECT_CONSOLE=De qual região é o console PS2 que usará esta unidade, US 
 POL_SKIP_NOROOM=Espaço livre insuficiente, ignorando:
 POL_SKIPPED_NOROOM=Não instalado por falta de espaço:
 POL_SKIPPED_RETRY=Libere espaço na área de partições do PS2 e execute esta opção novamente para adicioná-los.
+POL_ERROR_SUDO=Esta etapa precisa de permissões de administrador e a senha não foi aceita.

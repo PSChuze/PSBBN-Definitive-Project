@@ -517,3 +517,4 @@ POL_SELECT_CONSOLE=Aus welcher Region stammt die PS2-Konsole für dieses Laufwer
 POL_SKIP_NOROOM=Nicht genug freier Speicher, wird übersprungen:
 POL_SKIPPED_NOROOM=Wegen Platzmangels nicht installiert:
 POL_SKIPPED_RETRY=Schaffen Sie Platz im PS2-Partitionsbereich und führen Sie diese Option erneut aus.
+POL_ERROR_SUDO=Dieser Schritt benötigt Administratorrechte und das Passwort wurde nicht akzeptiert.

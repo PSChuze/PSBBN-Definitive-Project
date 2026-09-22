@@ -214,7 +214,14 @@ write_report() {
     } > "${REPORT_FILE}" 2>&1
     printf '\n%s %s\n' "${UI_TEXT[POL_REPORT_WRITTEN]}" "${REPORT_FILE}"
 }
-trap write_report EXIT
+on_exit() {
+    write_report
+    # The keep-alive outlives the script otherwise, holding a sudo timestamp
+    # warm for a run that has finished.
+    [[ -n "${SUDO_KEEPALIVE}" ]] && kill "${SUDO_KEEPALIVE}" 2>/dev/null
+    return 0
+}
+trap on_exit EXIT
 
 activate_python() {
     [ -n "$IN_NIX_SHELL" ] && return
@@ -280,6 +287,23 @@ activate_python
     echo "[X] Error: could not install pycryptodome into the venv." >> "${LOG_FILE}"
     error_msg "${UI_TEXT[ERROR_ACTIVATE_PYTHON]}"
 }
+# Every step that touches the drive runs under sudo, and those calls send
+# stderr to the log so their output does not litter the screen. sudo writes its
+# password prompt to stderr too, so a timestamp that expires part way through a
+# run takes the prompt into the log with it, and the installer looks like it
+# has hung on a blank line. Staging a title takes long enough for that to
+# happen on its own.
+#
+# Ask once here, where sudo's own prompt is visible, and keep the timestamp
+# from expiring for as long as the run lasts.
+sudo -v || error_msg "${UI_TEXT[POL_ERROR_SUDO]}"
+( while true; do
+      sleep 50
+      kill -0 "$$" 2>/dev/null || exit
+      sudo -n true 2>/dev/null || exit
+  done ) &
+SUDO_KEEPALIVE=$!
+
 find_device
 check_os
 

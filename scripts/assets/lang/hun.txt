@@ -517,3 +517,4 @@ POL_SELECT_CONSOLE=Melyik régióból való a PS2 konzol, amelyben a meghajtót 
 POL_SKIP_NOROOM=Nincs elég szabad hely, kihagyva:
 POL_SKIPPED_NOROOM=Helyhiány miatt nem lett telepítve:
 POL_SKIPPED_RETRY=Szabadíts fel helyet a PS2 partíciós területen, majd futtasd újra ezt a lehetőséget.
+POL_ERROR_SUDO=Ehhez a lépéshez rendszergazdai jog kell, és a jelszót nem fogadta el a rendszer.
