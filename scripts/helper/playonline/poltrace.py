@@ -247,6 +247,31 @@ def report(drive, partition, path=PATH):
     return ["trace sector: LBA %d" % lba] + decode(blk)
 
 
+def has(drive, partition, path=PATH):
+    """True when the partition already carries the trace file."""
+    blk, _lba, _why = read(drive, partition, path)
+    return blk is not None and is_trace(blk)
+
+
+def add_commands(device, partition, staged):
+    """pfsshell commands that put the staged blank file at the partition root.
+
+    A Viewer installed before the trace existed has no `/trace.bin`, and the
+    route that updates an existing Viewer only rewrites the loader in place,
+    so it never gains one. This is the same `put` resync uses to add a file to
+    a partition that is already there.
+    """
+    from . import pfsput
+    if os.path.basename(staged) != PATH.lstrip("/"):
+        raise ValueError("the staged file must be named %s" % PATH.lstrip("/"))
+    return ["device %s" % pfsput.quote(device),
+            "mount %s" % pfsput.quote(partition),
+            "lcd %s" % pfsput.quote(pfsput.host_path(os.path.dirname(staged))),
+            "put %s" % pfsput.quote(os.path.basename(staged)),
+            "umount",
+            "exit"]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("drive")
@@ -255,6 +280,15 @@ def main():
     ap.add_argument("--blank", metavar="OUT",
                     help="write the blank record to a file instead of "
                          "reading a drive, for staging into a partition")
+    ap.add_argument("--has", action="store_true",
+                    help="exit 0 when the partition has the trace file, 1 when "
+                         "it does not, 2 when the partition cannot be read")
+    ap.add_argument("--add-commands", metavar="OUT",
+                    help="stage a blank record at --stage and write the "
+                         "pfsshell commands that add it to the partition")
+    ap.add_argument("--stage", metavar="FILE",
+                    help="where --add-commands puts the blank record; must be "
+                         "named trace.bin")
     args = ap.parse_args()
 
     if args.blank:
@@ -262,6 +296,31 @@ def main():
             f.write(blank())
         print("wrote %d B to %s" % (SIZE, args.blank))
         return 0
+
+    if args.add_commands:
+        if not args.stage:
+            ap.error("--add-commands needs --stage")
+        with open(args.stage, "wb") as f:
+            f.write(blank())
+        cmds = add_commands(args.drive, args.partition, args.stage)
+        with open(args.add_commands, "w") as f:
+            f.write("\n".join(cmds) + "\n")
+        print("staged %s and wrote %d pfsshell command(s) to %s"
+              % (args.stage, len(cmds), args.add_commands))
+        return 0
+
+    if args.has:
+        try:
+            blk, _lba, why = read(args.drive, args.partition, args.path)
+        except (IOError, OSError, ValueError) as e:
+            print("cannot read: %s" % e)
+            return 2
+        if blk is None:
+            print(why)
+            return 1 if "has no" in why else 2
+        print("%s%s present" % (args.partition, args.path) if is_trace(blk)
+              else "%s%s present but not a trace record" % (args.partition, args.path))
+        return 0 if is_trace(blk) else 1
 
     for line in report(args.drive, args.partition, args.path):
         print(line)

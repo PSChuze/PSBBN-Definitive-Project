@@ -629,6 +629,30 @@ for k in "${ORDER[@]}"; do
                 # is "none" or when both files already name the host.
                 polsudo patchhost --drive "$DEVICE" --title "$k" --write \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                # A Viewer installed before the boot trace existed has no
+                # /trace.bin, and the loader update above rewrites one file in
+                # place and never adds any, so without this every drive already
+                # in a tester's hands would stay without a trace. Add it with
+                # the same pfsshell put resync uses. Checked again afterwards,
+                # because pfsshell reports nothing useful when a put fails.
+                if ! polsudo poltrace "$DEVICE" --partition "$part" --has \
+                        >> "${LOG_FILE}" 2>&1; then
+                    tadd="${WORK_DIR}/trace-add"
+                    rm -rf "$tadd" && mkdir -p "$tadd"
+                    if polmod poltrace "$DEVICE" --partition "$part" \
+                            --add-commands "$tadd/cmds.txt" --stage "$tadd/trace.bin" \
+                            >> "${LOG_FILE}" 2>&1; then
+                        sudo "${PFS_SHELL}" < "$tadd/cmds.txt" >> "${LOG_FILE}" 2>&1
+                    fi
+                    if polsudo poltrace "$DEVICE" --partition "$part" --has \
+                            >> "${LOG_FILE}" 2>&1; then
+                        echo "  added /trace.bin to $part" | tee -a "${LOG_FILE}"
+                    else
+                        echo "[!] could not add /trace.bin to $part; the boot trace will be absent." \
+                            >> "${LOG_FILE}"
+                    fi
+                    rm -rf "$tadd"
+                fi
             else
                 echo "${route_out}" >> "${LOG_FILE}"
             fi
