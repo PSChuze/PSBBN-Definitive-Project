@@ -309,8 +309,21 @@ def choose_size(tree_bytes, free_mibs=(), prefer=None):
     if not free_mibs:
         return need, "smallest that fits the tree"
     if not usable:
-        return None, ("no free entry holds %d MiB; the largest is %d"
-                      % (need, max(free_mibs) if free_mibs else 0))
+        # `need` doubles the tree for headroom, and the doubling is what puts
+        # FFXI's 3.7 GiB of files in an 8 GiB partition. When no entry is that
+        # large the tree itself may still fit a smaller one, and a title
+        # installed with little room to grow beats a title not installed. Take
+        # the largest that fits below `need`, and say the headroom is gone.
+        tight = fit_size(tree_bytes, headroom=1.0)
+        roomy = sorted((m for m in free_mibs if m >= tight), reverse=True)
+        if not roomy:
+            return None, ("no free entry holds %d MiB; the largest is %d"
+                          % (tight, max(free_mibs) if free_mibs else 0))
+        size = tight
+        while size * 2 <= roomy[0] and size * 2 < need:
+            size *= 2
+        return size, ("no free entry holds %d MiB, so this is the tree with "
+                      "little room to grow" % need)
     # Square Enix's size fits no free entry, so take the largest power of two
     # that does, no smaller than the tree needs and no larger than their
     # size. On a PSBBN drive the rest of the space is for the user's games.
