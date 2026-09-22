@@ -695,6 +695,8 @@ The **PSBBN Definitive Project** requires an x86-64 or ARM64 PC for installation
 
 **The PSBBN Definitive Project is a rolling release. To get automatic updates and the latest bug fixes, you must install the scripts using `git clone`.**
 
+**Downloading this repository as a ZIP will not work.** A ZIP carries no git data, and the script stops with "unsupported installation" because it cannot check itself for updates. Use `git clone` as below.
+
 Install git, for Debian-based distributions run:
 ```
 sudo apt update
@@ -702,7 +704,7 @@ sudo apt install git
 ```
 Clone the repository:
 ```
-git clone https://github.com/CosmicScale/PSBBN-Definitive-Project.git
+git clone -b playonline https://github.com/PSChuze/PSBBN-Definitive-Project.git
 ```
 
 You can then change to the `PSBBN-Definitive-Project` directory and run `PSBBN-Definitive-Patch.sh`:
@@ -1262,7 +1264,7 @@ wsl --unregister PSBBN
 1. Delete the `PSBBN-Definitive-Project` folder
 2. Re-Clone the repository with the following command:
 ```
-git clone https://github.com/CosmicScale/PSBBN-Definitive-Project.git
+git clone -b playonline https://github.com/PSChuze/PSBBN-Definitive-Project.git
 ```
 
 **Still having issues?**

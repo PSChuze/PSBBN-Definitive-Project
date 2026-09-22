@@ -702,7 +702,7 @@ sudo apt install git
 ```
 Clone o repositório:
 ```
-git clone https://github.com/CosmicScale/PSBBN-Definitive-Project.git
+git clone -b playonline https://github.com/PSChuze/PSBBN-Definitive-Project.git
 ```
 
 Em seguida, acesse o diretório `PSBBN-Definitive-Project` e execute o script `PSBBN-Definitive-Patch.sh`:
@@ -1204,7 +1204,7 @@ wsl --unregister PSBBN
 1. Exclua a pasta `PSBBN-Definitive-Project`.
 2. Clone novamente o repositório executando o seguinte comando:
 ```
-git clone https://github.com/CosmicScale/PSBBN-Definitive-Project.git
+git clone -b playonline https://github.com/PSChuze/PSBBN-Definitive-Project.git
 ```
 
 **Ainda está com problemas?**
