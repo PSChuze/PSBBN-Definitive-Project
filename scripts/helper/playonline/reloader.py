@@ -38,12 +38,33 @@ import hashlib
 import os
 import sys
 
+from . import pfsput
 from .lib import polfill, polnetdump, polpfspatch, polpfsread
 
 PATH = "/dnasload.elf"
 
 
-def refresh(drive, partition, loader_path, write=False):
+def replace_commands(device, partition, loader_path):
+    """pfsshell commands that remove the loader and put the new one.
+
+    Writing in place cannot change a file's size. A Viewer installed in disc
+    form carries Square Enix's own `dnasload.elf`, a fraction of the size of
+    this package's loader, so there is nothing long enough to write over. rm
+    and put reallocate, which is how resync replaces a file whose size
+    changed, and it leaves the rest of the partition alone.
+    """
+    return ["device %s" % pfsput.quote(device),
+            "mount %s" % pfsput.quote(partition),
+            "cd /",
+            "lcd %s" % pfsput.quote(pfsput.host_path(
+                os.path.dirname(loader_path))),
+            "rm %s" % pfsput.quote(PATH.lstrip("/")),
+            "put %s" % pfsput.quote(os.path.basename(loader_path)),
+            "umount",
+            "exit"]
+
+
+def refresh(drive, partition, loader_path, write=False, commands_out=None):
     """(changed, text). Raises SystemExit with a reason when it cannot."""
     with open(loader_path, "rb") as f:
         data = f.read()
@@ -68,10 +89,15 @@ def refresh(drive, partition, loader_path, write=False):
         # has; the size in the inode is updated with it.
         room = sum(cnt for _n, cnt in ino["runs"]) * part.zone_size
         if len(data) > room:
-            raise SystemExit(
-                "%s%s has %d B allocated and the new loader is %d B; it does "
-                "not fit in place. Reinstall the Viewer partition."
-                % (partition, PATH, room, len(data)))
+            why = ("%s%s has %d B allocated and the new loader is %d B, so it "
+                   "cannot be written over"
+                   % (partition, PATH, room, len(data)))
+            if commands_out is None:
+                raise SystemExit(why + ". Reinstall the Viewer partition.")
+            with open(commands_out, "w") as cf:
+                cf.write("\n".join(
+                    replace_commands(drive, partition, loader_path)) + "\n")
+            return True, why + "; replacing it through pfsshell instead"
         text = "%s%s: sha256 %s -> %s" % (
             partition, PATH, hashlib.sha256(before).hexdigest()[:16],
             hashlib.sha256(data).hexdigest()[:16])
@@ -95,8 +121,13 @@ def main():
     ap.add_argument("--loader", required=True,
                     help="the filled dnasload.elf from `route prepare`")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--commands", metavar="OUT",
+                    help="when the new loader cannot be written over the old "
+                         "one, write the pfsshell commands that replace it "
+                         "here instead of refusing")
     args = ap.parse_args()
-    _changed, text = refresh(args.drive, args.partition, args.loader, args.write)
+    _changed, text = refresh(args.drive, args.partition, args.loader,
+                             args.write, args.commands)
     print(text)
     return 0
 

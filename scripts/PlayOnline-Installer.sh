@@ -645,9 +645,26 @@ for k in "${ORDER[@]}"; do
                 echo "${route_out}" >> "${LOG_FILE}"
                 ROUTE_MODE="$(awk '/^mode:/ {print $2; exit}' <<< "${route_out}")"
                 echo "  ${UI_TEXT[POL_ROUTE_MODE_SET]} ${ROUTE_MODE}"
+                lcmds="${WORK_DIR}/loader-replace.txt"
+                rm -f "$lcmds"
                 polsudo reloader "$DEVICE" --partition "$part" \
                     --loader "${WORK_DIR}/$k/POL/install/PS2/dnasload.elf" --write \
+                    --commands "$lcmds" \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                # A Viewer installed in disc form carries Square Enix's own
+                # dnasload.elf, a fraction of the size of this loader, so there
+                # is nothing long enough to write over. reloader leaves the
+                # commands that replace it through pfsshell instead. Run them,
+                # then read the loader back, because a Viewer left with Square
+                # Enix's own cannot start and the run would otherwise report
+                # itself keyed.
+                if [[ -s "$lcmds" ]]; then
+                    sudo "${PFS_SHELL}" < "$lcmds" >> "${LOG_FILE}" 2>&1
+                    polsudo reloader "$DEVICE" --partition "$part" \
+                        --loader "${WORK_DIR}/$k/POL/install/PS2/dnasload.elf" \
+                        2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                    rm -f "$lcmds"
+                fi
                 # The installed Viewer's patch host, in place (see patchhost.py).
                 # It reads POL_PATCH_HOST itself, and changes nothing when that
                 # is "none" or when both files already name the host.
