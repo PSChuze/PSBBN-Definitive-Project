@@ -536,6 +536,23 @@ function main {
     Write-Host "------- Linux magic starts ---------"
 
     wsl --install --distribution Debian --version 2 --name $wslLabel
+
+    # wsl --install prints its own failure and returns anyway, so without this
+    # the script carries on and every later `wsl -d` fails with
+    # WSL_E_DISTRO_NOT_FOUND. Those errors then surface further down as though
+    # the toolkit were at fault, when the download simply did not finish.
+    if (-Not (wsl --list | Select-String -SimpleMatch -Quiet $wslLabel)) {
+      Write-Host "
+    The '$wslLabel' WSL distribution was not installed.
+
+    The download above did not finish. A reset connection, a VPN, or a
+    firewall blocking Microsoft's distribution server are the usual causes.
+
+    Check the connection and run this script again, or install it by hand:
+      wsl --install --distribution Debian --version 2 --name $wslLabel
+    " -ForegroundColor Red
+      Exit
+    }
   } else {
     Write-Host "The WSL distro is already present, skipping.`t" -NoNewline
     printOK
@@ -591,6 +608,18 @@ function main {
   $repoBranch = (wsl -d $wslLabel --cd "~/PSBBN-Definitive-Project" -- git rev-parse --abbrev-ref HEAD) -join ""
   $repoHead   = (wsl -d $wslLabel --cd "~/PSBBN-Definitive-Project" -- git rev-parse HEAD) -join ""
   $repoWant   = (wsl -d $wslLabel --cd "~/PSBBN-Definitive-Project" -- git rev-parse origin/$gitBranch) -join ""
+  # When the distribution is missing, every command above failed and its error
+  # text lands in these variables. Say that rather than reporting it as a
+  # checkout on the wrong commit and advising a delete inside a distribution
+  # that is not there.
+  if ($repoBranch -match 'no distribution|WSL_E_DISTRO_NOT_FOUND') {
+    Write-Host "
+    The '$wslLabel' WSL distribution is not available, so nothing could be
+    checked out. Install it and run this script again:
+      wsl --install --distribution Debian --version 2 --name $wslLabel
+    " -ForegroundColor Red
+    Exit
+  }
   if ($repoBranch.Trim() -ne $gitBranch -or $repoHead.Trim() -eq "" -or $repoHead.Trim() -ne $repoWant.Trim()) {
     Write-Host "
     Could not put ~/PSBBN-Definitive-Project on the latest '$gitBranch'.
