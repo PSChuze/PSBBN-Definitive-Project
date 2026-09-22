@@ -1031,7 +1031,9 @@ As a safeguard, the installer sets the Viewer's update server to `play.openlobby
 In the Viewer's network settings, create a connection as you would for any PS2 online game. How accounts are created depends on the server you use.
 
 ### PlayOnline Status
-The installer has been tested on a real console with a third-party SSD, using the US Viewer from *Vana'diel Collection 2008*. The Viewer starts from the [Game Collection](#game-collection) and from [HOSDMenu](#hosdmenu), updates and logs in, and every title installs. The Japanese Viewer has been tested under the PCSX2 emulator only.
+The installer has been tested on a Japanese console with a third-party SSD, using the US Viewer from *Vana'diel Collection 2008*. The Viewer starts from the [Game Collection](#game-collection) and from [HOSDMenu](#hosdmenu), updates and logs in, and every title installs. The Japanese Viewer has been tested under the PCSX2 emulator only.
+
+The Viewer starts through a loader, which is a signed KELF, and a console opens one only for its own MagicGate region. There is therefore a separate signed loader per console region, and the installer asks which console the drive is going into. This is a different question from which Viewer the drive gets: a Japanese console runs the US Viewer perfectly well, and needs the Japanese loader to do it. The Viewer has been confirmed to start on both a Japanese and a US console. No European PlayOnline disc was ever released, so there is no loader for a PAL console and those are not supported.
 
 Whether a game can be played online, and how far, depends on the server you connect to and not on the installer. Check your server's own documentation for the state of each game.
 
