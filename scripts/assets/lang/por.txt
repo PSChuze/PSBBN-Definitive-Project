@@ -518,3 +518,5 @@ POL_SKIP_NOROOM=Espaço livre insuficiente, ignorando:
 POL_SKIPPED_NOROOM=Não instalado por falta de espaço:
 POL_SKIPPED_RETRY=Libere espaço na área de partições do PS2 e execute esta opção novamente para adicioná-los.
 POL_ERROR_SUDO=Esta etapa precisa de permissões de administrador e a senha não foi aceita.
+PARTITION_DRIVE_POL_1=Vai instalar o PlayOnline? Os títulos vão para este espaço reservado: responda sim e reserve bastante.
+PARTITION_DRIVE_POL_2=Cerca de 20 GB cobrem todos os títulos (só o FFXI precisa de 8 GB). O espaço sai da partição de jogos.

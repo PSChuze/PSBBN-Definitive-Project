@@ -518,3 +518,5 @@ POL_SKIP_NOROOM=Nincs elég szabad hely, kihagyva:
 POL_SKIPPED_NOROOM=Helyhiány miatt nem lett telepítve:
 POL_SKIPPED_RETRY=Szabadíts fel helyet a PS2 partíciós területen, majd futtasd újra ezt a lehetőséget.
 POL_ERROR_SUDO=Ehhez a lépéshez rendszergazdai jog kell, és a jelszót nem fogadta el a rendszer.
+PARTITION_DRIVE_POL_1=PlayOnline-t telepítesz? A címek ebbe a fenntartott helybe kerülnek: válaszolj igennel, és foglalj bőven.
+PARTITION_DRIVE_POL_2=Kb. 20 GB elég minden címhez (csak az FFXI 8 GB). A hely a játékpartícióból vonódik le.

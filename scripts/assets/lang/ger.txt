@@ -518,3 +518,5 @@ POL_SKIP_NOROOM=Nicht genug freier Speicher, wird übersprungen:
 POL_SKIPPED_NOROOM=Wegen Platzmangels nicht installiert:
 POL_SKIPPED_RETRY=Schaffen Sie Platz im PS2-Partitionsbereich und führen Sie diese Option erneut aus.
 POL_ERROR_SUDO=Dieser Schritt benötigt Administratorrechte und das Passwort wurde nicht akzeptiert.
+PARTITION_DRIVE_POL_1=PlayOnline installieren? Die Titel kommen in diesen reservierten Bereich: mit Ja antworten, großzügig reservieren.
+PARTITION_DRIVE_POL_2=Etwa 20 GB reichen für alle Titel (FFXI allein braucht 8 GB). Der Platz geht von der Spielepartition ab.

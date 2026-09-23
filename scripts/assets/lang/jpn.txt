@@ -518,3 +518,5 @@ POL_SKIP_NOROOM=空き容量が足りないため、スキップします:
 POL_SKIPPED_NOROOM=容量不足のため未インストール:
 POL_SKIPPED_RETRY=PS2パーティション領域に空きを作り、この項目をもう一度実行してください。
 POL_ERROR_SUDO=この手順には管理者権限が必要ですが、パスワードが受け付けられませんでした。
+PARTITION_DRIVE_POL_1=PlayOnlineを入れる場合、タイトルはこの予約領域にインストールされます。「y」を選び、十分に確保してください。
+PARTITION_DRIVE_POL_2=全タイトルで約20GB(FFXIだけで8GB)必要です。この容量はゲーム用パーティションから差し引かれます。

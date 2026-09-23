@@ -599,6 +599,11 @@ while true; do
     echo "${UI_TEXT[PARTITION_DRIVE_2]} $free_space GB"
     echo
     echo "${UI_TEXT[PARTITION_DRIVE_9]}"
+    # PlayOnline's titles are installed into this reserved space, and people who
+    # plan to add them later answer no here without knowing that. The space
+    # cannot be added afterwards without starting again.
+    echo "${UI_TEXT[PARTITION_DRIVE_POL_1]}"
+    echo "${UI_TEXT[PARTITION_DRIVE_POL_2]}"
     echo
     read -rp "${UI_TEXT[PARTITION_DRIVE_11]} (y/n): " answer
 
