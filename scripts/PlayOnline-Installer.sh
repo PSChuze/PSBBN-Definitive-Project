@@ -239,6 +239,21 @@ activate_python() {
 # a lost HDD ID file must come back with the same value on a later run.
 find_device() {
     local line
+    # A standalone install names the drive (see PlayOnline-Standalone.sh). A
+    # drive formatted by HDD-OSD or the HDD Utility Disc has no OPL partition
+    # to be found by, and no partition UUID to seed the HDD ID from, so the
+    # drive's own serial seeds it instead: it comes back the same on a later
+    # run, which is what lets a lost HDD ID file be made again.
+    if [[ -n "${POL_DRIVE}" ]]; then
+        DEVICE="${POL_DRIVE}"
+        if [[ ! -b "${DEVICE}" && ! -f "${DEVICE}" ]]; then
+            echo "[X] Error: ${DEVICE} is not a drive." >> "${LOG_FILE}"
+            error_msg "${UI_TEXT[POL_SA_NO_DRIVE]}"
+        fi
+        DRIVE_UUID=$(lsblk -dno SERIAL "${DEVICE}" 2>/dev/null | tr -d ' \r\n')
+        echo "Device: $DEVICE (named; serial ${DRIVE_UUID:-none})" >> "${LOG_FILE}"
+        return
+    fi
     line=$(sudo blkid -t TYPE=exfat 2>/dev/null | grep OPL)
     DEVICE=$(awk -F: '{print $1}' <<< "$line" | sed 's/[0-9]*$//')
     if [[ -z "$DEVICE" ]]; then
@@ -259,7 +274,10 @@ check_os() {
     }
     for part in __system __sysconf __common; do
         if ! grep -q -- "$part" <<< "$toc"; then
-            echo "[X] Error: $part missing; not a PSBBN/HOSDMenu drive." >> "${LOG_FILE}"
+            echo "[X] Error: $part missing; not a PS2-formatted drive." >> "${LOG_FILE}"
+            # These three are Sony's, written when a drive is formatted for the
+            # PS2, so a stock HDD-OSD drive has them too. Only the advice differs.
+            [[ -n "${POL_DRIVE}" ]] && error_msg "${UI_TEXT[POL_ERROR_NOT_PS2HDD]}"
             error_msg "${UI_TEXT[POL_ERROR_NOT_PSBBN]}"
         fi
     done

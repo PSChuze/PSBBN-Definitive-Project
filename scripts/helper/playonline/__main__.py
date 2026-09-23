@@ -195,6 +195,11 @@ def _tail_room(drive):
         with open(drive, "rb") as f:
             f.seek(0, os.SEEK_END)
             end = f.tell() // 512
+        # Without an MBR nothing on the disk marks where the PS2 stops. A drive
+        # formatted for HDD-OSD is read by Sony's own ATA driver, which
+        # addresses 28 bits, 128 GiB. A partition past that could be created
+        # from the PC and never launched from the browser.
+        end = min(end, 1 << 28)
     best = 0
     size = titles.GRANULE_MIB
     while size <= titles.MAX_MIB:

@@ -46,6 +46,7 @@ ADDED = [
     "scripts/helper/playonline",
     "scripts/assets/playonline",
     "scripts/PlayOnline-Installer.sh",
+    "PlayOnline-Standalone.sh",
 ]
 
 # The signed loader, built from loader-src. It is checked instead of being

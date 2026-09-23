@@ -1016,6 +1016,23 @@ When more than one disc supplies the same title, the newest build is used. *Vana
 
 Nothing already on the drive is modified. A title that is already installed is skipped, so your saves and any updates are kept. If you run the option again you will be offered the chance to refresh installed titles from your discs.
 
+### Installing PlayOnline without PSBBN (experimental)
+PlayOnline can also go on a drive with neither PSBBN nor HOSDMenu on it: one formatted for the PS2 by HDD-OSD or the HDD Utility Disc, where the titles are started from Sony's own browser. This uses the same installer, and needs only Python and one package in place of the toolkit's full setup.
+
+```
+git clone -b playonline https://github.com/PSChuze/PSBBN-Definitive-Project.git
+cd PSBBN-Definitive-Project
+mkdir -p games/POL
+./PlayOnline-Standalone.sh
+```
+
+Put your disc images in `games/POL` before running it. It lists the drives that are formatted for the PS2 and asks which to use; `./PlayOnline-Standalone.sh /dev/sdX` names one directly. On Windows, attach the drive to WSL first from an Administrator PowerShell with `Set-Disk <number> -IsOffline $true` and `wsl --mount "\\.\PHYSICALDRIVE<number>" --bare`, then run the commands above inside WSL.
+
+- The drive needs Sony's `__system`, `__sysconf` and `__common` partitions, which HDD-OSD and the HDD Utility Disc create
+- Sony's own HDD driver reaches the first 128 GB of a drive, so on a larger drive the titles are placed within that
+- The drive has no OPL partition to identify it by, so `playonline.hddid` is made from the drive's serial number instead. Keep the file all the same
+- This has not yet been tested on a stock HDD-OSD drive
+
 **Notes:**
 - When the US Viewer is chosen, the Japan-only titles are given English names: *JongHoLow* (雀鳳楼), *FRONT MISSION ONLINE* and *Dirge of Cerberus -FFVII-*
 - A file named `playonline.hddid` is created in `games/POL`. **Keep this file.** It holds the drive identity that the PlayOnline install on this drive depends on
