@@ -264,11 +264,19 @@ def _header_sig(ks, header):
     return cbc_encrypt(s, ks["MG_SIG_MASTER_KEY"], 1, NULL_IV)
 
 
-def build_kelf(content, template, ks):
-    """Sign+encrypt `content` as a KELF, borrowing `template`'s header fields."""
+def build_kelf(content, template, ks, zones=None):
+    """Sign+encrypt `content` as a KELF, borrowing `template`'s header fields.
+
+    `zones` replaces the template's MGZones. A console opens a KELF only when
+    its own region's bit is set there, and the whole header is signed here,
+    so the mask is ours to choose: OSDMenu's OSDMBR.XLF sets all eight bits
+    (0xFF) and boots on consoles of every region.
+    """
     if len(content) <= 0x20:
         raise SystemExit("content must be larger than 32 bytes")
     hdr = bytearray(template[:32])
+    if zones is not None:
+        struct.pack_into("<I", hdr, 28, zones)
     _cs, _hs, _st, _at, flags, _bc, _mz = struct.unpack_from("<IHBBHHI", hdr, 16)
     keycount = flags >> 4 & 3
     if keycount not in (1, 2, 3):
@@ -332,6 +340,9 @@ def main():
                     help="sign this file as a new KELF, using the positional "
                          "KELF only as a header template (real hardware runs "
                          "the result); write it with -o")
+    ap.add_argument("--zones", metavar="MASK", type=lambda s: int(s, 0),
+                    help="with --encrypt, the MagicGate region mask to sign in "
+                         "place of the template's, e.g. 0xFF for every region")
     args = ap.parse_args()
 
     ks = load_keys(args.keys)
@@ -341,7 +352,7 @@ def main():
         if not args.out:
             raise SystemExit("--encrypt needs -o OUT")
         content = open(args.encrypt, "rb").read()
-        out = build_kelf(content, blob, ks)
+        out = build_kelf(content, blob, ks, args.zones)
         open(args.out, "wb").write(out)
         print("signed %s (%d B content) -> %s (%d B), template %s"
               % (os.path.basename(args.encrypt), len(content),

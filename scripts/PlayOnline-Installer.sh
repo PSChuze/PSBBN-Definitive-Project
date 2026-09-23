@@ -477,13 +477,19 @@ ROUTE_READY=0
 ROUTE_MISSING=()
 HDDID_FILE="${POL_HDDID:-${DISC_DIR}/playonline.hddid}"
 DERIVE_ELF="${WORK_DIR}/derivation.elf"
-# The loader is a signed KELF, and a KELF carries the MagicGate zone of the
-# disc it was signed from: Square Enix's US dnasload.elf is AppType 0x0B in
-# zone 0x2, the Japanese one AppType 0x01 in zone 0x1. A console opens a KELF
-# only for its own zone, and it checks before any of this runs, so a loader
-# from the wrong zone drops straight back to the browser with nothing drawn.
-# polkelf cannot widen a zone, so there is one signed loader per console
-# region.
+# The loader is a signed KELF, and a KELF's header carries a MagicGate region
+# mask. A console opens a KELF only when its own region's bit is set there, and
+# it checks before any of this runs, so a loader without that bit drops
+# straight back to the browser with nothing drawn. Square Enix's US
+# dnasload.elf sets bit 1 (0x2) and the Japanese one bit 0 (0x1).
+#
+# The mask is part of a header this toolkit signs itself, so it can carry more
+# than one bit. OSDMenu's OSDMBR.XLF sets all eight (0xFF) with the same
+# AppType and Flags as the Japanese loader, and boots on consoles of every
+# region; polbbnexec-all.kelf is signed the same way. It is what a European
+# console gets, since no European PlayOnline disc exists to sign one from.
+# The US and Japanese consoles keep the loader each has been proven to start
+# with until the all-regions one has been seen to start on them too.
 #
 # This is the console's region, not the disc's. They are independent: a
 # Japanese console runs the US Viewer perfectly well, and it needs the
@@ -495,9 +501,11 @@ if [[ -z "${CONSOLE_REGION}" ]]; then
     read -r answer </dev/tty
     case "$answer" in
         [Jj]*) CONSOLE_REGION=jp ;;
+        [Ee]*) CONSOLE_REGION=all ;;
         *)     CONSOLE_REGION=us ;;
     esac
 fi
+[[ "${CONSOLE_REGION}" == "eu" ]] && CONSOLE_REGION=all
 LOADER_KELF="${POL_LOADER:-${SCRIPTS_DIR}/assets/playonline/polbbnexec-${CONSOLE_REGION}.kelf}"
 # The toolkit shipped a single loader before it shipped one per region, and
 # that file is the Japanese-zoned build. A US console has no fallback on
