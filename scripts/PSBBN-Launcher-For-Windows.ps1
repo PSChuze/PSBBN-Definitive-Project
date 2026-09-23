@@ -21,7 +21,7 @@ $wslLabel = "PSBBN"
 $oplVolumeName = "OPL"
 
 # a list of subfolders to be created in the main folder if missing
-$defaultFolders = @('DVD', 'CD', 'POPS', 'APPS', 'music', 'movie', 'photo')
+$defaultFolders = @('DVD', 'CD', 'POPS', 'APPS', 'music', 'movie', 'photo', 'POL')
 
 # the git repository and branch the toolkit is cloned from. The PlayOnline
 # build lives on a fork; upstream's main has no option 7.
@@ -92,6 +92,9 @@ $TEXT = @{
         prompt_11 = "Selected disk number:"
         prompt_12 = "The following path was used previously:"
         prompt_13 = "Do you want to continue using it?"
+        pol_sa_1 = "Installing PlayOnline on a drive without PSBBN, formatted for the PS2 by HDD-OSD or the HDD Utility Disc?"
+        pol_sa_2 = "Answer 'y' to install PlayOnline on its own, or 'n' to run the PSBBN Definitive Project as usual."
+        pol_sa_3 = "Install PlayOnline without PSBBN?"
         prompt_14 = "Next, you will be prompted to select or create a folder on your PC (for example, C:\PSBBN)."
         prompt_15 = "This folder is for all the games, music, videos, and image files you plan to install."
         prompt_16 = "The following path has been chosen:"
@@ -139,6 +142,9 @@ $TEXT = @{
         prompt_11 = "選択されたディスク番号:"
         prompt_12 = "以前使用されたパス:"
         prompt_13 = "引き続きこれを使用しますか？"
+        pol_sa_1 = "PSBBNを入れずに、HDD-OSDまたはHDDユーティリティディスクでフォーマットしたドライブにPlayOnlineを入れますか？"
+        pol_sa_2 = "PlayOnlineだけを入れる場合は「y」、通常どおりPSBBN Definitive Projectを使う場合は「n」を選んでください。"
+        pol_sa_3 = "PSBBNなしでPlayOnlineをインストールしますか？"
         prompt_14 = "次に、PC 上のフォルダーを選択または作成するよう求められます（例: C:\\PSBBN）。"
         prompt_15 = "このフォルダーには、インストール予定のゲーム、音楽、動画、イメージファイルを保存します。"
         prompt_16 = "次のパスが選択されました:"
@@ -186,6 +192,9 @@ $TEXT = @{
         prompt_11 = "Numéro de disque sélectionné :"
         prompt_12 = "Le chemin suivant a été utilisé précédemment :"
         prompt_13 = "Souhaitez-vous continuer à l'utiliser ?"
+        pol_sa_1 = "Installer PlayOnline sur un disque sans PSBBN, formaté pour la PS2 par HDD-OSD ou le HDD Utility Disc ?"
+        pol_sa_2 = "Répondez 'y' pour installer PlayOnline seul, ou 'n' pour lancer le PSBBN Definitive Project comme d'habitude."
+        pol_sa_3 = "Installer PlayOnline sans PSBBN ?"
         prompt_14 = "Ensuite, il vous sera demandé de sélectionner ou de créer un dossier sur votre PC (par exemple, C:\PSBBN)."
         prompt_15 = "Ce dossier est destiné à tous les jeux, musiques, vidéos et fichiers image que vous prévoyez d'installer."
         prompt_16 = "Le chemin suivant a été choisi :"
@@ -233,6 +242,9 @@ $TEXT = @{
         prompt_11 = "Ausgewählte Laufwerksnummer:"
         prompt_12 = "Der folgende Pfad wurde zuvor verwendet:"
         prompt_13 = "Möchten Sie ihn weiterhin verwenden?"
+        pol_sa_1 = "PlayOnline auf einem Laufwerk ohne PSBBN installieren, das mit HDD-OSD oder der HDD Utility Disc formatiert ist?"
+        pol_sa_2 = "Mit 'y' wird nur PlayOnline installiert, mit 'n' startet das PSBBN Definitive Project wie gewohnt."
+        pol_sa_3 = "PlayOnline ohne PSBBN installieren?"
         prompt_14 = "Als Nächstes wählen oder erstellen Sie einen Ordner auf Ihrem PC (z. B. C:\\PSBBN)."
         prompt_15 = "Dieser Ordner ist für alle Spiele, Musik-, Video- und Image-Dateien vorgesehen, die Sie installieren möchten."
         prompt_16 = "Der folgende Pfad wurde ausgewählt:"
@@ -280,6 +292,9 @@ $TEXT = @{
         prompt_11 = "Kiválasztott lemez száma:"
         prompt_12 = "A következő elérési út lett korábban használva:"
         prompt_13 = "Szeretné továbbra is ezt használni?"
+        pol_sa_1 = "PlayOnline telepítése PSBBN nélküli, HDD-OSD-vel vagy a HDD Utility Disc-kel formázott meghajtóra?"
+        pol_sa_2 = "Az 'y' csak a PlayOnline-t telepíti, az 'n' a szokásos módon indítja a PSBBN Definitive Projectet."
+        pol_sa_3 = "Telepíted a PlayOnline-t PSBBN nélkül?"
         prompt_14 = "Ezután ki kell választania vagy létre kell hoznia egy mappát a számítógépén (például: C:\\PSBBN)."
         prompt_15 = "Ez a mappa szolgál az összes telepíteni kívánt játék, zene, videó és képfájl tárolására."
         prompt_16 = "A következő elérési út lett kiválasztva:"
@@ -327,6 +342,9 @@ $TEXT = @{
         prompt_11 = "Numero del disco selezionato:"
         prompt_12 = "Il seguente percorso è stato utilizzato in precedenza:"
         prompt_13 = "Vuoi continuare a usarlo?"
+        pol_sa_1 = "Installare PlayOnline su un disco senza PSBBN, formattato per PS2 con HDD-OSD o l'HDD Utility Disc?"
+        pol_sa_2 = "Rispondi 'y' per installare solo PlayOnline, o 'n' per avviare il PSBBN Definitive Project come al solito."
+        pol_sa_3 = "Installare PlayOnline senza PSBBN?"
         prompt_14 = "Successivamente, ti verrà chiesto di selezionare o creare una cartella sul tuo PC (ad esempio C:\\PSBBN)."
         prompt_15 = "Questa cartella è destinata a tutti i giochi, la musica, i video e i file immagine che intendi installare."
         prompt_16 = "È stato scelto il seguente percorso:"
@@ -374,6 +392,9 @@ $TEXT = @{
         prompt_11 = "Número do disco selecionado:"
         prompt_12 = "O seguinte caminho foi usado anteriormente:"
         prompt_13 = "Você deseja continuar usando-o?"
+        pol_sa_1 = "Instalar o PlayOnline numa unidade sem PSBBN, formatada para o PS2 pelo HDD-OSD ou pelo HDD Utility Disc?"
+        pol_sa_2 = "Responda 'y' para instalar só o PlayOnline, ou 'n' para executar o PSBBN Definitive Project como de costume."
+        pol_sa_3 = "Instalar o PlayOnline sem o PSBBN?"
         prompt_14 = "Em seguida, selecione ou crie uma pasta no PC (por exemplo, C:\PSBBN)."
         prompt_15 = "Esta pasta é destinada a todos os jogos, músicas, vídeos e arquivos de imagem que serão instalados."
         prompt_16 = "O seguinte caminho foi escolhido:"
@@ -421,6 +442,9 @@ $TEXT = @{
         prompt_11 = "Número de disco seleccionado:"
         prompt_12 = "La siguiente ruta se utilizó anteriormente:"
         prompt_13 = "¿Desea seguir utilizándola?"
+        pol_sa_1 = "¿Instalar PlayOnline en una unidad sin PSBBN, formateada para PS2 con HDD-OSD o el HDD Utility Disc?"
+        pol_sa_2 = "Responde 'y' para instalar solo PlayOnline, o 'n' para ejecutar el PSBBN Definitive Project como siempre."
+        pol_sa_3 = "¿Instalar PlayOnline sin PSBBN?"
         prompt_14 = "A continuación, se le pedirá que seleccione o cree una carpeta en su PC (por ejemplo, C:\\PSBBN)."
         prompt_15 = "Esta carpeta es para todos los juegos, música, vídeos y archivos de imagen que planea instalar."
         prompt_16 = "Se ha seleccionado la siguiente ruta:"
@@ -636,6 +660,14 @@ function main {
     Write-Host "------- Linux magic finishes ---------`n"
   }
 
+  # PlayOnline can go on a drive without PSBBN: one formatted for the PS2 by
+  # HDD-OSD or the HDD Utility Disc, where the titles are started from Sony's
+  # own browser. That route runs PlayOnline-Standalone.sh in place of the main
+  # menu. The 32 GB minimum is PSBBN's; the PlayOnline Viewer and Tetra Master
+  # fit in under 2 GB, so a standalone drive need only be a real drive.
+  $standalone = askStandalone
+  if ($standalone) { $script:minimumDiskSize = 1 }
+
   # prompt user to choose a disk
   diskPicker
 
@@ -651,10 +683,25 @@ function main {
   pause
   clear
 
-  # run PSBBN regular steps
-  wsl -d $wslLabel --cd "~/PSBBN-Definitive-Project" -- `
-    env SYS_LANG="$winLang" `
-    ./PSBBN-Definitive-Patch.sh -wsl $global:diskList[$selectedDisk].SerialNumber $wslPath
+  if ($standalone) {
+    # POL_DISC_DIR puts the disc folder in the folder picked above, where it
+    # can be reached from Explorer, instead of inside WSL. The installer's
+    # report is written there too. A path WSL cannot see leaves the default.
+    if ($wslPath) {
+      wsl -d $wslLabel --cd "~/PSBBN-Definitive-Project" -- `
+        env SYS_LANG="$winLang" POL_DISC_DIR="$wslPath/POL" `
+        ./PlayOnline-Standalone.sh
+    } else {
+      wsl -d $wslLabel --cd "~/PSBBN-Definitive-Project" -- `
+        env SYS_LANG="$winLang" `
+        ./PlayOnline-Standalone.sh
+    }
+  } else {
+    # run PSBBN regular steps
+    wsl -d $wslLabel --cd "~/PSBBN-Definitive-Project" -- `
+      env SYS_LANG="$winLang" `
+      ./PSBBN-Definitive-Patch.sh -wsl $global:diskList[$selectedDisk].SerialNumber $wslPath
+  }
 
   # clear the terminal to get rid of the wsl-run scripts
   clear
@@ -732,6 +779,18 @@ function printTitle {
 }
 
 # display the available disks and prompt user for choice
+# asks whether this run installs PlayOnline on its own, on a drive that has no
+# PSBBN on it, instead of running the PSBBN Definitive Project's main menu
+function askStandalone {
+  Write-Host "`n$(T 'pol_sa_1')" -ForegroundColor Yellow
+  Write-Host "$(T 'pol_sa_2')`n"
+  do {
+    $keyPressed = Read-Host "$(T 'pol_sa_3') (y/n)"
+    $keyPressed = $keyPressed.ToLower()
+  } while ($keyPressed -ne 'y' -and $keyPressed -ne 'n')
+  return ($keyPressed -eq 'y')
+}
+
 function diskPicker {
   # store the current cursor position to help clear the console upon refreshing the list of disks
   $lineStart = $Host.UI.RawUI.CursorPosition.Y
