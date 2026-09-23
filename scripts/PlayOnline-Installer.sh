@@ -209,8 +209,27 @@ write_report() {
                 || echo "(skipped: needs a password this late in the run)"
             echo
         fi
-        echo "--- log ---"
-        cat "${LOG_FILE}" 2>/dev/null
+        # The log keeps every run, and after a few attempts the whole of it
+        # is longer than a chat message allows, which cut off exactly the run
+        # that mattered. The run before this one is kept as well, since that
+        # is usually what went wrong first. A log written before the markers
+        # existed has none to count back to, so it gets its tail.
+        echo "--- log: this run and the one before (full log: ${LOG_FILE}) ---"
+        if [[ -f "${LOG_FILE}" ]]; then
+            local marks count start=""
+            marks=$(grep -n '^=== run ' "${LOG_FILE}" | cut -d: -f1)
+            count=$(grep -c '^=== run ' "${LOG_FILE}")
+            if (( count >= 2 )); then
+                start=$(sed -n "$((count - 1))p" <<< "${marks}")
+            elif (( count == 1 )); then
+                start="${marks}"
+            fi
+            if [[ -n "${start}" ]]; then
+                tail -n +"${start}" "${LOG_FILE}"
+            else
+                tail -n 400 "${LOG_FILE}"
+            fi
+        fi
     } > "${REPORT_FILE}" 2>&1
     printf '\n%s %s\n' "${UI_TEXT[POL_REPORT_WRITTEN]}" "${REPORT_FILE}"
 }
@@ -297,7 +316,10 @@ make_partition() {
 SPLASH
 center_text "${UI_TEXT[POL_TITLE]}"
 echo
-date >> "${LOG_FILE}"
+# The log is kept across runs. This line is what the report counts back to,
+# so it takes the last two runs and not everything since the first; a bare
+# `date` changes shape with the locale and cannot be found reliably.
+echo "=== run $(date) ===" >> "${LOG_FILE}"
 activate_python
 # Setup.sh installs pycryptodome into the venv. A venv made by an older
 # Setup.sh lacks it, and the crypto modules import it at load.
