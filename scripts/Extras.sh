@@ -243,6 +243,7 @@ display_menu() {
     printf "%*s%s\n\n" "$padding" "3) " "${UI_TEXT[EXTRAS_MENU_OPTION_3]}"
     printf "%*s%s\n\n" "$padding" "4) " "${UI_TEXT[EXTRAS_MENU_OPTION_4]}"
     printf "%*s%s\n\n" "$padding" "5) " "${UI_TEXT[EXTRAS_MENU_OPTION_5]}"
+    printf "%*s%s\n\n" "$padding" "6) " "${UI_TEXT[EXTRAS_MENU_OPTION_6]}"
     printf "%*s%s\n\n" "$padding" "b) " "${UI_TEXT[MENU_BACK]}"
     printf "%*s%s " "$((padding - 3))" "" "${UI_TEXT[MENU_PROMPT]}"
 }
@@ -1805,6 +1806,12 @@ option_five() {
     read -n 1 -s -r -p "$text" </dev/tty
 }
 
+# Nobunaga's Ambition Online: a step of its own, like the PlayOnline one, so
+# nothing above changes. It is handed the drive found at startup.
+option_six() {
+    "${SCRIPTS_DIR}/Nobunaga-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
+}
+
 clear
 trap 'echo; exit 130' INT
 trap exit_script EXIT
@@ -1849,6 +1856,7 @@ while true; do
         EXTRAS_MENU_OPTION_3
         EXTRAS_MENU_OPTION_4
         EXTRAS_MENU_OPTION_5
+        EXTRAS_MENU_OPTION_6
     )
     center_menu
     display_menu
@@ -1869,6 +1877,9 @@ while true; do
             ;;
         5)
             option_five
+            ;;
+        6)
+            option_six
             ;;
         b|B)
             break
