@@ -90,6 +90,16 @@ else
     exit 1
 fi
 
+# English fallbacks for the optional install-kit prompts. These are new strings;
+# the lang files carry no translation for them yet, so default them here and let
+# a real translation in the lang files override (only set when unset/empty).
+: "${UI_TEXT[NOBU_KIT_ASK]:=An install kit was found. Install Nobunaga to the drive now? (y/N)}"
+: "${UI_TEXT[NOBU_KIT_ASK_TRANSLATE]:=Apply the English translation? (y/N)}"
+: "${UI_TEXT[NOBU_KIT_INSTALLING]:=Installing Nobunaga to the drive. This can take a few minutes...}"
+: "${UI_TEXT[NOBU_KIT_ERROR]:=Install failed. See logs/nobunaga-installer.log}"
+: "${UI_TEXT[NOBU_KIT_DONE]:=Nobunaga installed. Boot HDD-OSD to launch it.}"
+: "${UI_TEXT[NOBU_KIT_NEEDS_HDDID]:=An install kit is present, but the PlayOnline step must run first to mint the drive ID.}"
+
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
 text_width() { echo -n "$1" | wc -L; }
@@ -263,10 +273,46 @@ if [[ "${INFO[net]}" != "ok" ]]; then
         >> "${LOG_FILE}" 2>&1 || error_msg "${UI_TEXT[NOBU_ERROR_NET]}"
 fi
 
+# ---- optional PC-side install (tester install kit) ----------------------
+# The public toolkit ships no game data and no DNAS2 tooling. If a tester has
+# placed an install kit at ${NOBU_DIR}/kit/, offer to install from it now; a
+# plain public checkout has no kit and falls through to the prepare-only path.
+NOBU_KIT="${NOBU_DIR}/kit/nobu-install-kit.sh"
+NOBU_INSTALLED_NOW=0
+if [[ -f "${NOBU_KIT}" ]]; then
+    echo
+    if [[ ! -f "${POL_HDDID_FILE}" ]]; then
+        center_text "${UI_TEXT[NOBU_KIT_NEEDS_HDDID]}"
+    else
+        printf "%s " "${UI_TEXT[NOBU_KIT_ASK]}"
+        read -r answer </dev/tty
+        case "$answer" in
+            [Yy]*)
+                TR_FLAG=""
+                if [[ -d "${NOBU_DIR}/kit/translation" ]]; then
+                    printf "%s " "${UI_TEXT[NOBU_KIT_ASK_TRANSLATE]}"
+                    read -r tr_answer </dev/tty
+                    case "$tr_answer" in [Yy]*) TR_FLAG="--translate";; esac
+                fi
+                echo "${UI_TEXT[NOBU_KIT_INSTALLING]}"
+                bash "${NOBU_KIT}" --device "${DEVICE}" --hddid "${POL_HDDID_FILE}" \
+                    --helper "${HELPER_DIR}" --log "${LOG_FILE}" ${TR_FLAG} \
+                    2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_KIT_ERROR]}"
+                NOBU_INSTALLED_NOW=1
+                ;;
+        esac
+    fi
+fi
+
 echo
-center_text "${UI_TEXT[NOBU_READY]}"
-[[ "${INFO[netcnf]}" == "present" ]] || center_text "${UI_TEXT[NOBU_NETCNF_MISSING]}"
-center_text "${UI_TEXT[NOBU_CONSOLE_PENDING]}"
+if [[ ${NOBU_INSTALLED_NOW} -eq 1 ]]; then
+    center_text "${UI_TEXT[NOBU_KIT_DONE]}"
+else
+    center_text "${UI_TEXT[NOBU_READY]}"
+    [[ "${INFO[netcnf]}" == "present" ]] || center_text "${UI_TEXT[NOBU_NETCNF_MISSING]}"
+    center_text "${UI_TEXT[NOBU_CONSOLE_PENDING]}"
+fi
 echo
 center_text "${UI_TEXT[NOBU_BACKUPS]} ${BACKUP_DIR}"
 echo
