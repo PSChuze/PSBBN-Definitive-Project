@@ -99,6 +99,12 @@ fi
 : "${UI_TEXT[NOBU_KIT_ERROR]:=Install failed. See logs/nobunaga-installer.log}"
 : "${UI_TEXT[NOBU_KIT_DONE]:=Nobunaga installed. Boot HDD-OSD to launch it.}"
 : "${UI_TEXT[NOBU_KIT_NEEDS_HDDID]:=An install kit is present, but the PlayOnline step must run first to mint the drive ID.}"
+: "${UI_TEXT[NOBU_TR_ASK]:=English translation: apply (a), remove (r), or skip (Enter)?}"
+: "${UI_TEXT[NOBU_TR_APPLYING]:=Applying the English translation...}"
+: "${UI_TEXT[NOBU_TR_APPLIED]:=English translation applied.}"
+: "${UI_TEXT[NOBU_TR_REMOVING]:=Restoring the original Japanese text...}"
+: "${UI_TEXT[NOBU_TR_REMOVED]:=Original Japanese text restored.}"
+: "${UI_TEXT[NOBU_TR_ERROR]:=Translation update failed. See logs/nobunaga-installer.log}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
@@ -228,6 +234,32 @@ if [[ -n "${INFO[installed]}" ]]; then
                 nobusudo nobunaga.record "${DEVICE}" --restore "${BACKUP_DIR}" --write \
                     >> "${LOG_FILE}" 2>&1 || error_msg "${UI_TEXT[NOBU_ERROR_RECORD]}"
                 echo "  ${UI_TEXT[NOBU_RECORD_RESTORED]}"
+                ;;
+        esac
+    fi
+
+    # ---- optional: add/remove the English translation (tester kit) -------
+    # Plain data-file swap in the existing partition; no reinstall. Dormant
+    # unless the kit and a translation pack are present.
+    NOBU_TR="${NOBU_DIR}/kit/nobu-translate.sh"
+    if [[ -f "${NOBU_TR}" && -d "${NOBU_DIR}/kit/translation" ]]; then
+        echo
+        printf "%s " "${UI_TEXT[NOBU_TR_ASK]}"
+        read -r tr_answer </dev/tty
+        case "$tr_answer" in
+            [Aa]*)
+                echo "${UI_TEXT[NOBU_TR_APPLYING]}"
+                bash "${NOBU_TR}" --device "${DEVICE}" --helper "${HELPER_DIR}" \
+                    --log "${LOG_FILE}" --action apply 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                [[ ${PIPESTATUS[0]} -eq 0 ]] && center_text "${UI_TEXT[NOBU_TR_APPLIED]}" \
+                    || error_msg "${UI_TEXT[NOBU_TR_ERROR]}"
+                ;;
+            [Rr]*)
+                echo "${UI_TEXT[NOBU_TR_REMOVING]}"
+                bash "${NOBU_TR}" --device "${DEVICE}" --helper "${HELPER_DIR}" \
+                    --log "${LOG_FILE}" --action remove 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                [[ ${PIPESTATUS[0]} -eq 0 ]] && center_text "${UI_TEXT[NOBU_TR_REMOVED]}" \
+                    || error_msg "${UI_TEXT[NOBU_TR_ERROR]}"
                 ;;
         esac
     fi
