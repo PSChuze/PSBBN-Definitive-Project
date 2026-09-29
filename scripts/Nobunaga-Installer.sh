@@ -23,11 +23,12 @@
 # Prepares a PSBBN drive for Nobunaga no Yabou Online, Hiryuu no Shou
 # (SLPM-65783), from the Extras menu.
 #
-# The game cannot be installed from the PC the way the PlayOnline titles are:
-# its files are Sony DNAS2 containers, and only Koei's own installer, running
-# on the console, turns the disc's form into the drive's. So this step checks
-# the drive, keeps a copy of what the console install could disturb, and makes
-# __net openable. See scripts/helper/nobunaga.
+# The game's files are Sony DNAS2 containers that Koei's own installer, running
+# on the console, turns from the disc's form into the drive's; the PC does not
+# re-encrypt them for you. So this step prepares the drive - checks it, keeps a
+# copy of what the console install could disturb, and makes __net openable - and
+# the console installer then installs the game. Booting the installed game from
+# HDD-OSD is proven on real hardware. See scripts/helper/nobunaga.
 #
 # It is written to sit beside the PlayOnline step without touching it: it only
 # reads the playonline package, never mints or changes the PlayOnline drive
@@ -269,5 +270,22 @@ center_text "${UI_TEXT[NOBU_CONSOLE_PENDING]}"
 echo
 center_text "${UI_TEXT[NOBU_BACKUPS]} ${BACKUP_DIR}"
 echo
+
+# Register this title's partition in protect-parts.list (the standing pattern:
+# an installer owns its keep-list entry), so PSBBN's Game-Installer keeps it on
+# every game add. Idempotent; safe if the list already has it.
+OPL_PROT_MNT="$(mktemp -d)"
+if sudo mount "${DEVICE}3" "${OPL_PROT_MNT}" >> "${LOG_FILE}" 2>&1; then
+    sudo touch "${OPL_PROT_MNT}/protect-parts.list"
+    sudo grep -qxF "PP.SLPM-65197.KOEI.NOBUON" "${OPL_PROT_MNT}/protect-parts.list" 2>/dev/null \
+        || echo "PP.SLPM-65197.KOEI.NOBUON" | sudo tee -a "${OPL_PROT_MNT}/protect-parts.list" >/dev/null
+    sync
+    sudo umount "${OPL_PROT_MNT}"
+    echo "Nobunaga partition registered in protect-parts.list." >> "${LOG_FILE}"
+else
+    echo "[!] could not mount exFAT to update protect-parts.list; a future PSBBN game add may drop the Nobunaga partition." >> "${LOG_FILE}"
+fi
+rmdir "${OPL_PROT_MNT}" 2>/dev/null
+
 read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
 echo

@@ -4208,6 +4208,10 @@ unmount_apa
 HDL_TOC
 
 delete_partition=$(grep -o 'PP\.[^ ]\+' "$hdl_output")
+# NOBU coexistence: keep direct-to-drive installs (Nobunaga / PlayOnline) that
+# PSBBN cannot regenerate -- never rmpart a partition listed in the keep-list on
+# the exFAT partition. If the list is absent, behave exactly as before.
+[ -f "${OPL}/protect-parts.list" ] && delete_partition=$(printf '%s\n' "$delete_partition" | grep -vxF -f "${OPL}/protect-parts.list")
 
 echo >> "${LOG_FILE}"
 echo "Existing PP Partitions:" >> "${LOG_FILE}"
@@ -4230,7 +4234,10 @@ if [ -n "$delete_partition" ]; then
     HDL_TOC
 
     delete_partition=$(grep -o 'PP\.[^ ]\+' "$hdl_output")
-    
+    # NOBU coexistence: the keep-list partitions are intentionally NOT deleted,
+    # so exclude them from the "failed to delete" re-check too.
+    [ -f "${OPL}/protect-parts.list" ] && delete_partition=$(printf '%s\n' "$delete_partition" | grep -vxF -f "${OPL}/protect-parts.list")
+
     if [ -n "$delete_partition" ]; then
         echo | tee -a "${LOG_FILE}"
         echo "Unable to delete the following partitions:" >> "${LOG_FILE}"
