@@ -424,6 +424,31 @@ def set_plaintext(boot):
     return build["name"], bytes(out)
 
 
+def universal_to_plain(blob, what):
+    """The module plaintext mode opens, from one universal `.pex.enc`.
+
+    Raises SystemExit naming `what` when the container is not a single
+    verified module section or does not decompress to its declared length.
+    The keys must already be set (`use_keys`).
+    """
+    from .lib import ci_universal, pexcodec
+    secs = ci_universal.sections(blob)
+    if len(secs) != 1:
+        raise SystemExit("%s: %d sections, a module container has one"
+                         % (what, len(secs)))
+    off, size = secs[0]
+    mod, _tag = ci_universal.module(blob[off:off + size])
+    if not pexcodec.is_pex(mod):
+        raise SystemExit("%s: the module is not a PEX container (head %s)"
+                         % (what, mod[:4].hex()))
+    plain = pexcodec.decompress(mod)
+    want = pexcodec.plaintext_len(mod)
+    if len(plain) != want:
+        raise SystemExit("%s: decompressed to %d bytes, the container says %d"
+                         % (what, len(plain), want))
+    return plain
+
+
 def modules_to_plaintext(src_dir, write=True):
     """Beside every universal `.pex.enc`, write the module plaintext mode opens.
 
@@ -437,7 +462,7 @@ def modules_to_plaintext(src_dir, write=True):
 
     Returns [(path written, container size, module size)].
     """
-    from .lib import ci_universal, pexcodec
+    from .lib import ci_universal
     done = []
     for path in modules(src_dir):
         blob = _read(path)
@@ -445,20 +470,7 @@ def modules_to_plaintext(src_dir, write=True):
             raise SystemExit("%s is not in the universal form. Stage the tree "
                              "from the disc again; a tree converted once "
                              "cannot be converted again." % path)
-        secs = ci_universal.sections(blob)
-        if len(secs) != 1:
-            raise SystemExit("%s: %d sections, a module container has one"
-                             % (path, len(secs)))
-        off, size = secs[0]
-        mod, _tag = ci_universal.module(blob[off:off + size])
-        if not pexcodec.is_pex(mod):
-            raise SystemExit("%s: the module is not a PEX container (head %s)"
-                             % (path, mod[:4].hex()))
-        plain = pexcodec.decompress(mod)
-        want = pexcodec.plaintext_len(mod)
-        if len(plain) != want:
-            raise SystemExit("%s: decompressed to %d bytes, the container says %d"
-                             % (path, len(plain), want))
+        plain = universal_to_plain(blob, path)
         out = path[:-len(".enc")]
         if write:
             with open(out, "wb") as f:

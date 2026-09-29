@@ -67,6 +67,14 @@ installed titles from the discs (`resync.py`), which adds and replaces files
 and never removes one, and refreshes the loader in place when a newer
 package ships a different one (`reloader.py`).
 
+The Viewer updates itself over PlayOnline's patch channel, but its updater
+only replaces the `.pex.enc` modules. On a plaintext install the plain `.pex`
+files it actually runs stay on the installed build while `version.dat` reports
+the new one. Every run rebuilds them from the downloads the updater keeps
+beside them (`<module>.pex.enc.tmp2`, readable with the disc's keys) and
+writes the ones that differ (`pexsync.py`). So after the Viewer updates,
+running the installer again brings the code it runs up to that build.
+
 ## Disc containers
 
 | container | discs | reader |

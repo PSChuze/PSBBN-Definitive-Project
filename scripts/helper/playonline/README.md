@@ -81,6 +81,8 @@ drive has room for them.
                     today, without removing anything that is the user's
     reloader.py     replace the loader on an installed Viewer, in place,
                     when a later version of this package changes it
+    pexsync.py      rebuild a plaintext Viewer's modules from the updates
+                    it has downloaded, which the updater leaves unused
     loader-src/     the loader itself, and how it is built and signed
     prepare.py      the two module routes and what each needs
     hddid.py        the drive identity the loader serves, and that keyed

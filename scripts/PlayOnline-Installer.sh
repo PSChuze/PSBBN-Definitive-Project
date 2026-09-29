@@ -718,6 +718,27 @@ for k in "${ORDER[@]}"; do
                 # is "none" or when both files already name the host.
                 polsudo patchhost --drive "$DEVICE" --title "$k" --write \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                # The in-Viewer updater replaces only the .pex.enc modules, so
+                # a plaintext install keeps running the plain .pex it was
+                # installed with while it reports the new version. pexsync
+                # rebuilds each plain module from the update kept beside it
+                # (see pexsync.py); a Viewer that never updated, or runs the
+                # keyed modules, is left as it is.
+                pcmds="${WORK_DIR}/pexsync.txt"
+                rm -rf "$pcmds" "${WORK_DIR}/pexsync"
+                polsudo pexsync "$DEVICE" --title "$k" --disc "$disc" \
+                    --derive-elf "${DERIVE_ELF}" --work "${WORK_DIR}/pexsync" \
+                    --out "$pcmds" 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                if [[ -s "$pcmds" ]]; then
+                    sudo "${PFS_SHELL}" < "$pcmds" 2>&1 \
+                        | polmod pfsprogress "$(wc -l < "$pcmds")" --log "${LOG_FILE}"
+                    # Read them back: a module left half-written stops the
+                    # Viewer at its logo, and pfsshell does not say so.
+                    polsudo pexsync "$DEVICE" --title "$k" --disc "$disc" \
+                        --derive-elf "${DERIVE_ELF}" --work "${WORK_DIR}/pexsync" \
+                        2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                fi
+                rm -rf "$pcmds" "${WORK_DIR}/pexsync"
                 # A Viewer installed before the boot trace existed has no
                 # /trace.bin, and the loader update above rewrites one file in
                 # place and never adds any, so without this every drive already
