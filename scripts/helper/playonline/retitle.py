@@ -88,18 +88,32 @@ ENGLISH = {
     },
 }
 
-_FIELD = re.compile(r"^([A-Za-z0-9_]+)(\s*=\s*)(.*?)(\r?)$")
+# `[ \t]`, not `\s`: `\s` also matches `\r`, so on an empty value
+# (`title1=\r`, as Dirge and Front Mission Online have) the separator took
+# the line ending and the value was written after it: `title1=\r-FFVII-`.
+_FIELD = re.compile(r"^([A-Za-z0-9_]+)([ \t]*=[ \t]*)(.*?)(\r?)$")
 
 
 def set_fields(text, fields):
-    """(new text, [keys changed], last key changed). Line endings are kept."""
+    """(new text, [keys changed], last key changed). Line endings are kept.
+
+    A line an earlier version wrote as `key=\\rvalue` is rewritten as
+    `key=value\\r`, so running again repairs a drive retitled with the bug.
+    """
+    eol = "\r" if "\r\n" in text else ""
     out, changed, last = [], [], None
-    for line in text.split("\n"):
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
         m = _FIELD.match(line)
-        if m and m.group(1) in fields and m.group(3).rstrip() != fields[m.group(1)].rstrip():
-            line = "%s%s%s%s" % (m.group(1), m.group(2), fields[m.group(1)], m.group(4))
-            changed.append(m.group(1))
-            last = m.group(1)
+        if m and m.group(1) in fields:
+            value = m.group(3)
+            # The last piece has no "\n" after it, so no "\r" is owed there.
+            end = eol if i < len(lines) - 1 else m.group(4)
+            damaged = "\r" in value or m.group(4) != end
+            if damaged or value.rstrip() != fields[m.group(1)].rstrip():
+                line = "%s%s%s%s" % (m.group(1), m.group(2), fields[m.group(1)], end)
+                changed.append(m.group(1))
+                last = m.group(1)
         out.append(line)
     return "\n".join(out), changed, last
 

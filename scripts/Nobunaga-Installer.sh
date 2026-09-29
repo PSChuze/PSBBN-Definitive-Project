@@ -144,6 +144,15 @@ NOBU_PY="${SCRIPTS_DIR}/venv/bin/python3"
 [[ -x "${NOBU_PY}" ]] || NOBU_PY="python3"
 nobusudo() { local m="$1"; shift; sudo -E env PYTHONPATH="${HELPER_DIR}" "${NOBU_PY}" -m "$m" "$@"; }
 
+# The name in HDD-OSD and PSBBN's list follows the game's language, as the
+# PlayOnline titles' do: English with the translation on, Koei's Japanese
+# without it. Cosmetic (the game reads neither place), so a failure is only
+# logged. See nobunaga/retitle.py.
+nobu_retitle() {
+    nobusudo nobunaga.retitle "${DEVICE}" "$1" --write >> "${LOG_FILE}" 2>&1 \
+        || echo "[!] retitle ($1) failed; the name in the browser is unchanged." >> "${LOG_FILE}"
+}
+
 on_exit() {
     [[ -n "${SUDO_KEEPALIVE}" ]] && kill "${SUDO_KEEPALIVE}" 2>/dev/null
     return 0
@@ -251,15 +260,17 @@ if [[ -n "${INFO[installed]}" ]]; then
                 echo "${UI_TEXT[NOBU_TR_APPLYING]}"
                 bash "${NOBU_TR}" --device "${DEVICE}" --helper "${HELPER_DIR}" \
                     --log "${LOG_FILE}" --action apply 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
-                [[ ${PIPESTATUS[0]} -eq 0 ]] && center_text "${UI_TEXT[NOBU_TR_APPLIED]}" \
-                    || error_msg "${UI_TEXT[NOBU_TR_ERROR]}"
+                [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_TR_ERROR]}"
+                nobu_retitle english
+                center_text "${UI_TEXT[NOBU_TR_APPLIED]}"
                 ;;
             [Rr]*)
                 echo "${UI_TEXT[NOBU_TR_REMOVING]}"
                 bash "${NOBU_TR}" --device "${DEVICE}" --helper "${HELPER_DIR}" \
                     --log "${LOG_FILE}" --action remove 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
-                [[ ${PIPESTATUS[0]} -eq 0 ]] && center_text "${UI_TEXT[NOBU_TR_REMOVED]}" \
-                    || error_msg "${UI_TEXT[NOBU_TR_ERROR]}"
+                [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_TR_ERROR]}"
+                nobu_retitle japanese
+                center_text "${UI_TEXT[NOBU_TR_REMOVED]}"
                 ;;
         esac
     fi
@@ -332,6 +343,13 @@ if [[ -f "${NOBU_KIT}" ]]; then
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_KIT_ERROR]}"
                 NOBU_INSTALLED_NOW=1
+                # The kit skips an empty translation pack, so test what it
+                # used, not only what was asked.
+                if [[ -n "${TR_FLAG}" && -n "$(ls -A "${NOBU_DIR}/kit/translation" 2>/dev/null)" ]]; then
+                    nobu_retitle english
+                else
+                    nobu_retitle japanese
+                fi
                 ;;
         esac
     fi
