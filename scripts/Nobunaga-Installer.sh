@@ -153,6 +153,13 @@ nobu_retitle() {
         || echo "[!] retitle ($1) failed; the name in the browser is unchanged." >> "${LOG_FILE}"
 }
 
+# True when the kit carries a translation pack. A kit built without one still
+# has translation/ holding a PUT-TRANSLATION-HERE.txt placeholder, which is not
+# a pack (nobu-translate.sh skips PUT-* files the same way).
+nobu_has_translation() {
+    [[ -n "$(find "${NOBU_DIR}/kit/translation" -type f ! -name 'PUT-*' 2>/dev/null | head -n 1)" ]]
+}
+
 on_exit() {
     [[ -n "${SUDO_KEEPALIVE}" ]] && kill "${SUDO_KEEPALIVE}" 2>/dev/null
     return 0
@@ -251,7 +258,7 @@ if [[ -n "${INFO[installed]}" ]]; then
     # Plain data-file swap in the existing partition; no reinstall. Dormant
     # unless the kit and a translation pack are present.
     NOBU_TR="${NOBU_DIR}/kit/nobu-translate.sh"
-    if [[ -f "${NOBU_TR}" && -d "${NOBU_DIR}/kit/translation" ]]; then
+    if [[ -f "${NOBU_TR}" ]] && nobu_has_translation; then
         echo
         printf "%s " "${UI_TEXT[NOBU_TR_ASK]}"
         read -r tr_answer </dev/tty
@@ -332,7 +339,7 @@ if [[ -f "${NOBU_KIT}" ]]; then
         case "$answer" in
             [Yy]*)
                 TR_FLAG=""
-                if [[ -d "${NOBU_DIR}/kit/translation" ]]; then
+                if nobu_has_translation; then
                     printf "%s " "${UI_TEXT[NOBU_KIT_ASK_TRANSLATE]}"
                     read -r tr_answer </dev/tty
                     case "$tr_answer" in [Yy]*) TR_FLAG="--translate";; esac
@@ -343,9 +350,8 @@ if [[ -f "${NOBU_KIT}" ]]; then
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_KIT_ERROR]}"
                 NOBU_INSTALLED_NOW=1
-                # The kit skips an empty translation pack, so test what it
-                # used, not only what was asked.
-                if [[ -n "${TR_FLAG}" && -n "$(ls -A "${NOBU_DIR}/kit/translation" 2>/dev/null)" ]]; then
+                # TR_FLAG is only set when a real pack was there to apply.
+                if [[ -n "${TR_FLAG}" ]]; then
                     nobu_retitle english
                 else
                     nobu_retitle japanese
