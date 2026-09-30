@@ -1,0 +1,4 @@
+# Shell helpers added for the title-partition protection must stay LF so they
+# run under bash on Linux/WSL regardless of a checkout core.autocrlf setting.
+scripts/helper/protect-parts-keep.sh text eol=lf
+scripts/helper/tests/test_protect_parts_keep.sh text eol=lf
