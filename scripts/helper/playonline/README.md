@@ -83,6 +83,11 @@ drive has room for them.
                     when a later version of this package changes it
     pexsync.py      rebuild a plaintext Viewer's modules from the updates
                     it has downloaded, which the updater leaves unused
+    update.py       bring a title to the patch server's latest version from
+                    the PC, writing what the console's updater would write,
+                    in minutes rather than the hours it takes the console
+    polp.py         the patch server's protocol, its patch list and its
+                    compressed files
     loader-src/     the loader itself, and how it is built and signed
     prepare.py      the two module routes and what each needs
     hddid.py        the drive identity the loader serves, and that keyed
