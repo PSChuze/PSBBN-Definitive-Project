@@ -4221,6 +4221,15 @@ if ! KEEP_LIST=$(OPL="${OPL}" HELPER_DIR="${HELPER_DIR}" SCRIPTS_DIR="${SCRIPTS_
 fi
 delete_partition=$(printf '%s\n' "$delete_partition" | grep -vxF -f <(printf '%s\n' "$KEEP_LIST"))
 
+# Say which title partitions the keep-list actually shielded on this drive, so
+# the log proves the guard fired (and which titles it saved).
+protected_present=$(grep -o 'PP\.[^ ]\+' "$hdl_output" | grep -xF -f <(printf '%s\n' "$KEEP_LIST") || true)
+if [ -n "$protected_present" ]; then
+    echo >> "${LOG_FILE}"
+    echo "Protected title partitions (NOT deleted):" >> "${LOG_FILE}"
+    echo "$protected_present" >> "${LOG_FILE}"
+fi
+
 echo >> "${LOG_FILE}"
 echo "Existing PP Partitions:" >> "${LOG_FILE}"
 echo "$delete_partition" >> "${LOG_FILE}"
