@@ -4208,10 +4208,18 @@ unmount_apa
 HDL_TOC
 
 delete_partition=$(grep -o 'PP\.[^ ]\+' "$hdl_output")
-# NOBU coexistence: keep direct-to-drive installs (Nobunaga / PlayOnline) that
-# PSBBN cannot regenerate -- never rmpart a partition listed in the keep-list on
-# the exFAT partition. If the list is absent, behave exactly as before.
-[ -f "${OPL}/protect-parts.list" ] && delete_partition=$(printf '%s\n' "$delete_partition" | grep -vxF -f "${OPL}/protect-parts.list")
+
+# Never rmpart a title partition this toolkit installed directly (PlayOnline,
+# Nobunaga, Minna no Golf, pop'n). PSBBN cannot regenerate those, so deleting
+# one here silently destroys the user's game. The helper enumerates the exact
+# names to keep and FAILS CLOSED; if it cannot, we refuse to delete any PP
+# partition rather than risk a wipe. See helper/protect-parts-keep.sh.
+if ! KEEP_LIST=$(OPL="${OPL}" HELPER_DIR="${HELPER_DIR}" SCRIPTS_DIR="${SCRIPTS_DIR}" \
+        bash "${HELPER_DIR}/protect-parts-keep.sh"); then
+    echo "[X] Error: could not determine which partitions to protect; refusing to delete any PP partition." >> "${LOG_FILE}"
+    error_msg "Error" "${UI_TEXT[ERROR_DELETE_PARTITION]}"
+fi
+delete_partition=$(printf '%s\n' "$delete_partition" | grep -vxF -f <(printf '%s\n' "$KEEP_LIST"))
 
 echo >> "${LOG_FILE}"
 echo "Existing PP Partitions:" >> "${LOG_FILE}"
@@ -4234,9 +4242,9 @@ if [ -n "$delete_partition" ]; then
     HDL_TOC
 
     delete_partition=$(grep -o 'PP\.[^ ]\+' "$hdl_output")
-    # NOBU coexistence: the keep-list partitions are intentionally NOT deleted,
-    # so exclude them from the "failed to delete" re-check too.
-    [ -f "${OPL}/protect-parts.list" ] && delete_partition=$(printf '%s\n' "$delete_partition" | grep -vxF -f "${OPL}/protect-parts.list")
+    # The protected partitions are intentionally NOT deleted, so exclude them
+    # from the "failed to delete" re-check too (same keep-list as above).
+    delete_partition=$(printf '%s\n' "$delete_partition" | grep -vxF -f <(printf '%s\n' "$KEEP_LIST"))
 
     if [ -n "$delete_partition" ]; then
         echo | tee -a "${LOG_FILE}"
