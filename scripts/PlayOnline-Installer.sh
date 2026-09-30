@@ -637,6 +637,16 @@ if [[ -z "${RESYNC}" && $ROUTE_READY -eq 1 ]]; then
         fi
     done
 fi
+# The titles can also be brought to the patch server's latest version from
+# here, instead of by the console's own updater, which takes hours over the
+# PS2's network for FFXI. Asked now so the rest of the run needs no one at
+# the keyboard. See update.py.
+UPDATE="${POL_UPDATE:-}"
+if [[ -z "${UPDATE}" && $ROUTE_READY -eq 1 ]]; then
+    printf "%s " "${UI_TEXT[POL_ASK_UPDATE]}"
+    read -r answer </dev/tty
+    case "$answer" in [Yy]*) UPDATE=1 ;; *) UPDATE=0 ;; esac
+fi
 echo
 
 # ---- do it --------------------------------------------------------------
@@ -944,6 +954,48 @@ done
 # from this run or an earlier one. See installinf.py.
 polsudo installinf "$DEVICE" --write >> "${LOG_FILE}" 2>&1 \
     || echo "[!] installinf failed; the Viewer may report titles as not installed." >> "${LOG_FILE}"
+
+# Updates from the patch server, written from the PC. Every title on the
+# drive except the Viewer, which the console updates itself in minutes. The
+# downloads stay under the work folder until the partition verifies, so a run
+# that stops part way picks up where it left off. On a plaintext drive the
+# plain modules are then rebuilt from the updated ones, as pexsync does after
+# a console update.
+if [[ "${UPDATE}" == "1" ]]; then
+    TOC=$(sudo "${HDL_DUMP}" toc "$DEVICE" 2>>"${LOG_FILE}")
+    for k in "${!TITLE_PART[@]}"; do
+        [[ "$k" == viewer-* ]] && continue
+        grep -q -- "${TITLE_PART[$k]}" <<< "$TOC" || continue
+        echo "${UI_TEXT[POL_DOING_UPDATE]} $k"
+        upd="${WORK_DIR}/update-$k"
+        rm -f "${upd}.txt"
+        polsudo update "$DEVICE" --title "$k" --work "$upd" --out "${upd}.txt" \
+            --hddid "${HDDID_FILE}" --derive-elf "${DERIVE_ELF}" 2>&1 \
+            | tee -a "${LOG_FILE}"
+        rc=${PIPESTATUS[0]}
+        if [[ $rc -eq 3 ]]; then
+            echo "  ${UI_TEXT[POL_RESYNC_CURRENT]}"
+        elif [[ $rc -eq 0 && -s "${upd}.txt" ]]; then
+            sudo "${PFS_SHELL}" < "${upd}.txt" 2>&1 \
+                | polmod pfsprogress "$(wc -l < "${upd}.txt")" --log "${LOG_FILE}"
+            if polsudo update "$DEVICE" --title "$k" --work "$upd" --verify \
+                    >> "${LOG_FILE}" 2>&1; then
+                pcmds="${upd}-pexsync.txt"
+                polsudo pexsync "$DEVICE" --title "$k" --derive-elf "${DERIVE_ELF}" \
+                    --work "${upd}-pexsync" --out "$pcmds" >> "${LOG_FILE}" 2>&1
+                if [[ $? -eq 0 && -s "$pcmds" ]]; then
+                    sudo "${PFS_SHELL}" < "$pcmds" >> "${LOG_FILE}" 2>&1
+                fi
+                rm -rf "$upd" "${upd}-pexsync" "$pcmds"
+            else
+                echo "  ${UI_TEXT[POL_ERROR_UPDATE]} $k"
+            fi
+        else
+            echo "  ${UI_TEXT[POL_ERROR_UPDATE]} $k"
+        fi
+        rm -f "${upd}.txt"
+    done
+fi
 
 # Janhourou, Dirge and Front Mission Online were only released in Japan, and
 # the US Viewer launches all three. On a US install their names in the
