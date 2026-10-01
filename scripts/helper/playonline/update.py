@@ -228,9 +228,14 @@ class Keys(object):
                              % hddid_path)
         self.record_four = head[:4]
         self.four = self.record_four
-        self.candidates = [self.record_four]
-        if self.record_four != ZERO_FOUR:
-            self.candidates.append(ZERO_FOUR)
+        # The record's value now, zero, and the value the installer mints
+        # (the record can change after files were keyed: on 2026-10-01 a
+        # drive whose record held 0001776c when its FFXI was keyed held
+        # zero after the console had been online).
+        self.candidates = []
+        for four in (self.record_four, ZERO_FOUR, ci_transcrypt.DEFAULT_FOUR):
+            if four not in self.candidates:
+                self.candidates.append(four)
 
     def opens(self, blob, four=None):
         """True when `blob` opens with the key, False when it is in the keyed
