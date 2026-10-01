@@ -240,6 +240,50 @@ on_exit() {
     [[ -n "${SUDO_KEEPALIVE}" ]] && kill "${SUDO_KEEPALIVE}" 2>/dev/null
     return 0
 }
+# ---- the PlayOnline menu --------------------------------------------------
+# The main menu's PlayOnline entry opens this, in the same shape as the Media
+# menu. One action per run, and none of them removes anything: install adds
+# partitions for titles the drive lacks, update and refresh write into the
+# partitions of the titles picked, and a title that is not picked is not
+# opened. It is shown before sudo and before the drive is read, so Back costs
+# nothing.
+#
+# Scripted runs: POL_ACTION=install|update|refresh with POL_TITLES=key,key.
+# The older POL_RESYNC=1 and POL_UPDATE=1 still select refresh and update.
+ACTION="${POL_ACTION:-}"
+[[ -z "${ACTION}" && "${POL_RESYNC}" == "1" ]] && ACTION=refresh
+[[ -z "${ACTION}" && "${POL_UPDATE}" == "1" ]] && ACTION=update
+[[ -z "${ACTION}" && -n "${POL_TITLES}" ]] && ACTION=install
+pol_menu() {
+    local key width longest=0 padding
+    for key in POL_MENU_OPTION_1 POL_MENU_OPTION_2 POL_MENU_OPTION_3 MENU_BACK; do
+        width=$(text_width "${UI_TEXT[$key]}")
+        (( width > longest )) && longest=$width
+    done
+    padding=$(( (term_width - longest + 3) / 2 ))
+    SPLASH
+    center_text "${UI_TEXT[POL_TITLE]}"
+    printf "\n\n"
+    printf "%*s%s\n\n" "$padding" "1) " "${UI_TEXT[POL_MENU_OPTION_1]}"
+    printf "%*s%s\n\n" "$padding" "2) " "${UI_TEXT[POL_MENU_OPTION_2]}"
+    printf "%*s%s\n\n" "$padding" "3) " "${UI_TEXT[POL_MENU_OPTION_3]}"
+    printf "%*s%s\n\n" "$padding" "b) " "${UI_TEXT[MENU_BACK]}"
+    printf "%*s%s " "$((padding - 3))" "" "${UI_TEXT[MENU_PROMPT]}"
+    MENU_PADDING=$padding
+}
+while [[ -z "${ACTION}" ]]; do
+    pol_menu
+    read -r choice </dev/tty
+    case "$choice" in
+        1) ACTION=install ;;
+        2) ACTION=update ;;
+        3) ACTION=refresh ;;
+        b|B) exit 0 ;;
+        *) printf "%*s%s " "$((MENU_PADDING - 3))" "" "${UI_TEXT[MENU_INVALID]}"
+           sleep 2 ;;
+    esac
+done
+
 trap on_exit EXIT
 
 activate_python() {
@@ -446,51 +490,107 @@ if [[ ! -v "TITLE_PART[$VIEWER_KEY]" ]]; then
     error_msg "${UI_TEXT[POL_NO_VIEWER_DISC]}"
 fi
 
+# ---- what is on the drive -------------------------------------------------
+# Every title the discs can supply, and whether the drive already has it. The
+# drive's own state is what each action below is offered against, so a user
+# picks from titles that action can apply to and nothing else.
+TOC=$(sudo "${HDL_DUMP}" toc "$DEVICE" 2>>"${LOG_FILE}")
+on_drive() { grep -q -- "${TITLE_PART[$1]}" <<< "$TOC"; }
+in_list() { local x="$1" y; shift; for y in "$@"; do [[ "$y" == "$x" ]] && return 0; done; return 1; }
+pause_exit() {
+    echo
+    read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
+    echo
+    exit 0
+}
+
 echo "${UI_TEXT[POL_DISCS_FOUND]} ${DISC_DIR}"
 echo "  ${UI_TEXT[POL_REGION_SET]} ${REGION}"
 echo
-i=0
 for k in "${ORDER[@]}"; do
-    i=$((i + 1))
-    printf "  %2d  %-16s %-30s %-10s %s\n" "$i" "$k" "${TITLE_PART[$k]}" "${TITLE_VER[$k]}" "$(basename "${TITLE_DISC[$k]}")"
+    if on_drive "$k"; then
+        state="${UI_TEXT[POL_STATE_INSTALLED]}"
+    else
+        state="${UI_TEXT[POL_STATE_MISSING]}"
+    fi
+    printf "  %-16s %-16s %-10s %s\n" "$k" "$state" "${TITLE_VER[$k]}" "$(basename "${TITLE_DISC[$k]}")"
 done
 echo
 
-# ---- which titles ---------------------------------------------------------
-# The Viewer is always installed, because it is what launches the titles.
-# POL_TITLES names keys for a scripted run.
-CHOSEN=()
+# ---- which titles -----------------------------------------------------------
+# The titles the action chosen in the menu can apply to. Install offers what the drive lacks.
+# Update and refresh offer what it has, except the Viewer, which updates
+# itself on the console in minutes and is kept current by every run anyway.
+CANDIDATES=()
+for k in "${ORDER[@]}"; do
+    if [[ "${ACTION}" == install ]]; then
+        on_drive "$k" || CANDIDATES+=("$k")
+    elif [[ "$k" != viewer-* ]] && on_drive "$k"; then
+        CANDIDATES+=("$k")
+    fi
+done
+if [[ ${#CANDIDATES[@]} -eq 0 ]]; then
+    if [[ "${ACTION}" == install ]]; then
+        echo "${UI_TEXT[POL_NONE_TO_INSTALL]}"
+    else
+        echo "${UI_TEXT[POL_NONE_INSTALLED]}"
+    fi
+    pause_exit
+fi
+
+PICKS=()
 if [[ -n "${POL_TITLES}" ]]; then
     for k in ${POL_TITLES//,/ }; do
-        [[ -v "TITLE_PART[$k]" ]] && CHOSEN+=("$k")
+        in_list "$k" "${CANDIDATES[@]}" && ! in_list "$k" "${PICKS[@]}" && PICKS+=("$k")
     done
 else
+    i=0
+    for k in "${CANDIDATES[@]}"; do
+        i=$((i + 1))
+        printf "  %2d  %s\n" "$i" "$k"
+    done
     printf "%s " "${UI_TEXT[POL_SELECT_TITLES]}"
     read -r answer </dev/tty
     if [[ -z "$answer" || "$answer" == [Aa]* ]]; then
-        CHOSEN=("${ORDER[@]}")
+        PICKS=("${CANDIDATES[@]}")
     else
         for n in ${answer//,/ }; do
             [[ "$n" =~ ^[0-9]+$ ]] || continue
-            (( n >= 1 && n <= ${#ORDER[@]} )) && CHOSEN+=("${ORDER[$((n - 1))]}")
+            (( n >= 1 && n <= ${#CANDIDATES[@]} )) || continue
+            k="${CANDIDATES[$((n - 1))]}"
+            in_list "$k" "${PICKS[@]}" || PICKS+=("$k")
         done
     fi
 fi
-if [[ ${#CHOSEN[@]} -eq 0 ]]; then
+if [[ ${#PICKS[@]} -eq 0 ]]; then
     echo; echo "${UI_TEXT[POL_ABORTED]}"; sleep 2; exit 0
 fi
-has_viewer=0
-for k in "${CHOSEN[@]}"; do [[ "$k" == "$VIEWER_KEY" ]] && has_viewer=1; done
-if [[ $has_viewer -eq 0 ]]; then
-    echo "  ${UI_TEXT[POL_SELECT_VIEWER_REQUIRED]}"
-    CHOSEN=("$VIEWER_KEY" "${CHOSEN[@]}")
-fi
-# The Viewer goes first, so the module mode it decides reaches the titles
-# prepared after it.
-ORDER=("$VIEWER_KEY")
-for k in "${CHOSEN[@]}"; do
-    [[ "$k" == "$VIEWER_KEY" ]] || ORDER+=("$k")
-done
+
+# ORDER is what the install loop walks: the Viewer first, so the module mode
+# it decides reaches the titles prepared after it. An installed Viewer is not
+# rewritten there, only kept current (its loader, patch host and modules).
+# RESYNC_SET and UPDATE_SET name the titles a refresh or an update may write.
+RESYNC_SET=()
+UPDATE_SET=()
+case "${ACTION}" in
+    install)
+        if ! on_drive "$VIEWER_KEY" && ! in_list "$VIEWER_KEY" "${PICKS[@]}"; then
+            echo "  ${UI_TEXT[POL_SELECT_VIEWER_REQUIRED]}"
+        fi
+        ORDER=("$VIEWER_KEY")
+        for k in "${PICKS[@]}"; do
+            [[ "$k" == "$VIEWER_KEY" ]] || ORDER+=("$k")
+        done
+        ;;
+    refresh)
+        ORDER=("$VIEWER_KEY" "${PICKS[@]}")
+        RESYNC_SET=("${PICKS[@]}")
+        ;;
+    update)
+        ORDER=()
+        UPDATE_SET=("${PICKS[@]}")
+        ;;
+esac
 echo
 
 # ---- what making the titles bootable needs -------------------------------
@@ -586,13 +686,33 @@ echo
 TOC=$(sudo "${HDL_DUMP}" toc "$DEVICE" 2>>"${LOG_FILE}")
 grep -q -- "__net" <<< "$TOC" && NET_EXISTS=1 || NET_EXISTS=0
 [[ $NET_EXISTS -eq 0 ]] && echo "  + __net (128M)  ${UI_TEXT[POL_PLAN_NET]}"
-for k in "${ORDER[@]}"; do
-    if grep -q -- "${TITLE_PART[$k]}" <<< "$TOC"; then
-        echo "  = ${TITLE_PART[$k]}  ${UI_TEXT[POL_PLAN_SKIP]}"
+# Every PlayOnline title on the drive is named, not only the ones this run
+# writes, with what happens to it: + added, ~ updated or refreshed in place,
+# = not touched.
+PLANNED=()
+for k in "${ORDER[@]}" "${UPDATE_SET[@]}"; do
+    in_list "$k" "${PLANNED[@]}" && continue
+    PLANNED+=("$k")
+    part="${TITLE_PART[$k]}"
+    if in_list "$k" "${UPDATE_SET[@]}"; then
+        echo "  ~ ${part}  ${UI_TEXT[POL_PLAN_UPDATE]}"
+    elif in_list "$k" "${RESYNC_SET[@]}"; then
+        echo "  ~ ${part}  ${UI_TEXT[POL_PLAN_REFRESH]}"
+    elif on_drive "$k"; then
+        echo "  = ${part}  ${UI_TEXT[POL_PLAN_SKIP]}"
     else
-        echo "  + ${TITLE_PART[$k]} (${TITLE_SIZE[$k]}M)  ${UI_TEXT[POL_PLAN_ADD]}"
+        echo "  + ${part} (${TITLE_SIZE[$k]}M)  ${UI_TEXT[POL_PLAN_ADD]}"
     fi
 done
+PLANNED_PARTS=()
+for k in "${PLANNED[@]}"; do PLANNED_PARTS+=("${TITLE_PART[$k]}"); done
+while IFS='|' read -r _key part _rest; do
+    [[ -z "$part" ]] && continue
+    in_list "$part" "${PLANNED_PARTS[@]}" && continue
+    grep -q -- "$part" <<< "$TOC" && echo "  = ${part}  ${UI_TEXT[POL_PLAN_KEEP]}"
+done < <(pol titles --plain 2>>"${LOG_FILE}" | tr -d '\r')
+echo
+echo "  ${UI_TEXT[POL_PLAN_NOTHING_REMOVED]}"
 echo
 if [[ $ROUTE_READY -eq 1 ]]; then
     echo "  ${UI_TEXT[POL_PLAN_ROUTE]}"
@@ -622,31 +742,6 @@ case "$answer" in
     *) echo; echo "${UI_TEXT[POL_ABORTED]}"; sleep 2; exit 0 ;;
 esac
 
-# A title already on the drive is left alone unless the user asks for a
-# refresh, which compares it with what this version would install and writes
-# the difference. Files the disc does not carry are never removed, so saves
-# and settings stay. Asked only when it could apply. See resync.py.
-RESYNC="${POL_RESYNC:-}"
-if [[ -z "${RESYNC}" && $ROUTE_READY -eq 1 ]]; then
-    for k in "${ORDER[@]}"; do
-        if [[ "$k" != viewer-* ]] && grep -q -- "${TITLE_PART[$k]}" <<< "$TOC"; then
-            printf "%s " "${UI_TEXT[POL_ASK_RESYNC]}"
-            read -r answer </dev/tty
-            case "$answer" in [Yy]*) RESYNC=1 ;; *) RESYNC=0 ;; esac
-            break
-        fi
-    done
-fi
-# The titles can also be brought to the patch server's latest version from
-# here, instead of by the console's own updater, which takes hours over the
-# PS2's network for FFXI. Asked now so the rest of the run needs no one at
-# the keyboard. See update.py.
-UPDATE="${POL_UPDATE:-}"
-if [[ -z "${UPDATE}" && $ROUTE_READY -eq 1 ]]; then
-    printf "%s " "${UI_TEXT[POL_ASK_UPDATE]}"
-    read -r answer </dev/tty
-    case "$answer" in [Yy]*) UPDATE=1 ;; *) UPDATE=0 ;; esac
-fi
 echo
 
 # ---- do it --------------------------------------------------------------
@@ -778,10 +873,13 @@ for k in "${ORDER[@]}"; do
             fi
             rm -rf "${WORK_DIR}/$k" "${WORK_DIR}/${k}-net-record.bin"
         fi
-        # Everything else is skipped unless a refresh was asked for. A
-        # refreshed title is staged and prepared like a new install and then
-        # compared with the partition, further down.
-        if [[ "${RESYNC}" != "1" || "$k" == viewer-* || $ROUTE_READY -ne 1 ]]; then
+        # Everything else is skipped unless it was picked for a refresh, which
+        # compares it with what this version would install and writes the
+        # difference; files the disc does not carry, saves and settings among
+        # them, stay. A refreshed title is staged and prepared like a new
+        # install and then compared with the partition, further down. See
+        # resync.py.
+        if ! in_list "$k" "${RESYNC_SET[@]}" || [[ "$k" == viewer-* || $ROUTE_READY -ne 1 ]]; then
             continue
         fi
         REFRESH=1
@@ -955,22 +1053,21 @@ done
 polsudo installinf "$DEVICE" --write >> "${LOG_FILE}" 2>&1 \
     || echo "[!] installinf failed; the Viewer may report titles as not installed." >> "${LOG_FILE}"
 
-# Updates from the patch server, written from the PC. Every title on the
-# drive except the Viewer, which the console updates itself in minutes. The
-# downloads stay under the work folder until the partition verifies, so a run
-# that stops part way picks up where it left off. On a plaintext drive the
-# plain modules are then rebuilt from the updated ones, as pexsync does after
-# a console update.
-if [[ "${UPDATE}" == "1" ]]; then
-    TOC=$(sudo "${HDL_DUMP}" toc "$DEVICE" 2>>"${LOG_FILE}")
-    for k in "${!TITLE_PART[@]}"; do
-        [[ "$k" == viewer-* ]] && continue
-        grep -q -- "${TITLE_PART[$k]}" <<< "$TOC" || continue
+# Updates from the patch server, written from the PC, for the titles picked
+# in the menu and no others. The downloads stay under the work folder until
+# the partition verifies, so a run that stops part way picks up where it left
+# off. On a plaintext drive the plain modules are then rebuilt from the
+# updated ones, as pexsync does after a console update.
+if [[ ${#UPDATE_SET[@]} -gt 0 ]]; then
+    key_args=()
+    [[ -f "${HDDID_FILE}" ]] && key_args+=(--hddid "${HDDID_FILE}")
+    [[ -n "${DERIVE_ELF}" ]] && key_args+=(--derive-elf "${DERIVE_ELF}")
+    for k in "${UPDATE_SET[@]}"; do
         echo "${UI_TEXT[POL_DOING_UPDATE]} $k"
         upd="${WORK_DIR}/update-$k"
         rm -f "${upd}.txt"
         polsudo update "$DEVICE" --title "$k" --work "$upd" --out "${upd}.txt" \
-            --hddid "${HDDID_FILE}" --derive-elf "${DERIVE_ELF}" 2>&1 \
+            "${key_args[@]}" 2>&1 \
             | tee -a "${LOG_FILE}"
         rc=${PIPESTATUS[0]}
         if [[ $rc -eq 3 ]]; then
