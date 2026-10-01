@@ -33,16 +33,28 @@ are appended there. The count is a guide only; `build --verify` is the
 check.
 """
 import sys
+import time
+
+from .progress import duration
 
 WIDTH = 40
+START = time.monotonic()
 
 
 def draw(out, done, total):
     done = min(done, total)
     frac = done / float(total) if total else 1.0
     fill = int(frac * WIDTH)
-    out.write("\r  [%s%s] %3d%%  %d/%d" % ("#" * fill, "." * (WIDTH - fill),
-                                          int(frac * 100), done, total))
+    elapsed = time.monotonic() - START
+    if frac >= 1.0:
+        tail = "  done in %s" % duration(elapsed)
+    elif frac > 0.01 and elapsed > 3:
+        tail = "  ~%s left" % duration(elapsed * (1 - frac) / frac)
+    else:
+        tail = ""
+    out.write("\r  [%s%s] %3d%%  %s/%s commands%s\033[K"
+              % ("#" * fill, "." * (WIDTH - fill), int(frac * 100),
+                 format(done, ","), format(total, ","), tail))
     out.flush()
 
 
