@@ -1120,6 +1120,31 @@ done
 polsudo installinf "$DEVICE" --write >> "${LOG_FILE}" 2>&1 \
     || echo "[!] installinf failed; the Viewer may report titles as not installed." >> "${LOG_FILE}"
 
+# PSBBN's Game-Installer rmparts EVERY PP.* it cannot regenerate when it adds a
+# game, which would wipe these PlayOnline partitions (they live in their own PFS
+# partitions, not as exFAT ISOs). Register them in the exFAT keep-list the
+# patched Game-Installer honors, so they survive future game adds. Runs on every
+# install, so re-running also fixes protection for anyone who installed before
+# this existed. Idempotent; safe if the list already has them.
+POL_PROTECT=()
+for k in "${!TITLE_PART[@]}"; do POL_PROTECT+=("${TITLE_PART[$k]}"); done
+if [[ ${#POL_PROTECT[@]} -gt 0 ]]; then
+    OPL_PROT_MNT="$(mktemp -d)"
+    if sudo mount "${DEVICE}3" "${OPL_PROT_MNT}" >> "${LOG_FILE}" 2>&1; then
+        sudo touch "${OPL_PROT_MNT}/protect-parts.list"
+        for p in "${POL_PROTECT[@]}"; do
+            sudo grep -qxF "$p" "${OPL_PROT_MNT}/protect-parts.list" 2>/dev/null \
+                || echo "$p" | sudo tee -a "${OPL_PROT_MNT}/protect-parts.list" >/dev/null
+        done
+        sync
+        sudo umount "${OPL_PROT_MNT}"
+        echo "PlayOnline partitions registered in protect-parts.list." >> "${LOG_FILE}"
+    else
+        echo "[!] could not mount exFAT to update protect-parts.list; a future PSBBN game add may drop the PlayOnline titles." >> "${LOG_FILE}"
+    fi
+    rmdir "${OPL_PROT_MNT}" 2>/dev/null
+fi
+
 # Updates from the patch server, written from the PC, for the titles picked
 # in the menu and no others. The downloads stay under the work folder until
 # the partition verifies, so a run that stops part way picks up where it left
