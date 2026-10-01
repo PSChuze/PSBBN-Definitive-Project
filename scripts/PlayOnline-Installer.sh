@@ -238,6 +238,8 @@ on_exit() {
     # The keep-alive outlives the script otherwise, holding a sudo timestamp
     # warm for a run that has finished.
     [[ -n "${SUDO_KEEPALIVE}" ]] && kill "${SUDO_KEEPALIVE}" 2>/dev/null
+    # Discs copied off a slow /mnt source are large; do not leave them behind.
+    [[ -n "${POL_LOCAL_DISCS:-}" ]] && rm -rf "${POL_LOCAL_DISCS}" 2>/dev/null
     return 0
 }
 # ---- the PlayOnline menu --------------------------------------------------
@@ -573,6 +575,50 @@ if [[ ${#PICKS[@]} -eq 0 ]]; then
     echo; echo "${UI_TEXT[POL_ABORTED]}"; sleep 2; exit 0
 fi
 
+# Copy the chosen titles' discs off a slow /mnt (9p/drvfs) mount to the local
+# filesystem before the heavy reads. The launcher puts everyone's discs in a
+# Windows folder, which WSL exposes over 9p, and the disc parser's seek-heavy
+# reads wedge that transport: the process ends up in D state on p9_client_rpc
+# and never returns, which a DVD title like FFXI or Dirge reliably triggers. A
+# plain sequential copy is 9p-friendly, and parsing the local copy is fast. Each
+# disc is copied once; a disc already on a local filesystem, or one too large to
+# fit, is read where it is rather than filling the WSL disk. The copies are
+# removed when the run ends (on_exit).
+POL_LOCAL_DISCS=""
+case "${DISC_DIR}" in
+    /mnt/*)
+        POL_LOCAL_DISCS="${WORK_DIR}/discs"
+        mkdir -p "${POL_LOCAL_DISCS}"
+        declare -A _pol_disc_local
+        for k in "${PICKS[@]}"; do
+            src="${TITLE_DISC[$k]}"
+            [[ -n "$src" ]] || continue
+            if [[ -n "${_pol_disc_local[$src]:-}" ]]; then
+                TITLE_DISC["$k"]="${_pol_disc_local[$src]}"
+                continue
+            fi
+            base=$(basename "$src")
+            dst="${POL_LOCAL_DISCS}/${base}"
+            if [[ ! -f "$dst" ]]; then
+                need_kb=$(du -k "$src" 2>/dev/null | cut -f1)
+                free_kb=$(df -Pk "${POL_LOCAL_DISCS}" 2>/dev/null | awk 'NR==2{print $4}')
+                if [[ -n "$need_kb" && -n "$free_kb" && "$free_kb" -gt $((need_kb + 1048576)) ]]; then
+                    echo "  ${UI_TEXT[POL_COPY_DISC]:-Copying to local storage:} ${base}"
+                    if ! cp -f "$src" "$dst" 2>>"${LOG_FILE}"; then
+                        echo "[!] could not copy ${base} locally; reading it from ${DISC_DIR}." >> "${LOG_FILE}"
+                        dst="$src"
+                    fi
+                else
+                    echo "[!] not enough local space for ${base}; reading it from ${DISC_DIR}." >> "${LOG_FILE}"
+                    dst="$src"
+                fi
+            fi
+            _pol_disc_local[$src]="$dst"
+            TITLE_DISC["$k"]="$dst"
+        done
+        ;;
+esac
+
 # ORDER is what the install loop walks: the Viewer first, so the module mode
 # it decides reaches the titles prepared after it. An installed Viewer is not
 # rewritten there, only kept current (its loader, patch host and modules).
@@ -837,7 +883,7 @@ for k in "${ORDER[@]}"; do
                 # (see pexsync.py); a Viewer that never updated, or runs the
                 # keyed modules, is left as it is.
                 pcmds="${WORK_DIR}/pexsync.txt"
-                rm -rf "$pcmds" "${WORK_DIR}/pexsync"
+                sudo rm -rf "$pcmds" "${WORK_DIR}/pexsync"
                 polsudo pexsync "$DEVICE" --title "$k" --disc "$disc" \
                     --derive-elf "${DERIVE_ELF}" --work "${WORK_DIR}/pexsync" \
                     --out "$pcmds" 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
@@ -850,7 +896,7 @@ for k in "${ORDER[@]}"; do
                         --derive-elf "${DERIVE_ELF}" --work "${WORK_DIR}/pexsync" \
                         2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 fi
-                rm -rf "$pcmds" "${WORK_DIR}/pexsync"
+                sudo rm -rf "$pcmds" "${WORK_DIR}/pexsync"
                 # A Viewer installed before the boot trace existed has no
                 # /trace.bin, and the loader update above rewrites one file in
                 # place and never adds any, so without this every drive already
@@ -1106,7 +1152,8 @@ if [[ ${#UPDATE_SET[@]} -gt 0 ]]; then
                 if [[ $? -eq 0 && -s "$pcmds" ]]; then
                     sudo "${PFS_SHELL}" < "$pcmds" >> "${LOG_FILE}" 2>&1
                 fi
-                rm -rf "$upd" "${upd}-pexsync" "$pcmds"
+                # The downloads were written under sudo, so they are root's.
+                sudo rm -rf "$upd" "${upd}-pexsync" "$pcmds"
             else
                 echo "  ${UI_TEXT[POL_ERROR_UPDATE]} $k"
             fi
