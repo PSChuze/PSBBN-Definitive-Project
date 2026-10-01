@@ -238,6 +238,8 @@ on_exit() {
     # The keep-alive outlives the script otherwise, holding a sudo timestamp
     # warm for a run that has finished.
     [[ -n "${SUDO_KEEPALIVE}" ]] && kill "${SUDO_KEEPALIVE}" 2>/dev/null
+    # Discs copied off a slow /mnt source are large; do not leave them behind.
+    [[ -n "${POL_LOCAL_DISCS:-}" ]] && rm -rf "${POL_LOCAL_DISCS}" 2>/dev/null
     return 0
 }
 # ---- the PlayOnline menu --------------------------------------------------
@@ -572,6 +574,50 @@ fi
 if [[ ${#PICKS[@]} -eq 0 ]]; then
     echo; echo "${UI_TEXT[POL_ABORTED]}"; sleep 2; exit 0
 fi
+
+# Copy the chosen titles' discs off a slow /mnt (9p/drvfs) mount to the local
+# filesystem before the heavy reads. The launcher puts everyone's discs in a
+# Windows folder, which WSL exposes over 9p, and the disc parser's seek-heavy
+# reads wedge that transport: the process ends up in D state on p9_client_rpc
+# and never returns, which a DVD title like FFXI or Dirge reliably triggers. A
+# plain sequential copy is 9p-friendly, and parsing the local copy is fast. Each
+# disc is copied once; a disc already on a local filesystem, or one too large to
+# fit, is read where it is rather than filling the WSL disk. The copies are
+# removed when the run ends (on_exit).
+POL_LOCAL_DISCS=""
+case "${DISC_DIR}" in
+    /mnt/*)
+        POL_LOCAL_DISCS="${WORK_DIR}/discs"
+        mkdir -p "${POL_LOCAL_DISCS}"
+        declare -A _pol_disc_local
+        for k in "${PICKS[@]}"; do
+            src="${TITLE_DISC[$k]}"
+            [[ -n "$src" ]] || continue
+            if [[ -n "${_pol_disc_local[$src]:-}" ]]; then
+                TITLE_DISC["$k"]="${_pol_disc_local[$src]}"
+                continue
+            fi
+            base=$(basename "$src")
+            dst="${POL_LOCAL_DISCS}/${base}"
+            if [[ ! -f "$dst" ]]; then
+                need_kb=$(du -k "$src" 2>/dev/null | cut -f1)
+                free_kb=$(df -Pk "${POL_LOCAL_DISCS}" 2>/dev/null | awk 'NR==2{print $4}')
+                if [[ -n "$need_kb" && -n "$free_kb" && "$free_kb" -gt $((need_kb + 1048576)) ]]; then
+                    echo "  ${UI_TEXT[POL_COPY_DISC]:-Copying to local storage:} ${base}"
+                    if ! cp -f "$src" "$dst" 2>>"${LOG_FILE}"; then
+                        echo "[!] could not copy ${base} locally; reading it from ${DISC_DIR}." >> "${LOG_FILE}"
+                        dst="$src"
+                    fi
+                else
+                    echo "[!] not enough local space for ${base}; reading it from ${DISC_DIR}." >> "${LOG_FILE}"
+                    dst="$src"
+                fi
+            fi
+            _pol_disc_local[$src]="$dst"
+            TITLE_DISC["$k"]="$dst"
+        done
+        ;;
+esac
 
 # ORDER is what the install loop walks: the Viewer first, so the module mode
 # it decides reaches the titles prepared after it. An installed Viewer is not
@@ -1073,6 +1119,31 @@ done
 # from this run or an earlier one. See installinf.py.
 polsudo installinf "$DEVICE" --write >> "${LOG_FILE}" 2>&1 \
     || echo "[!] installinf failed; the Viewer may report titles as not installed." >> "${LOG_FILE}"
+
+# PSBBN's Game-Installer rmparts EVERY PP.* it cannot regenerate when it adds a
+# game, which would wipe these PlayOnline partitions (they live in their own PFS
+# partitions, not as exFAT ISOs). Register them in the exFAT keep-list the
+# patched Game-Installer honors, so they survive future game adds. Runs on every
+# install, so re-running also fixes protection for anyone who installed before
+# this existed. Idempotent; safe if the list already has them.
+POL_PROTECT=()
+for k in "${!TITLE_PART[@]}"; do POL_PROTECT+=("${TITLE_PART[$k]}"); done
+if [[ ${#POL_PROTECT[@]} -gt 0 ]]; then
+    OPL_PROT_MNT="$(mktemp -d)"
+    if sudo mount "${DEVICE}3" "${OPL_PROT_MNT}" >> "${LOG_FILE}" 2>&1; then
+        sudo touch "${OPL_PROT_MNT}/protect-parts.list"
+        for p in "${POL_PROTECT[@]}"; do
+            sudo grep -qxF "$p" "${OPL_PROT_MNT}/protect-parts.list" 2>/dev/null \
+                || echo "$p" | sudo tee -a "${OPL_PROT_MNT}/protect-parts.list" >/dev/null
+        done
+        sync
+        sudo umount "${OPL_PROT_MNT}"
+        echo "PlayOnline partitions registered in protect-parts.list." >> "${LOG_FILE}"
+    else
+        echo "[!] could not mount exFAT to update protect-parts.list; a future PSBBN game add may drop the PlayOnline titles." >> "${LOG_FILE}"
+    fi
+    rmdir "${OPL_PROT_MNT}" 2>/dev/null
+fi
 
 # Updates from the patch server, written from the PC, for the titles picked
 # in the menu and no others. The downloads stay under the work folder until
