@@ -63,7 +63,7 @@ import threading
 import time
 import zlib
 
-from . import apa, pfsput, polp, titles
+from . import apa, pfsput, polp, progress, titles
 from .lib import polfill, polnetdump, polpfsread
 
 FIO_S_IFDIR = 0x1000
@@ -114,8 +114,9 @@ def region_for(image, title):
 class Drive(object):
     """A title's partition, read through the reader that follows sub-partitions."""
 
-    def __init__(self, image, title):
+    def __init__(self, image, title, show=False):
         self.image, self.title = image, title
+        self.counter = progress.Counter("reading the partition") if show else None
         try:
             self.lba, self.sectors = apa.find_partition(image, title.partition)
         except KeyError:
@@ -129,6 +130,8 @@ class Drive(object):
             raise SystemExit("%s did not mount" % title.partition)
         self.files, self.dirs = {}, set()
         self._walk(self.root, (), 0)
+        if self.counter:
+            self.counter.close()
 
     def close(self):
         self.f.close()
@@ -141,6 +144,8 @@ class Drive(object):
             if not child["ok"]:
                 continue
             here = at + (name.decode("latin-1"),)
+            if self.counter:
+                self.counter.add()
             if child["mode"] & FIO_S_IFDIR:
                 self.dirs.add(here)
                 if depth < 24:
@@ -227,13 +232,28 @@ class Keys(object):
 
 
 def check_drive_key(drive, keys):
-    """Read one module already on the partition with the key, before any
-    conversion, so a wrong HDD ID stops here and not on the console."""
+    """Read one drive-keyed module already on the partition with the key,
+    before any conversion, so a wrong HDD ID stops here and not on the console.
+
+    Not every `.pex.enc` on a partition is drive-keyed. Dirge's are installed
+    as the disc ships them and only the ones an update replaced are keyed, so
+    a file whose layout is not the keyed one (its sizes block or length do not
+    parse) is passed over. Only a keyed layout whose bulk does not open is a
+    wrong key. Returns the module read, or None when there is none to read.
+    """
+    from .lib import ci_transcrypt
     for path in sorted(drive.files):
         name = "/".join(path)
-        if name.endswith(".pex.enc"):
-            keys.check(drive.read(name), "/" + name + " on the drive")
+        if not name.endswith(".pex.enc"):
+            continue
+        results = ci_transcrypt.check(drive.read(name), keys.hddid, keys.four,
+                                      pcsx2=keys.pcsx2)
+        tags = [good for label, good, _d in results if label.endswith("bulk tag")]
+        if not tags:
+            continue                    # not in the drive-keyed layout
+        if all(tags):
             return name
+        keys.check(drive.read(name), "/" + name + " on the drive")
     return None
 
 
@@ -296,7 +316,7 @@ def need_zones(drive, chosen):
 
 # --- fetching -----------------------------------------------------------------
 
-def fetch_all(plan_, host, port, product, stage, connections=8, log=print):
+def fetch_all(plan_, host, port, product, stage, connections=8, log=print, bar=None):
     """Download, check and decompress every chosen file into `stage`.
 
     A file already in `stage` that matches its row is kept, so an
@@ -322,6 +342,8 @@ def fetch_all(plan_, host, port, product, stage, connections=8, log=print):
                     with lock:
                         done["n"] += 1
                         done["kept"] += 1
+                        if bar:
+                            bar.add(1, row.blob_size)
                     return
         client = getattr(local, "client", None)
         if client is None:
@@ -354,7 +376,10 @@ def fetch_all(plan_, host, port, product, stage, connections=8, log=print):
             done["n"] += 1
             done["bytes"] += len(blob)
             n = done["n"]
-        if n % 500 == 0 or n == total:
+            if bar:
+                bar.add(1, len(blob))
+        # The log gets a line now and then; the screen has the bar.
+        if n % 5000 == 0 or n == total:
             secs = max(time.monotonic() - t0, 0.001)
             log("  %d/%d files, %.0f MB fetched, %.1f MB/s"
                 % (n, total, done["bytes"] / 1e6, done["bytes"] / 1e6 / secs))
@@ -368,15 +393,20 @@ def fetch_all(plan_, host, port, product, stage, connections=8, log=print):
     finally:
         for c in clients:
             c.close()
+        if bar:
+            bar.close()
     if done["kept"]:
         log("  %d file(s) were already fetched and still match the list" % done["kept"])
     return done
 
 
-def convert(plan_, stage, keys, title, log=print):
+def convert(plan_, stage, keys, title, log=print, show=False):
     """Put the drive-keyed form of every keyed file beside its `.tmp2`."""
     keyed = [b for b, _row in plan_.chosen if keyed_on_console(b.path)]
+    bar = progress.Bar(len(keyed)) if show and keyed else None
     for b in keyed:
+        if bar:
+            bar.add()
         dest = os.path.join(stage, *b.path.split("/"))
         with open(dest + ".tmp2", "rb") as f:
             universal = f.read()
@@ -390,6 +420,8 @@ def convert(plan_, stage, keys, title, log=print):
             out = patch_boot_container(out, keys)
         with open(dest, "wb") as f:
             f.write(out)
+    if bar:
+        bar.close()
     if keyed:
         log("  %d file(s) converted to the drive's key" % len(keyed))
     return len(keyed)
@@ -465,25 +497,32 @@ def commands(drive, plan_, stage, meta):
     return out + ["umount", "exit"]
 
 
-def verify(drive, work):
+def verify(drive, work, show=False):
     """[problems]: every staged file against what the partition holds."""
     bad = []
     stage, meta = os.path.join(work, "tree"), os.path.join(work, "meta")
-    for base, prefix in ((stage, ()), (meta, ())):
+    todo = []
+    for base in (stage, meta):
         for dirpath, _dirs, names in os.walk(base):
             rel = os.path.relpath(dirpath, base)
-            at = prefix + (() if rel == "." else tuple(rel.split(os.sep)))
+            at = () if rel == "." else tuple(rel.split(os.sep))
             for n in names:
-                if n.endswith(".part"):
-                    continue
-                path = "/".join(at + (n,))
-                have = drive.read(path)
-                with open(os.path.join(dirpath, n), "rb") as f:
-                    want = f.read()
-                if have is None:
-                    bad.append("/%s is not on the partition" % path)
-                elif have != want:
-                    bad.append("/%s differs from what was staged" % path)
+                if not n.endswith(".part"):
+                    host = os.path.join(dirpath, n)
+                    todo.append(("/".join(at + (n,)), host, os.path.getsize(host)))
+    bar = progress.Bar(len(todo), weight=sum(t[2] for t in todo)) if show else None
+    for path, host, size in todo:
+        have = drive.read(path)
+        with open(host, "rb") as f:
+            want = f.read()
+        if have is None:
+            bad.append("/%s is not on the partition" % path)
+        elif have != want:
+            bad.append("/%s differs from what was staged" % path)
+        if bar:
+            bar.add(1, size)
+    if bar:
+        bar.close()
     return bad
 
 
@@ -515,10 +554,19 @@ def main():
     title = titles.TITLES.get(args.title)
     if title is None:
         sys.exit("unknown title %r" % args.title)
-    drive = Drive(args.drive, title)
+    # The installer pipes this into its log through tee, and a pipe holds
+    # Python's output back until it fills, so each line is sent as it is
+    # printed. The live progress lines go to the terminal itself (progress.py).
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
+    print("Reading what is on %s (a large title takes a few minutes)" % title.partition)
+    drive = Drive(args.drive, title, show=True)
     try:
         if args.verify:
-            bad = verify(drive, args.work)
+            print("Reading every updated file back off the drive to check it")
+            bad = verify(drive, args.work, show=True)
             for line in bad[:40]:
                 print("  " + line)
             print("%s: %s" % (title.partition, "%d problem(s)" % len(bad) if bad
@@ -528,8 +576,8 @@ def main():
         host = args.server or _default_host()
         port = args.port or polp.port_for(number_of(title))
         region = args.region or region_for(args.drive, title)
-        print("%s at %s; asking %s:%d as %s" % (title.partition, drive.version(),
-                                                host, port, region))
+        print("%s is at version %s; asking %s:%d (%s) for updates"
+              % (title.partition, drive.version(), host, port, region))
         p = plan(drive, host, port, region)
         if p.current:
             print("already at the latest version, %s" % p.latest)
@@ -567,15 +615,21 @@ def main():
                 print("  the key reads /%s on the drive" % name)
 
         stage, meta = os.path.join(args.work, "tree"), os.path.join(args.work, "meta")
-        fetch_all(p, host, port, number_of(title), stage, args.connections)
+        print("Downloading %s files (%.0f MB); each one is checked against the list"
+              % (format(len(p.chosen), ","), blob / 1e6))
+        fetch_all(p, host, port, number_of(title), stage, args.connections,
+                  bar=progress.Bar(len(p.chosen), weight=blob))
         if keys:
-            convert(p, stage, keys, title)
+            print("Keying %d file(s) to this drive, as the console's updater does" % keyed)
+            convert(p, stage, keys, title, show=True)
         write_own_files(p, meta)
         cmds = commands(drive, p, stage, meta)
         if args.out:
             with open(args.out, "w", encoding="utf-8", newline="\n") as f:
                 f.write("\n".join(cmds) + "\n")
             print("  %d pfsshell command(s) in %s" % (len(cmds), args.out))
+        print("Downloaded and checked. Next: writing %s files (%.0f MB) to the drive"
+              % (format(len(p.chosen) + keyed, ","), size / 1e6))
         return 0
     finally:
         drive.close()

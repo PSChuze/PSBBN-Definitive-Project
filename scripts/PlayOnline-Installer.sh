@@ -453,7 +453,14 @@ fi
 # ones (Janhourou, FMO, Dirge) through its own install.inf; a JP Viewer
 # launches only Japanese-serial partitions. The region is chosen first, and
 # the title list is then read again for what that Viewer can launch.
-REGION="${POL_REGION:-}"
+# A drive that already has a Viewer answers the two region questions itself:
+# its Viewer partition says which Viewer it is, and the loader on it says which
+# console it opens on (see driveinfo.py). They are asked only when it cannot.
+DRIVE_INFO=$(polsudo driveinfo "$DEVICE" 2>>"${LOG_FILE}" | tr -d '\r')
+DRIVE_VIEWER=$(sed -n 's/^viewer=//p' <<< "${DRIVE_INFO}")
+DRIVE_CONSOLE=$(sed -n 's/^console=//p' <<< "${DRIVE_INFO}")
+echo "Drive: viewer=${DRIVE_VIEWER:-none} console=${DRIVE_CONSOLE:-unknown}" >> "${LOG_FILE}"
+REGION="${POL_REGION:-${DRIVE_VIEWER}}"
 HAVE_US=0; HAVE_JP=0
 for k in "${ORDER[@]}"; do
     [[ "$k" == viewer-us ]] && HAVE_US=1
@@ -635,7 +642,7 @@ DERIVE_ELF="${WORK_DIR}/derivation.elf"
 # Japanese console runs the US Viewer perfectly well, and it needs the
 # Japanese loader to do it. REGION above is the Viewer's and decides the
 # titles; this decides which loader can open at all.
-CONSOLE_REGION="${POL_CONSOLE:-}"
+CONSOLE_REGION="${POL_CONSOLE:-${DRIVE_CONSOLE}}"
 if [[ -z "${CONSOLE_REGION}" ]]; then
     printf "%s " "${UI_TEXT[POL_SELECT_CONSOLE]}"
     read -r answer </dev/tty
@@ -948,9 +955,18 @@ for k in "${ORDER[@]}"; do
         fi
     fi
 
-    # A refresh: compare the prepared tree with the partition and have
-    # pfsshell write what is missing or differs. pfsshell mounts a partition
-    # whatever password its header carries, so the password is left in place.
+    # A repair: compare the prepared tree with the partition and have
+    # pfsshell write what is missing or differs, so a file an interrupted
+    # install never wrote, or one that was damaged, comes back from the disc.
+    # The disc's patch.ver comes back with them, so a title that was updated
+    # reports the disc's version again and an update brings it forward. Files
+    # the disc does not carry, saves and settings among them, stay.
+    #
+    # An install that stopped part way also never reached the header password
+    # and the browser entry, and without the password the title cannot mount
+    # its own partition, so both are written again; that replaces only what
+    # it would have written (the entry it replaces is backed up). The second
+    # comparison is the verification: it exits 3 when nothing differs.
     if [[ $REFRESH -eq 1 ]]; then
         echo "${UI_TEXT[POL_DOING_RESYNC]} $k"
         rm -f "${WORK_DIR}/$k-resync.txt"
@@ -963,12 +979,17 @@ for k in "${ORDER[@]}"; do
             sudo "${PFS_SHELL}" < "${WORK_DIR}/$k-resync.txt" 2>&1 \
                 | polmod pfsprogress "$(wc -l < "${WORK_DIR}/$k-resync.txt")" \
                     --log "${LOG_FILE}"
-            # Run again so the log shows what is left, if anything.
+            echo "${UI_TEXT[POL_DOING_VERIFY]} $k"
             polsudo resync "$DEVICE" --title "$k" --src "${WORK_DIR}/$k" \
                 >> "${LOG_FILE}" 2>&1
+            [[ $? -eq 3 ]] || error_msg "${UI_TEXT[POL_ERROR_VERIFY]} $k"
         else
             error_msg "${UI_TEXT[POL_ERROR_WRITE]} $k"
         fi
+        polsudo build "$DEVICE" \
+            --title "$k" --src "${WORK_DIR}/$k" --disc "$disc" --populated --write \
+            "${title_args[@]}" \
+            >> "${LOG_FILE}" 2>&1 || error_msg "${UI_TEXT[POL_ERROR_WRITE]} $k"
         rm -rf "${WORK_DIR}/$k" "${WORK_DIR}/$k-resync.txt"
         continue
     fi
@@ -1073,8 +1094,10 @@ if [[ ${#UPDATE_SET[@]} -gt 0 ]]; then
         if [[ $rc -eq 3 ]]; then
             echo "  ${UI_TEXT[POL_RESYNC_CURRENT]}"
         elif [[ $rc -eq 0 && -s "${upd}.txt" ]]; then
+            echo "${UI_TEXT[POL_DOING_WRITE]} $k"
             sudo "${PFS_SHELL}" < "${upd}.txt" 2>&1 \
                 | polmod pfsprogress "$(wc -l < "${upd}.txt")" --log "${LOG_FILE}"
+            echo "${UI_TEXT[POL_DOING_VERIFY]} $k"
             if polsudo update "$DEVICE" --title "$k" --work "$upd" --verify \
                     >> "${LOG_FILE}" 2>&1; then
                 pcmds="${upd}-pexsync.txt"
