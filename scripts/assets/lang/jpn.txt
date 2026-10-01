@@ -509,6 +509,7 @@ POL_ASK_RESYNC=すでにドライブにあるタイトルをディスクから�
 POL_DOING_RESYNC=ディスクから修復中:
 POL_RESYNC_CURRENT=すでに最新です。
 POL_DOING_UPDATE=サーバーから更新中:
+POL_DOING_VIEWERSYNC=Viewerのモジュールを本体の更新内容に合わせています...
 POL_ERROR_UPDATE=更新できませんでした(インストーラーをもう一度実行すると続きから再開します):
 POL_MENU_OPTION_1=PlayOnlineタイトルをインストール
 POL_MENU_OPTION_2=インストール済みのタイトルをPlayOnlineサーバーから更新

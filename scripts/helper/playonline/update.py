@@ -55,6 +55,7 @@ Exit status 3 means the title is already at the server's latest version.
 import argparse
 import concurrent.futures
 import os
+import re
 import shutil
 import struct
 import sys
@@ -502,16 +503,90 @@ def fetch_all(plan_, host, port, product, stage, connections=8, log=print, bar=N
     return done
 
 
-def convert(plan_, stage, keys, title, log=print, show=False):
-    """Put the drive-keyed form of every keyed file beside its `.tmp2`."""
+def title_keyed(drive):
+    """True when the title opens its own containers with a title key.
+
+    Such a title names the key file in its config.sys (FFXI: `KEY=/polkey.dat`).
+    The console's updater leaves its containers exactly as the server sends
+    them and puts the module from each beside it: on a Square Enix partition
+    after the 2016 update, ffxi_pol.pex.enc and dancer.enc are the served
+    files byte for byte, ffxi_pol.pex is the PEX module out of the first and
+    dancer.bin the module out of the second. Keyed to the drive instead,
+    FFXI's 2016 build does not start.
+    """
+    config = drive.read("config.sys") or b""
+    return re.search(rb"^\s*KEY\s*=", config, re.M | re.I) is not None
+
+
+def module_name(path):
+    """Where the module out of a served container goes, or None."""
+    if path.endswith(".pex.enc"):
+        return path[:-len(".enc")]
+    if path.endswith(".enc"):
+        return path[:-len(".enc")] + ".bin"
+    return None
+
+
+def served_form(universal, path, stage):
+    """Stage `path` as the server sent it and its module beside it, as the
+    console's updater does for a title-keyed title. Returns the path tuples
+    of the files beside the container (the module), to be put as well."""
+    from .lib import ci_universal
+    dest = os.path.join(stage, *path.split("/"))
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with open(dest, "wb") as f:
+        f.write(universal)
+    beside = module_name(path)
+    if beside is None:
+        return []
+    secs = ci_universal.sections(universal)
+    if len(secs) != 1:
+        raise SystemExit("%s: %d sections, a module container has one" % (path, len(secs)))
+    off, size = secs[0]
+    mod, _tag = ci_universal.module(universal[off:off + size])
+    with open(os.path.join(stage, *beside.split("/")), "wb") as f:
+        f.write(mod)
+    return [tuple(beside.split("/"))]
+
+
+def restore_served(drive, stage, skip=()):
+    """For a title-keyed title: every container on the partition that is not
+    the served file its `.tmp2` holds (an earlier version of this updater
+    keyed them) is staged again in the served form, with its module. Returns
+    the path tuples to put."""
+    out = []
+    for path in sorted(drive.files):
+        name = "/".join(path)
+        if name in skip or name.endswith(".tmp2") or not keyed_on_console(name):
+            continue
+        tmp2 = path[:-1] + (path[-1] + ".tmp2",)
+        if tmp2 not in drive.files:
+            continue
+        served = drive.read("/".join(tmp2))
+        beside = module_name(name)
+        if drive.read(name) == served and (beside is None or tuple(beside.split("/")) in drive.files):
+            continue
+        out.append(path)
+        out.extend(served_form(served, name, stage))
+    return out
+
+
+def convert(plan_, stage, keys, title, log=print, show=False, title_key=False):
+    """Put the drive-keyed form of every keyed file beside its `.tmp2`, or for
+    a title-keyed title the served form and its module. Returns the path
+    tuples written beside the update's own files (the modules)."""
     keyed = [b for b, _row in plan_.chosen if keyed_on_console(b.path)]
     bar = progress.Bar(len(keyed)) if show and keyed else None
+    extra = []
     for b in keyed:
         if bar:
             bar.add()
         dest = os.path.join(stage, *b.path.split("/"))
         with open(dest + ".tmp2", "rb") as f:
             universal = f.read()
+        if title_key:
+            extra.extend(served_form(universal, b.path, stage))
+            continue
         try:
             out = keys.installed(universal)
         except (ValueError, SystemExit) as e:
@@ -524,9 +599,11 @@ def convert(plan_, stage, keys, title, log=print, show=False):
             f.write(out)
     if bar:
         bar.close()
-    if keyed:
+    if keyed and title_key:
+        log("  %d container(s) kept as served, with their modules beside them" % len(keyed))
+    elif keyed:
         log("  %d file(s) converted to the drive's key" % len(keyed))
-    return len(keyed)
+    return extra
 
 
 def patch_boot_container(installed, keys):
@@ -689,20 +766,32 @@ def main():
               % (title.partition, drive.version(), host, port, region))
         p = plan(drive, host, port, region)
         stage, meta = os.path.join(args.work, "tree"), os.path.join(args.work, "meta")
+        title_key = title_keyed(drive)
+        if title_key:
+            print("  %s opens its containers with its own key (config.sys KEY=); "
+                  "they are kept as the server sends them" % title.partition)
         if p.current:
             print("already at the latest version, %s" % p.latest)
-            if not (args.hddid and args.derive_elf):
+            if not args.derive_elf or not (args.hddid or title_key):
                 return 3
-            # Current, but its keyed files may have been keyed with a value
-            # the console does not use; those are rebuilt from their .tmp2.
-            # The work folder starts empty, so --verify checks only these.
+            # Current, but an earlier version of this updater may have keyed
+            # its files with a value the console does not use, or keyed a
+            # title-keyed title's containers at all; those are put right from
+            # their .tmp2. The work folder starts empty, so --verify checks
+            # only these.
             shutil.rmtree(args.work, ignore_errors=True)
-            keys = load_keys(args, drive)
-            fixed = rekey(drive, keys, stage, title)
+            if title_key:
+                load_disc_keys(args)
+                fixed = restore_served(drive, stage)
+                what = "Putting back %d file(s) the way the console's updater leaves them:"
+            else:
+                keys = load_keys(args, drive)
+                fixed = rekey(drive, keys, stage, title)
+                what = "Keying %d file(s) again with the key the console uses:"
             if not fixed:
-                print("  every keyed file opens with the console's key")
+                print("  every keyed file is as the console expects it")
                 return 3
-            print("Keying %d file(s) again with the key the console uses:" % len(fixed))
+            print(what % len(fixed))
             for path in fixed:
                 print("  /" + "/".join(path))
             write_commands(args, commands(drive, None, stage, meta, extra=fixed))
@@ -727,23 +816,36 @@ def main():
             return 0
 
         keys = None
-        if keyed and not (args.hddid and args.derive_elf):
-            sys.exit("this update has %d keyed file(s): --hddid and "
-                     "--derive-elf are required" % keyed)
-        if args.hddid and args.derive_elf:
-            keys = load_keys(args, drive)
+        if title_key:
+            if keyed and not args.derive_elf:
+                sys.exit("this update has %d container(s): --derive-elf is required"
+                         % keyed)
+            if args.derive_elf:
+                load_disc_keys(args)
+        else:
+            if keyed and not (args.hddid and args.derive_elf):
+                sys.exit("this update has %d keyed file(s): --hddid and "
+                         "--derive-elf are required" % keyed)
+            if args.hddid and args.derive_elf:
+                keys = load_keys(args, drive)
 
         print("Downloading %s files (%.0f MB); each one is checked against the list"
               % (format(len(p.chosen), ","), blob / 1e6))
         fetch_all(p, host, port, number_of(title), stage, args.connections,
                   bar=progress.Bar(len(p.chosen), weight=blob))
         fixed = []
-        if keys:
+        skip = {b.path for b, _row in p.chosen}
+        if title_key and args.derive_elf:
+            if keyed:
+                print("Keeping %d container(s) as served, with the module from each "
+                      "beside it, as the console's updater does" % keyed)
+                fixed = convert(p, stage, None, title, show=True, title_key=True)
+            fixed += restore_served(drive, stage, skip=skip)
+        elif keys:
             if keyed:
                 print("Keying %d file(s) to this drive, as the console's updater does" % keyed)
                 convert(p, stage, keys, title, show=True)
-            fixed = rekey(drive, keys, stage, title,
-                          skip={b.path for b, _row in p.chosen})
+            fixed = rekey(drive, keys, stage, title, skip=skip)
             if fixed:
                 print("  and %d file(s) already on the drive keyed again with the "
                       "key the console uses" % len(fixed))
@@ -754,6 +856,13 @@ def main():
         return 0
     finally:
         drive.close()
+
+
+def load_disc_keys(args):
+    """Square Enix's public keys and derivation constants off the disc: enough
+    to open a served container, without the drive's own key."""
+    from . import discs, route
+    route.use_keys(discs.identify(args.disc) if args.disc else None, args.derive_elf)
 
 
 def load_keys(args, drive):

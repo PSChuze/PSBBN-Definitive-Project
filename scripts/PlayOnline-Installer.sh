@@ -1151,6 +1151,31 @@ fi
 # off. On a plaintext drive the plain modules are then rebuilt from the
 # updated ones, as pexsync does after a console update.
 if [[ ${#UPDATE_SET[@]} -gt 0 ]]; then
+    # The Viewer updates itself on the console, and on a plaintext drive that
+    # replaces only its keyed modules: the plain ones it actually runs stay on
+    # the old build while it reports the new one. A title updated for the new
+    # Viewer then cannot start on the old code; FFXI's 2016 build stops at a
+    # black screen. So the Viewer's plain modules are brought into step with
+    # its own updates first (see pexsync.py), as an install run does.
+    if grep -q -- "${TITLE_PART[$VIEWER_KEY]}" <<< "$TOC" && [[ -n "${DERIVE_ELF}" ]]; then
+        echo "${UI_TEXT[POL_DOING_VIEWERSYNC]}"
+        vcmds="${WORK_DIR}/viewer-pexsync.txt"
+        sudo rm -rf "$vcmds" "${WORK_DIR}/viewer-pexsync"
+        polsudo pexsync "$DEVICE" --title "$VIEWER_KEY" --disc "${TITLE_DISC[$VIEWER_KEY]}" \
+            --derive-elf "${DERIVE_ELF}" --work "${WORK_DIR}/viewer-pexsync" \
+            --out "$vcmds" 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+        if [[ -s "$vcmds" ]]; then
+            sudo "${PFS_SHELL}" < "$vcmds" 2>&1 \
+                | polmod pfsprogress "$(wc -l < "$vcmds")" --log "${LOG_FILE}"
+            # Read them back: a module left half-written stops the Viewer at
+            # its logo, and pfsshell does not say so.
+            polsudo pexsync "$DEVICE" --title "$VIEWER_KEY" --disc "${TITLE_DISC[$VIEWER_KEY]}" \
+                --derive-elf "${DERIVE_ELF}" --work "${WORK_DIR}/viewer-pexsync" \
+                >> "${LOG_FILE}" 2>&1
+            [[ $? -eq 3 ]] || echo "  ${UI_TEXT[POL_ERROR_VERIFY]} ${VIEWER_KEY}"
+        fi
+        sudo rm -rf "$vcmds" "${WORK_DIR}/viewer-pexsync"
+    fi
     key_args=()
     [[ -f "${HDDID_FILE}" ]] && key_args+=(--hddid "${HDDID_FILE}")
     [[ -n "${DERIVE_ELF}" ]] && key_args+=(--derive-elf "${DERIVE_ELF}")

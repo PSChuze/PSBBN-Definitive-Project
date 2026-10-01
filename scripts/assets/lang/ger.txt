@@ -509,6 +509,7 @@ POL_ASK_RESYNC=Die bereits auf dem Laufwerk vorhandenen Titel von Ihren Discs au
 POL_DOING_RESYNC=Reparatur von der Disc:
 POL_RESYNC_CURRENT=Bereits aktuell.
 POL_DOING_UPDATE=Aktualisierung vom Server:
+POL_DOING_VIEWERSYNC=Die Module des Viewers werden auf seine eigenen Updates gebracht...
 POL_ERROR_UPDATE=Aktualisierung fehlgeschlagen (Installer erneut starten, um dort fortzufahren):
 POL_MENU_OPTION_1=PlayOnline-Titel installieren
 POL_MENU_OPTION_2=Installierte Titel vom PlayOnline-Server aktualisieren

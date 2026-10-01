@@ -154,6 +154,51 @@ class Tests(unittest.TestCase):
         for n in no:
             self.assertFalse(update.keyed_on_console(n), n)
 
+    def test_title_key_is_read_from_config_sys(self):
+        class D(object):
+            def __init__(self, cfg):
+                self.cfg = cfg
+
+            def read(self, path):
+                return self.cfg if path == "config.sys" else None
+        ffxi = b"TITLE=FINAL FANTASY XI\r\nBOOT=/image/ffxi/prog/ps2/ffxi_pol.pex\r\nKEY=/polkey.dat\r\n"
+        self.assertTrue(update.title_keyed(D(ffxi)))
+        self.assertFalse(update.title_keyed(D(b"TITLE=x\nBOOT=/bin/kel_rel.dat\n")))
+        self.assertFalse(update.title_keyed(D(None)))
+        self.assertEqual(update.module_name("a/ffxi_pol.pex.enc"), "a/ffxi_pol.pex")
+        self.assertEqual(update.module_name("a/dancer.enc"), "a/dancer.bin")
+        self.assertIsNone(update.module_name("a/b.dat"))
+
+    def test_restore_served_puts_back_only_what_differs(self):
+        p = "image/ffxi/prog/ps2/"
+
+        class D(object):
+            files = {}
+            data = {
+                p + "ffxi_pol.pex.enc": b"keyed by an earlier run",
+                p + "ffxi_pol.pex.enc.tmp2": b"served",
+                p + "ffxi_pol.pex": b"module",
+                p + "dancer.enc": b"served d",
+                p + "dancer.enc.tmp2": b"served d",
+                p + "dancer.bin": b"module d",
+                p + "other.enc": b"no tmp2 beside it",
+            }
+
+            def read(self, path):
+                return self.data.get(path)
+        D.files = {tuple(k.split("/")): {} for k in D.data}
+        calls = []
+        saved = update.served_form
+        update.served_form = lambda served, path, stage: (
+            calls.append((served, path)) or [tuple(update.module_name(path).split("/"))])
+        try:
+            out = update.restore_served(D(), "stage")
+        finally:
+            update.served_form = saved
+        self.assertEqual(calls, [(b"served", p + "ffxi_pol.pex.enc")])
+        self.assertEqual(["/".join(x) for x in out],
+                         [p + "ffxi_pol.pex.enc", p + "ffxi_pol.pex"])
+
     def test_work_list_matches_the_viewers_shape(self):
         blocks = polp.parse_list("file a {\n20260913_M 1 2 3 v/a.slc 4\n}\n\nend\n")
         self.assertEqual(polp.work_list(blocks),
