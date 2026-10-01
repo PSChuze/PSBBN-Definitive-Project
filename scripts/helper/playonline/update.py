@@ -196,8 +196,21 @@ class Drive(object):
 
 # --- the drive's keys ---------------------------------------------------------
 
+ZERO_FOUR = bytes(4)
+
+
 class Keys(object):
-    """What converting a file to the drive's key needs."""
+    """What converting a file to the drive's key needs.
+
+    The key is built from the HDD ID and a 4-byte value, `four`, that the
+    installer writes into the drive's `__net` record. A console has been
+    found keying with `four` = 0 on a drive whose record says 0001776c
+    (2026-10-01: Janhourou's JanHouRou.dat.enc as the Viewer's Check Files
+    rewrote it opens with the drive's HDD ID and zero, and with nothing
+    else). Files keyed with the record's value then do not open on that
+    console and the title stops at a black screen. So the record's value is
+    only a candidate: `calibrate` asks modules the console keyed itself.
+    """
 
     def __init__(self, image, hddid_path, pcsx2=False):
         from .lib import ci_transcrypt, polrecord
@@ -213,7 +226,58 @@ class Keys(object):
             raise SystemExit("the drive's __net record does not open with %s: it "
                              "is not the HDD ID this drive was keyed to"
                              % hddid_path)
-        self.four = head[:4]
+        self.record_four = head[:4]
+        self.four = self.record_four
+        self.candidates = [self.record_four]
+        if self.record_four != ZERO_FOUR:
+            self.candidates.append(ZERO_FOUR)
+
+    def opens(self, blob, four=None):
+        """True when `blob` opens with the key, False when it is in the keyed
+        layout and does not, None when it is not in the keyed layout at all
+        (a disc-form module, say)."""
+        from .lib import ci_transcrypt
+        results = ci_transcrypt.check(blob, self.hddid, four or self.four,
+                                      pcsx2=self.pcsx2)
+        tags = [good for label, good, _d in results if label.endswith("bulk tag")]
+        if not tags:
+            return None
+        return all(good for _l, good, _d in results)
+
+    def calibrate(self, image, probes=4):
+        """Set `four` to the value the console keys with.
+
+        The Viewer updates itself on the console, and its updater keeps each
+        downloaded module as `.tmp2` beside the keyed one it wrote, so those
+        pairs on the Viewer partition were keyed by the console. Each
+        candidate is tried on a few of them. Returns {four: modules opened};
+        empty when the drive has no such pair, and `four` is then left as
+        the record's.
+        """
+        from .driveinfo import viewers
+        votes = {}
+        for region in viewers(image):
+            vdrive = Drive(image, titles.TITLES["viewer-" + region])
+            try:
+                tried = 0
+                for path in sorted(vdrive.files):
+                    name = "/".join(path)
+                    if not name.endswith(".pex.enc"):
+                        continue
+                    if path[:-1] + (path[-1] + ".tmp2",) not in vdrive.files:
+                        continue
+                    blob = vdrive.read(name)
+                    for four in self.candidates:
+                        if self.opens(blob, four):
+                            votes[four] = votes.get(four, 0) + 1
+                    tried += 1
+                    if tried >= probes:
+                        break
+            finally:
+                vdrive.close()
+        if votes:
+            self.four = max(votes, key=votes.get)
+        return votes
 
     def installed(self, universal):
         from .lib import ci_transcrypt
@@ -239,22 +303,55 @@ def check_drive_key(drive, keys):
     as the disc ships them and only the ones an update replaced are keyed, so
     a file whose layout is not the keyed one (its sizes block or length do not
     parse) is passed over. Only a keyed layout whose bulk does not open is a
-    wrong key. Returns the module read, or None when there is none to read.
+    wrong key. A module keyed with either candidate `four` passes: an earlier
+    run may have keyed with the record's value, which `rekey` then repairs.
+    Returns the module read, or None when there is none to read.
     """
-    from .lib import ci_transcrypt
     for path in sorted(drive.files):
         name = "/".join(path)
         if not name.endswith(".pex.enc"):
             continue
-        results = ci_transcrypt.check(drive.read(name), keys.hddid, keys.four,
-                                      pcsx2=keys.pcsx2)
-        tags = [good for label, good, _d in results if label.endswith("bulk tag")]
-        if not tags:
+        blob = drive.read(name)
+        states = [keys.opens(blob, four) for four in keys.candidates]
+        if all(s is None for s in states):
             continue                    # not in the drive-keyed layout
-        if all(tags):
+        if any(states):
             return name
-        keys.check(drive.read(name), "/" + name + " on the drive")
+        keys.check(blob, "/" + name + " on the drive")
     return None
+
+
+def rekey(drive, keys, stage, title, skip=()):
+    """Key again every keyed file on the partition the console cannot open.
+
+    A keyed file with its `.tmp2` (the universal form it was made from)
+    beside it is rebuilt from the `.tmp2` with the key the console uses and
+    staged at its own path. Files named in `skip` (being rewritten by this
+    update anyway) and files without a `.tmp2` are left alone. Returns the
+    path tuples staged.
+    """
+    fixed = []
+    for path in sorted(drive.files):
+        name = "/".join(path)
+        if name in skip or name.endswith(".tmp2") or not keyed_on_console(name):
+            continue
+        tmp2 = path[:-1] + (path[-1] + ".tmp2",)
+        if tmp2 not in drive.files:
+            continue
+        if keys.opens(drive.read(name)) is not False:
+            continue                    # opens already, or not keyed at all
+        try:
+            out = keys.installed(drive.read("/".join(tmp2)))
+        except (ValueError, SystemExit):
+            continue                    # the .tmp2 is not a universal container
+        if name == title.product:
+            out = patch_boot_container(out, keys)
+        dest = os.path.join(stage, *path)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, "wb") as f:
+            f.write(out)
+        fixed.append(path)
+    return fixed
 
 
 # --- the plan -----------------------------------------------------------------
@@ -462,11 +559,15 @@ def write_own_files(plan_, meta):
 
 # --- the commands -------------------------------------------------------------
 
-def commands(drive, plan_, stage, meta):
+def commands(drive, plan_, stage, meta, extra=()):
+    """pfsshell commands for an update (`plan_`) and/or files `rekey` staged
+    (`extra`, path tuples already on the drive). With `plan_` None only the
+    `extra` files are put and the version files are not touched."""
     q = pfsput.quote
+    chosen = plan_.chosen if plan_ is not None else []
     out = ["device %s" % drive.image, "mount %s" % drive.title.partition]
     want_dirs = set()
-    for b, _row in plan_.chosen:
+    for b, _row in chosen:
         path = tuple(b.path.split("/"))
         for k in range(1, len(path)):
             want_dirs.add(path[:k])
@@ -475,12 +576,14 @@ def commands(drive, plan_, stage, meta):
         out.append("mkdir %s" % q(d[-1]))
 
     by_dir = {}
-    for b, _row in plan_.chosen:
+    for b, _row in chosen:
         path = tuple(b.path.split("/"))
         names = [path[-1]]
         if keyed_on_console(b.path):
             names.append(path[-1] + ".tmp2")
         by_dir.setdefault(path[:-1], []).extend(names)
+    for path in extra:
+        by_dir.setdefault(path[:-1], []).append(path[-1])
     for d in sorted(by_dir):
         out.append("cd /%s" % "/".join(d))
         out.append("lcd %s" % q(pfsput.host_path(os.path.join(stage, *d))))
@@ -489,11 +592,12 @@ def commands(drive, plan_, stage, meta):
                 out.append("rm %s" % q(name))
             out.append("put %s" % q(name))
 
-    out += ["cd /", "lcd %s" % q(pfsput.host_path(meta))]
-    for name in (PATCH_CFG, PATCH_WORK, PATCH_VER):       # the version last
-        if (name,) in drive.files:
-            out.append("rm %s" % name)
-        out.append("put %s" % name)
+    if plan_ is not None:
+        out += ["cd /", "lcd %s" % q(pfsput.host_path(meta))]
+        for name in (PATCH_CFG, PATCH_WORK, PATCH_VER):       # the version last
+            if (name,) in drive.files:
+                out.append("rm %s" % name)
+            out.append("put %s" % name)
     return out + ["umount", "exit"]
 
 
@@ -579,9 +683,25 @@ def main():
         print("%s is at version %s; asking %s:%d (%s) for updates"
               % (title.partition, drive.version(), host, port, region))
         p = plan(drive, host, port, region)
+        stage, meta = os.path.join(args.work, "tree"), os.path.join(args.work, "meta")
         if p.current:
             print("already at the latest version, %s" % p.latest)
-            return 3
+            if not (args.hddid and args.derive_elf):
+                return 3
+            # Current, but its keyed files may have been keyed with a value
+            # the console does not use; those are rebuilt from their .tmp2.
+            # The work folder starts empty, so --verify checks only these.
+            shutil.rmtree(args.work, ignore_errors=True)
+            keys = load_keys(args, drive)
+            fixed = rekey(drive, keys, stage, title)
+            if not fixed:
+                print("  every keyed file opens with the console's key")
+                return 3
+            print("Keying %d file(s) again with the key the console uses:" % len(fixed))
+            for path in fixed:
+                print("  /" + "/".join(path))
+            write_commands(args, commands(drive, None, stage, meta, extra=fixed))
+            return 0
         size = sum(row.size for _b, row in p.chosen)
         blob = sum(row.blob_size for _b, row in p.chosen)
         keyed = sum(1 for b, _row in p.chosen if keyed_on_console(b.path))
@@ -602,37 +722,59 @@ def main():
             return 0
 
         keys = None
-        if keyed:
-            if not (args.hddid and args.derive_elf):
-                sys.exit("this update has %d keyed file(s): --hddid and "
-                         "--derive-elf are required" % keyed)
-            from . import discs, route
-            route.use_keys(discs.identify(args.disc) if args.disc else None,
-                           args.derive_elf)
-            keys = Keys(args.drive, args.hddid, args.pcsx2)
-            name = check_drive_key(drive, keys)
-            if name:
-                print("  the key reads /%s on the drive" % name)
+        if keyed and not (args.hddid and args.derive_elf):
+            sys.exit("this update has %d keyed file(s): --hddid and "
+                     "--derive-elf are required" % keyed)
+        if args.hddid and args.derive_elf:
+            keys = load_keys(args, drive)
 
-        stage, meta = os.path.join(args.work, "tree"), os.path.join(args.work, "meta")
         print("Downloading %s files (%.0f MB); each one is checked against the list"
               % (format(len(p.chosen), ","), blob / 1e6))
         fetch_all(p, host, port, number_of(title), stage, args.connections,
                   bar=progress.Bar(len(p.chosen), weight=blob))
+        fixed = []
         if keys:
-            print("Keying %d file(s) to this drive, as the console's updater does" % keyed)
-            convert(p, stage, keys, title, show=True)
+            if keyed:
+                print("Keying %d file(s) to this drive, as the console's updater does" % keyed)
+                convert(p, stage, keys, title, show=True)
+            fixed = rekey(drive, keys, stage, title,
+                          skip={b.path for b, _row in p.chosen})
+            if fixed:
+                print("  and %d file(s) already on the drive keyed again with the "
+                      "key the console uses" % len(fixed))
         write_own_files(p, meta)
-        cmds = commands(drive, p, stage, meta)
-        if args.out:
-            with open(args.out, "w", encoding="utf-8", newline="\n") as f:
-                f.write("\n".join(cmds) + "\n")
-            print("  %d pfsshell command(s) in %s" % (len(cmds), args.out))
+        write_commands(args, commands(drive, p, stage, meta, extra=fixed))
         print("Downloaded and checked. Next: writing %s files (%.0f MB) to the drive"
-              % (format(len(p.chosen) + keyed, ","), size / 1e6))
+              % (format(len(p.chosen) + keyed + len(fixed), ","), size / 1e6))
         return 0
     finally:
         drive.close()
+
+
+def load_keys(args, drive):
+    """The drive's keys, with `four` set to what the console keys with."""
+    from . import discs, route
+    route.use_keys(discs.identify(args.disc) if args.disc else None, args.derive_elf)
+    keys = Keys(args.drive, args.hddid, args.pcsx2)
+    votes = keys.calibrate(args.drive)
+    if votes:
+        print("  the console keys with %s (%d of its own modules on the Viewer "
+              "partition open with it; the drive's record says %s)"
+              % (keys.four.hex(), votes[keys.four], keys.record_four.hex()))
+    else:
+        print("  no module the console keyed itself was found; keying with the "
+              "drive's record value %s" % keys.four.hex())
+    name = check_drive_key(drive, keys)
+    if name:
+        print("  the HDD ID reads /%s on the drive" % name)
+    return keys
+
+
+def write_commands(args, cmds):
+    if args.out:
+        with open(args.out, "w", encoding="utf-8", newline="\n") as f:
+            f.write("\n".join(cmds) + "\n")
+        print("  %d pfsshell command(s) in %s" % (len(cmds), args.out))
 
 
 def _default_host():

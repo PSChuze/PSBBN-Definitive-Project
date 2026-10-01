@@ -207,6 +207,13 @@ class Tests(unittest.TestCase):
             # the version goes on last, after the lists, and replaces the old one
             self.assertEqual(cmds[-4:], ["rm patch.ver", "put patch.ver", "umount", "exit"])
             self.assertLess(cmds.index("put patch2.cfg"), cmds.index("put patch.ver"))
+            # re-keyed files ride along; on their own, the version files stay
+            cmds = update.commands(FakeDrive(), p, stage, meta, extra=[("a.dat",)])
+            self.assertEqual(cmds.count("put a.dat"), 2)
+            only = update.commands(FakeDrive(), None, stage, meta, extra=[("a.dat",)])
+            self.assertIn("put a.dat", only)
+            self.assertNotIn("put patch.ver", only)
+            self.assertEqual(only[-2:], ["umount", "exit"])
             # a second run keeps what it already has
             kept = update.fetch_all(p, "127.0.0.1", srv.port, "0001", stage, 2,
                                     log=lambda *_: None)
