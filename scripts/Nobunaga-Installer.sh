@@ -452,7 +452,16 @@ if [[ ${NOBU_INSTALLED_NOW} -eq 1 ]]; then
 else
     center_text "${UI_TEXT[NOBU_READY]}"
     [[ "${INFO[netcnf]}" == "present" ]] || center_text "${UI_TEXT[NOBU_NETCNF_MISSING]}"
-    center_text "${UI_TEXT[NOBU_CONSOLE_PENDING]}"
+    # The PC-side install did not run: say WHY, so a prepared-only drive is not a
+    # mystery. It needs both the disc extract and the install tools.
+    if [[ ! -f "${NOBU_DISC}/SYSTEM.CNF" || ! -d "${NOBU_DISC}/AUTH" ]]; then
+        center_text "To install now: extract your Hiryuu no Shou disc to ${NOBU_DISC}"
+        echo "  install skipped: no disc extract at ${NOBU_DISC} (need SYSTEM.CNF + AUTH/)" >> "${LOG_FILE}"
+    fi
+    if [[ ! -f "${NOBU_INSTALL_PY}" ]]; then
+        center_text "Install tools not found - set NOBU_TOOLS_OVERRIDE to your nobunaga/tools dir."
+        echo "  install skipped: nobuinstall.py not found (looked in ${NOBU_TOOLS})" >> "${LOG_FILE}"
+    fi
 fi
 echo
 center_text "${UI_TEXT[NOBU_BACKUPS]} ${BACKUP_DIR}"
