@@ -153,6 +153,20 @@ nobu_retitle() {
         || echo "[!] retitle ($1) failed; the name in the browser is unchanged." >> "${LOG_FILE}"
 }
 
+# Place Nobunaga's DNAS boot gate (access_flag25 at __net+0x202000), keyed to the
+# psbb i.Link the dnasload spoof serves. This writes ONLY that record; the shared
+# PlayOnline record at +0x201800 is never touched (accessflag.py refuses if it
+# would change), so FFXI/the Viewer keep decrypting. The current record is backed
+# up first. See nobunaga/accessflag.py.
+nobu_accessflag() {
+    if nobusudo nobunaga.accessflag "${DEVICE}" --write --save "${BACKUP_DIR}" \
+        >> "${LOG_FILE}" 2>&1; then
+        echo "  ${UI_TEXT[NOBU_AF_DONE]:-DNAS boot record placed, PlayOnline record left intact.}"
+    else
+        echo "[!] access_flag25 write failed; the game may not pass its boot check. See logs/nobunaga-installer.log" >> "${LOG_FILE}"
+    fi
+}
+
 # True when the kit carries a translation pack. A kit built without one still
 # has translation/ holding a PUT-TRANSLATION-HERE.txt placeholder, which is not
 # a pack (nobu-translate.sh skips PUT-* files the same way).
@@ -323,13 +337,84 @@ if [[ "${INFO[net]}" != "ok" ]]; then
         >> "${LOG_FILE}" 2>&1 || error_msg "${UI_TEXT[NOBU_ERROR_NET]}"
 fi
 
-# ---- optional PC-side install (tester install kit) ----------------------
-# The public toolkit ships no game data and no DNAS2 tooling. If a tester has
-# placed an install kit at ${NOBU_DIR}/kit/, offer to install from it now; a
-# plain public checkout has no kit and falls through to the prepare-only path.
+# ---- optional PC-side install (from the player's own disc) --------------
+# Primary path (2026-09-29 onward): the player extracts their disc into
+# ${NOBU_DIR}/disc/ (Hiryuu no Shou expansion, SLPM-65197). The installer
+# builds every drive-form container from the disc bytes on the fly, keyed to
+# the target drive's ID -- no precomputed neutral bundle needed.
+# Legacy fallback: the older tester install kit at ${NOBU_DIR}/kit/ if the
+# disc is not present; retained for the transition.
+NOBU_DISC="${NOBU_DIR}/disc"
 NOBU_KIT="${NOBU_DIR}/kit/nobu-install-kit.sh"
+# nobunaga/tools/ ships as public code (no Koei/Sony bytes -- the disc supplies
+# everything). Tester can override via $NOBU_TOOLS; falls back to a common
+# layout under NOBU_DIR/tools, then a git-checkout sibling of the toolkit.
+NOBU_TOOLS="${NOBU_TOOLS_OVERRIDE:-${NOBU_DIR}/tools}"
+[[ -f "${NOBU_TOOLS}/nobuinstall.py" ]] || NOBU_TOOLS="${SCRIPTS_DIR}/../../nobunaga/nobunaga/tools"
+[[ -f "${NOBU_TOOLS}/nobuinstall.py" ]] || NOBU_TOOLS="${SCRIPTS_DIR}/../../Nobunaga Online/nobunaga/tools"
+NOBU_INSTALL_PY="${NOBU_TOOLS}/nobuinstall.py"
+# The pre-signed spoof boot loader. nobuinstall fills it per drive from the
+# disc's own boot ELF/IOP image + this drive's HDD ID (no re-signing, no PS2
+# keys), then installs it as pfs:/dnasload.elf in place of the disc's stock
+# dnasload, which cannot pass the dead DNAS console binding. It serves the
+# drive's HDD ID and spoofs the psbb i.Link the access_flag25 record is keyed
+# to, and carries the English text-input default. Ships in the toolkit assets;
+# override with $NOBU_LOADER_OVERRIDE.
+NOBU_LOADER="${NOBU_LOADER_OVERRIDE:-${SCRIPTS_DIR}/assets/nobunaga/polbbnexec-inputpatch.kelf}"
 NOBU_INSTALLED_NOW=0
-if [[ -f "${NOBU_KIT}" ]]; then
+
+# Prefer the disc path when the extract is present and looks right (has
+# SYSTEM.CNF at its root and the AUTH/ container tree).
+if [[ -f "${NOBU_DISC}/SYSTEM.CNF" ]] && [[ -d "${NOBU_DISC}/AUTH" ]] \
+   && [[ -f "${NOBU_INSTALL_PY}" ]]; then
+    echo
+    if [[ ! -f "${POL_HDDID_FILE}" ]]; then
+        center_text "${UI_TEXT[NOBU_KIT_NEEDS_HDDID]}"
+    else
+        printf "%s " "${UI_TEXT[NOBU_KIT_ASK]}"
+        read -r answer </dev/tty
+        case "$answer" in
+            [Yy]*)
+                # Translation folder is auto-created next to the disc extract by
+                # nobuinstall.py on first run. Users drop the translation zip's
+                # contents into ${NOBU_DIR}/translation/ -- anything found there
+                # (except README*) is overlaid onto the staged tree.
+                TR_FLAG=""
+                if [[ -d "${NOBU_DIR}/translation" ]] && [[ -n "$(find "${NOBU_DIR}/translation" -type f ! -name 'README*' 2>/dev/null | head -n 1)" ]]; then
+                    printf "%s " "${UI_TEXT[NOBU_KIT_ASK_TRANSLATE]}"
+                    read -r tr_answer </dev/tty
+                    case "$tr_answer" in [Yy]*) TR_FLAG="--translation ${NOBU_DIR}/translation";; esac
+                fi
+                LOADER_FLAG=""
+                if [[ -f "${NOBU_LOADER}" ]]; then
+                    LOADER_FLAG="--loader ${NOBU_LOADER}"
+                else
+                    echo "[!] spoof loader not found at ${NOBU_LOADER}; installing with the disc's stock dnasload (will NOT boot past the DNAS check)." >> "${LOG_FILE}"
+                fi
+                echo "${UI_TEXT[NOBU_KIT_INSTALLING]}"
+                sudo -E env PYTHONPATH="${HELPER_DIR}" "${NOBU_PY}" \
+                    "${NOBU_INSTALL_PY}" "${DEVICE}" \
+                    --disc "${NOBU_DISC}" \
+                    --hddid "${POL_HDDID_FILE}" \
+                    --helper "${HELPER_DIR}" \
+                    --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
+                    ${LOADER_FLAG} \
+                    --write ${TR_FLAG} \
+                    2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_KIT_ERROR]}"
+                NOBU_INSTALLED_NOW=1
+                nobu_accessflag
+                if [[ -n "${TR_FLAG}" ]]; then
+                    nobu_retitle english
+                else
+                    nobu_retitle japanese
+                fi
+                ;;
+        esac
+    fi
+elif [[ -f "${NOBU_KIT}" ]]; then
+    # Legacy pre-built kit. Retained for the transition; the disc path above
+    # is the supported one going forward.
     echo
     if [[ ! -f "${POL_HDDID_FILE}" ]]; then
         center_text "${UI_TEXT[NOBU_KIT_NEEDS_HDDID]}"
@@ -350,7 +435,7 @@ if [[ -f "${NOBU_KIT}" ]]; then
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_KIT_ERROR]}"
                 NOBU_INSTALLED_NOW=1
-                # TR_FLAG is only set when a real pack was there to apply.
+                nobu_accessflag
                 if [[ -n "${TR_FLAG}" ]]; then
                     nobu_retitle english
                 else
