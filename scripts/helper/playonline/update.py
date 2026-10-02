@@ -159,10 +159,15 @@ class Drive(object):
         return None if ino is None else polfill.read_content(self.part, ino)
 
     def version(self):
+        """The drive's `patch.ver`, or None when it has none.
+
+        The Viewer writes the file on a title's first update. Front Mission
+        Online as Square Enix installs it has none, and the Viewer then asks
+        the server with an empty version.
+        """
         raw = self.read(PATCH_VER)
         if raw is None:
-            raise SystemExit("%s has no patch.ver, so it was never installed "
-                             "the way the Viewer installs a title" % self.title.partition)
+            return None
         return raw.split(b"\0")[0].decode("latin-1").strip()
 
     def zones_free(self):
@@ -363,24 +368,43 @@ def rekey(drive, keys, stage, title, skip=()):
 # --- the plan -----------------------------------------------------------------
 
 class Plan(object):
-    def __init__(self, have, latest, listing, blocks, chosen, region, tool):
+    def __init__(self, have, latest, listing, blocks, chosen, region, tool,
+                 unpatched=False):
         self.have, self.latest = have, latest
         self.listing = listing          # the list, decompressed, as served
         self.blocks = blocks
         self.chosen = chosen            # [(block, row)] in list order
         self.region, self.tool = region, tool
+        # The drive had no patch.ver, and `have` is the list's base version.
+        self.unpatched = unpatched
 
     @property
     def current(self):
         return polp.version_key(self.latest) <= polp.version_key(self.have)
 
 
+def base_version(blocks):
+    """The oldest version in the list, the build a title is installed at.
+
+    Every file the install puts down has a row at that version, so a title
+    that was never patched holds its files (FMO: 20050324_0, the console's
+    own build stamp)."""
+    versions = [r.version for b in blocks for r in b.rows]
+    return min(versions, key=polp.version_key) if versions else None
+
+
+def same_size(drive, path, size):
+    ino = drive.files.get(tuple(path.split("/")))
+    return ino is not None and ino["size"] == size
+
+
 def plan(drive, host, port, region, tool=True):
     have = drive.version()
     client = polp.Client(host, port, region, number_of(drive.title), tool=tool)
     try:
-        status, latest = client.version(have)
-        if polp.version_key(latest) <= polp.version_key(have):
+        # A drive with no patch.ver asks with an empty version, as the Viewer does.
+        status, latest = client.version(have or "")
+        if have is not None and polp.version_key(latest) <= polp.version_key(have):
             return Plan(have, latest, None, [], [], region, client.tool)
         listing = client.patch_list()
     except polp.Rejected:
@@ -389,14 +413,26 @@ def plan(drive, host, port, region, tool=True):
     finally:
         client.close()
     blocks = polp.parse_list(listing.decode("latin-1"))
+    unpatched = have is None
+    if unpatched:
+        have = base_version(blocks)
+        if have is None:
+            raise SystemExit("%s has no patch.ver and the server's list for it "
+                             "is empty" % drive.title.partition)
     chosen = []
     for b in blocks:
         if b.path in OWN_FILES:
             continue
         row = b.newest(latest)
-        if row is not None and polp.version_key(row.version) > polp.version_key(have):
+        if row is None:
+            continue
+        if polp.version_key(row.version) > polp.version_key(have):
             chosen.append((b, row))
-    return Plan(have, latest, listing, blocks, chosen, region, client.tool)
+        elif unpatched and not same_size(drive, b.path, row.size):
+            # Taken to be at the base version, so a file that is missing or
+            # another size is fetched, as Check Files would fetch it.
+            chosen.append((b, row))
+    return Plan(have, latest, listing, blocks, chosen, region, client.tool, unpatched)
 
 
 def need_zones(drive, chosen):
@@ -763,7 +799,8 @@ def main():
         port = args.port or polp.port_for(number_of(title))
         region = args.region or region_for(args.drive, title)
         print("%s is at version %s; asking %s:%d (%s) for updates"
-              % (title.partition, drive.version(), host, port, region))
+              % (title.partition, drive.version() or "(none, never patched)",
+                 host, port, region))
         p = plan(drive, host, port, region)
         stage, meta = os.path.join(args.work, "tree"), os.path.join(args.work, "meta")
         title_key = title_keyed(drive)
