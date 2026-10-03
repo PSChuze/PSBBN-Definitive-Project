@@ -235,6 +235,9 @@ POPN_DISC="${POPN_DIR}/disc"
 POPN_TOOLS="${POPN_TOOLS_OVERRIDE:-${POPN_DIR}/tools}"
 [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${SCRIPTS_DIR}/../../popn/popn/tools"
 [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${SCRIPTS_DIR}/../../Pop'N Puzzle Dama Online/popn/tools"
+# Bundled copy inside the toolkit -- makes a fresh clone self-contained (no
+# external popn repo needed). Last fallback so a dev checkout's tools win.
+[[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${HELPER_DIR}/popn/tools"
 POPN_INSTALL_PY="${POPN_TOOLS}/popninstall.py"
 # The pre-signed spoof boot loader. popninstall fills it per drive from this
 # drive's HDD ID + the player's own patched boot ELF and DNAS280.IMG IOPRP,
