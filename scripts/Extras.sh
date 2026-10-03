@@ -1827,26 +1827,26 @@ option_five() {
 # Nobunaga's Ambition Online: a step of its own, like the PlayOnline one, so
 # nothing above changes. It is handed the drive found at startup.
 option_six() {
-    "${SCRIPTS_DIR}/Nobunaga-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
+    bash "${SCRIPTS_DIR}/Nobunaga-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
 }
 
 # Net de Bomberman: the same shape, but the install is complete from the PC
 # (two partitions, no console step). Handed the drive found at startup.
 option_seven() {
-    "${SCRIPTS_DIR}/Bomb-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
+    bash "${SCRIPTS_DIR}/Bomb-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
 }
 
 # Minna no Golf Online: fully PC-side, one partition. The player's disc extract
 # supplies the game bytes; the toolkit's kit assets supply the seal + loader.
 option_eight() {
-    "${SCRIPTS_DIR}/Mingol-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
+    bash "${SCRIPTS_DIR}/Mingol-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
 }
 
 # pop'n Puzzle Dama Online: fully PC-side, one partition. The player's disc
 # extract supplies the game bytes; the toolkit fills a pre-signed loader for the
 # drive so it boots disc-less. Handed the drive found at startup.
 option_nine() {
-    "${SCRIPTS_DIR}/Popn-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
+    bash "${SCRIPTS_DIR}/Popn-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
 }
 
 clear
