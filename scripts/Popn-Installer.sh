@@ -103,7 +103,7 @@ fi
 : "${UI_TEXT[POPN_RESWAP_RUNNING]:=Swapping the boot loader in place...}"
 : "${UI_TEXT[POPN_RESWAP_DONE]:=Loader swapped. Boot HDD-OSD to launch it.}"
 : "${UI_TEXT[POPN_RESWAP_ERROR]:=Loader swap failed. See logs/popn-installer.log}"
-: "${UI_TEXT[POPN_TR_ASK]:=Apply the English translation (UI text and the menu/logo textures)? (y/N)}"
+: "${UI_TEXT[POPN_TR_ASK]:=Apply the English text translation? (Menu/logo images stay/restore to the original Japanese.) (y/N)}"
 : "${UI_TEXT[POPN_RECOVER_ASK]:=The game is installed on this drive, but this machine has no saved drive ID (playonline.hddid). Recover it from the installed loader on the drive? (Y/n)}"
 : "${UI_TEXT[POPN_RECOVER_RUNNING]:=Recovering the drive ID from the installed loader...}"
 : "${UI_TEXT[POPN_RECOVER_DONE]:=Recovered the drive ID:}"
@@ -180,13 +180,12 @@ echo "=== run $(date) ===" >> "${LOG_FILE}"
     echo "[X] Error: could not install pycryptodome into the venv." >> "${LOG_FILE}"
     error_msg "${UI_TEXT[ERROR_ACTIVATE_PYTHON]}"
 }
-# Pillow is used to render the English menu/logo textures at install time
-# (popninstall.py --translate -> apply_textures.py / pntexedit.py). Only needed
-# when the user opts into the translation, but cheap to ensure up front.
-"${POPN_PY}" -c "import PIL" 2>/dev/null || "${POPN_PY}" -m pip install Pillow >> "${LOG_FILE}" 2>&1 || {
-    echo "[X] Error: could not install Pillow into the venv." >> "${LOG_FILE}"
-    error_msg "${UI_TEXT[ERROR_ACTIVATE_PYTHON]}"
-}
+# Pillow is only needed for the EXPERIMENTAL English texture rendering
+# (popninstall.py --translate-images -> apply_textures.py). The installer does
+# not use that path -- the default English is text-only and images stay stock --
+# so a missing Pillow is a warning here, not a hard error.
+"${POPN_PY}" -c "import PIL" 2>/dev/null || "${POPN_PY}" -m pip install Pillow >> "${LOG_FILE}" 2>&1 \
+    || echo "[!] Pillow not installed; experimental texture rendering (--translate-images) unavailable." >> "${LOG_FILE}"
 sudo -v || error_msg "${UI_TEXT[POPN_ERROR_SUDO]}"
 ( while true; do
       sleep 50

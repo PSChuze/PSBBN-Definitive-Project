@@ -323,11 +323,24 @@ def loader_swap(a):
              ", English" if a.translate else ""))
     puts = ["dnasload.elf"]
     rms = ["rm dnasload.elf"]
-    if a.translate:
-        image_en(a.disc, os.path.join(work, "IMAGE.DAT"))
+    # IMAGE.DAT: with --translate-images, render the (experimental) English
+    # textures; otherwise restore the disc's STOCK IMAGE.DAT, so a re-swap always
+    # leaves the images in a known state -- and so a drive that got the old
+    # low-fidelity English textures is put back to clean Japanese. ELF text
+    # (--translate) is independent of this.
+    img = os.path.join(work, "IMAGE.DAT")
+    if a.translate_images:
+        image_en(a.disc, img)
+        print("== translation: EXPERIMENTAL English IMAGE.DAT textures prepared for swap")
         rms.append("rm IMAGE.DAT")
         puts.append("IMAGE.DAT")
-        print("== translation: English IMAGE.DAT textures prepared for swap")
+    else:
+        src_img = os.path.join(a.disc, "IMAGE.DAT")
+        if os.path.isfile(src_img):
+            shutil.copy(src_img, img)
+            print("== images: restoring the stock (Japanese) IMAGE.DAT")
+            rms.append("rm IMAGE.DAT")
+            puts.append("IMAGE.DAT")
     script = "\n".join(
         ["device %s" % a.device, "mount %s" % PARTITION]
         + rms
@@ -416,10 +429,16 @@ def main():
                     "the drive's HDD ID + the player's own patched boot ELF and DNAS280.IMG carved "
                     "from the disc; no re-signing, so no PS2 keys are needed. Without it the stock "
                     "dnasload is kept and the install will NOT boot disc-less past the DNAS check.")
-    ap.add_argument("--translate", help="apply the English translation: an elf.en.tsv "
+    ap.add_argument("--translate", help="apply the English TEXT translation: an elf.en.tsv "
                     "(popn/translation/elf.en.tsv). The boot ELF is rebuilt with the translated "
-                    "strings before it is embedded in the loader, AND the menu/logo textures are "
-                    "rendered onto IMAGE.DAT (apply_textures.py; needs Pillow). Requires --loader.")
+                    "strings before it is embedded in the loader. Requires --loader. (Images are "
+                    "left as the stock Japanese IMAGE.DAT; see --translate-images.)")
+    ap.add_argument("--translate-images", dest="translate_images", action="store_true",
+                    help="EXPERIMENTAL: also render the English menu/logo textures onto IMAGE.DAT "
+                    "(apply_textures.py; needs Pillow). Off by default -- the current renderer is "
+                    "low fidelity (flat boxes + overlaid text) and can disturb nearby textures "
+                    "(e.g. title/character animations). Without it, IMAGE.DAT stays/restores to "
+                    "stock Japanese.")
     ap.add_argument("--four", default=FOUR)
     ap.add_argument("--part-mib", type=int, default=DEFAULT_MIB)
     ap.add_argument("--pfsshell", default="pfsshell")
@@ -489,13 +508,16 @@ def main():
         print("== loader: NONE given; keeping the disc's stock dnasload.elf "
               "(install will NOT boot disc-less past the DNAS check without --loader)")
 
-    # English textures: rebuild the staged IMAGE.DAT (copied plaintext by seal_tree)
-    # with the translated menu/logo text, so the put writes the English one.
-    if a.translate:
+    # English textures (EXPERIMENTAL, --translate-images only): rebuild the staged
+    # IMAGE.DAT (copied plaintext by seal_tree) with the translated menu/logo text.
+    # Off by default -- the current renderer is low fidelity and can disturb other
+    # textures; the stock IMAGE.DAT seal_tree copied is used otherwise. ELF text
+    # (--translate) is applied regardless and is the normal English experience.
+    if a.translate_images:
         staged_image = os.path.join(staged, "IMAGE.DAT")
         if os.path.isfile(staged_image):
             image_en(a.disc, staged_image)
-            print("== translation: English textures applied to IMAGE.DAT")
+            print("== translation: EXPERIMENTAL English textures applied to IMAGE.DAT")
         else:
             print("== translation: IMAGE.DAT not staged; textures skipped")
 
