@@ -164,10 +164,95 @@ def cmd_elf_x(elf_path, out):
     write_tsv(out, rows)
     print("%s: %d strings" % (out, len(rows)))
 
+def _read_cstr(elf, off, limit):
+    j = off
+    while j < limit and elf[j] != 0:
+        j += 1
+    return elf[off:j], j            # bytes (no NUL), index of the NUL
+
+
+def patch_prefectures(elf, pref_rows):
+    """Repack the 47-prefecture name table into romaji and repoint its pointer
+    array. The names are pure kanji (e.g. 北海道), which is_text() rejects, so the
+    extractor never sees them; they arrive as TSV rows with a `pref:` id, in
+    table order. The names live in a packed rodata blob reached through a 47-entry
+    char* array. Romaji needs more room than some original 8-byte slots give, so
+    we repack the whole blob (it still fits the original region) and rewrite every
+    pointer. Self-locating: the array is found by matching the 47 targets against
+    the JP (or already-applied EN) names, so no file offset is hard-coded.
+    Returns the count of names given an English form (0 = nothing to do)."""
+    en_list = [r["en"] for r in pref_rows]
+    jp_list = [r["jp"] for r in pref_rows]
+    if not any(en_list):
+        return 0
+    n = len(pref_rows)
+    foff, va, sz = load_seg(elf)
+    end = foff + sz
+
+    def va2off(aa):
+        return foff + (aa - va) if va <= aa < va + sz else None
+
+    def target(aa):
+        o = va2off(aa)
+        if o is None:
+            return None
+        raw, _ = _read_cstr(elf, o, end)
+        try:
+            return raw.decode("cp932")
+        except UnicodeDecodeError:
+            return None
+
+    want = [(jp_list[k], en_list[k] or jp_list[k]) for k in range(n)]
+    arr = None
+    for off in range(foff, end - n * 4, 4):
+        if target(struct.unpack_from("<I", elf, off)[0]) not in want[0]:
+            continue
+        if all(target(struct.unpack_from("<I", elf, off + 4 * k)[0]) in want[k]
+               for k in range(n)):
+            arr = off
+            break
+    if arr is None:
+        raise SystemExit("prefecture pointer array not found")
+
+    ptrs = [struct.unpack_from("<I", elf, arr + 4 * k)[0] for k in range(n)]
+    base = va2off(min(ptrs))
+    pos = base                               # walk the blob to find its extent
+    for _ in range(n):
+        _, nul = _read_cstr(elf, pos, end)
+        pos = nul
+        while pos < end and elf[pos] == 0:
+            pos += 1
+    region_end = pos
+    avail = region_end - base
+
+    packed = bytearray(); new_ptrs = []; cur_va = va + (base - foff)
+    for k in range(n):
+        use_en = bool(en_list[k])
+        s = en_list[k] if use_en else jp_list[k]
+        try:
+            b = s.encode("ascii") if use_en else s.encode("cp932")
+        except UnicodeEncodeError as e:
+            raise SystemExit("prefecture %r: %s" % (s, e))
+        new_ptrs.append(cur_va)
+        packed += b + b"\x00"
+        cur_va += len(b) + 1
+    if len(packed) > avail:
+        raise SystemExit("prefecture repack %d B > region %d B" % (len(packed), avail))
+
+    elf[base:base + len(packed)] = packed
+    for i in range(base + len(packed), region_end):
+        elf[i] = 0
+    for k in range(n):
+        struct.pack_into("<I", elf, arr + 4 * k, new_ptrs[k])
+    return sum(1 for e in en_list if e)
+
+
 def cmd_elf_b(elf_path, tsv, out):
     elf = bytearray(open(elf_path, "rb").read())
     foff, va, sz = load_seg(elf)
     rows = read_tsv(tsv)
+    pref_rows = [r for r in rows if r["id"].startswith("pref:")]
+    rows = [r for r in rows if not r["id"].startswith("pref:")]
     # index extracted slots by vaddr for budget lookup
     slots = {}
     for vaddr, raw, slot in walk_strings(bytes(elf)):
@@ -190,8 +275,10 @@ def cmd_elf_b(elf_path, tsv, out):
         n += 1
     if errs:
         raise SystemExit("%d errors; not written" % errs)
+    npref = patch_prefectures(elf, pref_rows) if pref_rows else 0
     open(out, "wb").write(bytes(elf))
-    print("%s: %d strings replaced" % (out, n))
+    print("%s: %d strings replaced%s" % (
+        out, n, (", %d prefectures" % npref) if npref else ""))
 
 _FMT = re.compile(r"%[-0-9.]*[sdDuxXc]")
 

@@ -1,0 +1,306 @@
+id	max	jp	en	note
+elf:002accbc	7	脉ぇ		len 4 slot 8
+elf:002b4618	7	潔け		len 4 slot 8
+elf:002b66e0	5	怏け1		len 5 slot 6
+elf:00308cd4	63	3連鎖せよ！！		len 13 slot 64
+elf:00308e68	63	7個以上同時に消せ！！		len 21 slot 64
+elf:00308ffc	63	全消しせよ！！		len 14 slot 64
+elf:00309190	63	全消しせよ！！		len 14 slot 64
+elf:00309324	63	全消しせよ！！		len 14 slot 64
+elf:003094b8	63	11連鎖以上せよ！！		len 18 slot 64
+elf:0030964c	63	全消しせよ！！		len 14 slot 64
+elf:003097e0	63	全消しせよ！！		len 14 slot 64
+elf:00309974	63	12個以上同時に消せ！！		len 22 slot 64
+elf:00309b08	63	全消しせよ！！		len 14 slot 64
+elf:00309c9c	63	2連鎖せよ！！		len 13 slot 64
+elf:00309e30	63	1連鎖せよ！！		len 13 slot 64
+elf:00309fc4	63	1連鎖せよ！！		len 13 slot 64
+elf:0030a158	63	全消しせよ！！		len 14 slot 64
+elf:0030a2ec	63	全消しせよ！！		len 14 slot 64
+elf:0030a480	63	全消しせよ！！		len 14 slot 64
+elf:0030a614	63	8連鎖せよ！！		len 13 slot 64
+elf:0030a7a8	63	10連鎖せよ！！		len 14 slot 64
+elf:0030a93c	63	26連鎖せよ！！		len 14 slot 64
+elf:0030aad0	63	4連鎖せよ！！		len 13 slot 64
+elf:0030ac64	63	14連鎖せよ！！		len 14 slot 64
+elf:0030adf8	63	11連鎖せよ！！		len 14 slot 64
+elf:0030af8c	63	全消しせよ！！		len 14 slot 64
+elf:0030b120	63	14連鎖せよ！！		len 14 slot 64
+elf:0030b2b4	63	3連鎖せよ！！		len 13 slot 64
+elf:0030b448	63	7個同時に消せ！！		len 17 slot 64
+elf:0030b5dc	63	2連鎖せよ！！		len 13 slot 64
+elf:0030b770	63	6個同時に消せ！！		len 17 slot 64
+elf:0030b904	63	全消しせよ！！		len 14 slot 64
+elf:0030ba98	63	5個同時に消せ！！		len 17 slot 64
+elf:0030bc2c	63	5連鎖せよ！！		len 13 slot 64
+elf:0030bdc0	63	全消しせよ！！		len 14 slot 64
+elf:0030bf54	63	全消しせよ！！		len 14 slot 64
+elf:0030c0e8	63	6連鎖せよ！！		len 13 slot 64
+elf:0030c27c	63	70個以上同時に消せ！！		len 22 slot 64
+elf:0030c410	63	13連鎖せよ！！		len 14 slot 64
+elf:0030c5a4	63	全消しせよ！！		len 14 slot 64
+elf:0030c738	63	全消しせよ！！		len 14 slot 64
+elf:0030c8cc	63	8連鎖せよ！！		len 13 slot 64
+elf:0030ca60	63	11連鎖せよ！！		len 14 slot 64
+elf:0030cbf4	63	全消しせよ！！		len 14 slot 64
+elf:0030cd88	63	全消しせよ！！		len 14 slot 64
+elf:0030cf1c	63	全消しせよ！！		len 14 slot 64
+elf:0030d0b0	63	全消しせよ！！		len 14 slot 64
+elf:0030d244	63	全消しせよ！！		len 14 slot 64
+elf:0030d3d8	63	全消しせよ！！		len 14 slot 64
+elf:0030d56c	63	全消しせよ！！		len 14 slot 64
+elf:0030d700	63	全消しせよ！！		len 14 slot 64
+elf:0030d894	63	全消しせよ！！		len 14 slot 64
+elf:0030da28	63	全消しせよ！！		len 14 slot 64
+elf:0030dbbc	63	全消しせよ！！		len 14 slot 64
+elf:0030dd50	63	5連鎖せよ！！		len 13 slot 64
+elf:0030dee4	63	11個同時に消せ！！		len 18 slot 64
+elf:0030e078	63	全消しせよ！！		len 14 slot 64
+elf:0030e20c	63	全消しせよ！！		len 14 slot 64
+elf:0030e3a0	63	全消しせよ！！		len 14 slot 64
+elf:0030e534	63	8連鎖せよ！！		len 13 slot 64
+elf:0030e6c8	63	全消しせよ！！		len 14 slot 64
+elf:0030e85c	63	全消しせよ！！		len 14 slot 64
+elf:0030e9f0	63	6連鎖せよ！！		len 13 slot 64
+elf:0030eb84	63	32個同時に消せ！！		len 18 slot 64
+elf:0030ed18	63	全消しせよ！！		len 14 slot 64
+elf:0030eeac	63	12連鎖せよ！！		len 14 slot 64
+elf:0030f040	63	全消しせよ！！		len 14 slot 64
+elf:0030f1d4	63	全消しせよ！！		len 14 slot 64
+elf:0030f368	63	12個同時に消せ！！		len 18 slot 64
+elf:0030f4fc	63	全消しせよ！！		len 14 slot 64
+elf:0030f690	63	全消しせよ！！		len 14 slot 64
+elf:0030f824	63	10連鎖せよ！！		len 14 slot 64
+elf:0030f9b8	63	全消しせよ！！		len 14 slot 64
+elf:0030fb4c	63	全消しせよ！！		len 14 slot 64
+elf:0030fce0	63	8連鎖せよ！！		len 13 slot 64
+elf:0030fe74	63	全消しせよ！！		len 14 slot 64
+elf:00310008	63	全消しせよ！！		len 14 slot 64
+elf:0031019c	63	5連鎖せよ！！		len 13 slot 64
+elf:00310330	63	全消しせよ！！		len 14 slot 64
+elf:003104c4	63	全消しせよ！！		len 14 slot 64
+elf:00310658	63	11連鎖せよ！！		len 14 slot 64
+elf:003107ec	63	全消しせよ！！		len 14 slot 64
+elf:00310980	63	7連鎖せよ！！		len 13 slot 64
+elf:00310b14	63	全消しせよ！！		len 14 slot 64
+elf:00310ca8	63	全消しせよ！！		len 14 slot 64
+elf:00310e3c	63	13連鎖せよ！！		len 14 slot 64
+elf:00310fd0	63	24連鎖せよ！！		len 14 slot 64
+elf:00311164	63	全消しせよ！！		len 14 slot 64
+elf:003112f8	63	全消しせよ！！		len 14 slot 64
+elf:0031148c	63	10連鎖せよ！！		len 14 slot 64
+elf:00311620	63	全消しせよ！！		len 14 slot 64
+elf:003117b4	63	8個同時に消せ！！		len 17 slot 64
+elf:00311948	63	全消しせよ！！		len 14 slot 64
+elf:00311adc	63	全消しせよ！！		len 14 slot 64
+elf:00311c70	63	全消しせよ！！		len 14 slot 64
+elf:00311e04	63	40個同時に消せ！！		len 18 slot 64
+elf:00311f98	63	全消しせよ！！		len 14 slot 64
+elf:0031212c	63	7連鎖せよ！！		len 13 slot 64
+elf:003122c0	63	全消しせよ！！		len 14 slot 64
+elf:00312454	63	2連鎖せよ！！		len 13 slot 64
+elf:003125e8	63	全消しせよ！！		len 14 slot 64
+elf:0031277c	63	13連鎖せよ！！		len 14 slot 64
+elf:00312910	63	全消しせよ！！		len 14 slot 64
+elf:00312aa4	63	全消しせよ！！		len 14 slot 64
+elf:00312c38	63	全消しせよ！！		len 14 slot 64
+elf:00312dcc	63	全消しせよ！！		len 14 slot 64
+elf:00312f60	63	11連鎖せよ！！		len 14 slot 64
+elf:003130f4	63	10連鎖せよ！！		len 14 slot 64
+elf:00313288	63	5連鎖せよ！！		len 13 slot 64
+elf:0031341c	63	3連鎖せよ！！		len 13 slot 64
+elf:003135b0	63	4連鎖せよ！！		len 13 slot 64
+elf:00313744	63	5連鎖せよ！！		len 13 slot 64
+elf:003138d8	63	全消しせよ！！		len 14 slot 64
+elf:00313a6c	63	12連鎖せよ！！		len 14 slot 64
+elf:00313c00	63	全消しせよ！！		len 14 slot 64
+elf:00313d94	63	全消しせよ！！		len 14 slot 64
+elf:00313f28	63	4連鎖せよ！！		len 13 slot 64
+elf:003140bc	63	全消しせよ！！		len 14 slot 64
+elf:00314250	63	8連鎖せよ！！		len 13 slot 64
+elf:003143e4	63	8連鎖せよ！！		len 13 slot 64
+elf:00314578	63	全消しせよ！！		len 14 slot 64
+elf:0031470c	63	18連鎖せよ！！		len 14 slot 64
+elf:003148a0	63	9連鎖せよ！！		len 13 slot 64
+elf:00314a34	63	全消しせよ！！		len 14 slot 64
+elf:00314bc8	63	全消しせよ！！		len 14 slot 64
+elf:00314d5c	63	全消しせよ！！		len 14 slot 64
+elf:00314ef0	63	全消しせよ！！		len 14 slot 64
+elf:00315084	63	全消しせよ！！		len 14 slot 64
+elf:00315218	63	12連鎖せよ！！		len 14 slot 64
+elf:003153ac	63	全消しせよ！！		len 14 slot 64
+elf:00315540	63	3連鎖せよ！！		len 13 slot 64
+elf:003156d4	63	4連鎖せよ！！		len 13 slot 64
+elf:00315868	63	21連鎖せよ！！		len 14 slot 64
+elf:003159fc	63	全消しせよ！！		len 14 slot 64
+elf:00315b90	63	全消しせよ！！		len 14 slot 64
+elf:00315d24	63	全消しせよ！！		len 14 slot 64
+elf:00315eb8	63	全消しせよ！！		len 14 slot 64
+elf:0031604c	63	8連鎖せよ！！		len 13 slot 64
+elf:003161e0	63	9連鎖せよ！！		len 13 slot 64
+elf:00316374	63	12連鎖せよ！！		len 14 slot 64
+elf:00316508	63	全消しせよ！！		len 14 slot 64
+elf:0031669c	63	全消しせよ！！		len 14 slot 64
+elf:00316830	63	全消しせよ！！		len 14 slot 64
+elf:003169c4	63	6連鎖せよ！！		len 13 slot 64
+elf:00316b58	63	全消しせよ！！		len 14 slot 64
+elf:00316cec	63	全消しせよ！！		len 14 slot 64
+elf:00316e80	63	全消しせよ！！		len 14 slot 64
+elf:00317014	63	9連鎖せよ！！		len 13 slot 64
+elf:003171a8	63	7連鎖せよ！！		len 13 slot 64
+elf:0031733c	63	全消しせよ！！		len 14 slot 64
+elf:003174d0	63	全消しせよ！！		len 14 slot 64
+elf:00317664	63	6連鎖せよ！！		len 13 slot 64
+elf:003177f8	63	7連鎖せよ！！		len 13 slot 64
+elf:0031798c	63	6連鎖せよ！！		len 13 slot 64
+elf:00317b20	63	6個以上同時に消せ！！		len 21 slot 64
+elf:0031d720	31	よろしくお願いします。		len 22 slot 32
+elf:0031d740	31	ルームを作ります。		len 18 slot 32
+elf:0031d760	31	ちょっと席を離れます。		len 22 slot 32
+elf:0031d780	31	そろそろやめます。		len 18 slot 32
+elf:0031d7a0	31	ありがとうございました。		len 24 slot 32
+elf:00324820	23	エラーコード  %d		len 16 slot 24
+elf:00324860	15	家事手伝い		len 10 slot 16
+elf:00324870	15	フリーター		len 10 slot 16
+elf:00324880	7	その他		len 6 slot 8
+elf:003249c0	15	入室しました。		len 14 slot 16
+elf:003249d0	15	退室しました。		len 14 slot 16
+elf:003249e8	23	さんが、		len 8 slot 24
+elf:00324a00	15	ようこそ！		len 10 slot 16
+elf:00324a10	7	さん		len 4 slot 8
+elf:00328090	15	エラーなし		len 10 slot 16
+elf:003280b0	47	ご利用のルータが正しく設定されていない		len 38 slot 48
+elf:003280e0	47	可能性があります。TCPポートの5730が		len 35 slot 48
+elf:00328110	47	許可されているかご確認ください。		len 32 slot 48
+elf:00328140	47	対戦相手のヴァージョンが古いです。		len 34 slot 48
+elf:00328170	47	あなたのヴァージョンが古いです。		len 32 slot 48
+elf:003281a0	31	対戦が開始できませんでした。		len 28 slot 32
+elf:003281c0	15	エラーコード %d		len 15 slot 16
+elf:003281d0	31	○ボタンを押してください。		len 26 slot 32
+elf:00328230	15	エラーなし。		len 12 slot 16
+elf:00328240	15	エラー！		len 8 slot 16
+elf:00328250	47	ネットワーク設定ファイルのロードに失敗！		len 40 slot 48
+elf:00328280	31	プロトコルエラー！		len 18 slot 32
+elf:003282a0	31	データベースエラー！		len 20 slot 32
+elf:003282c0	31	DNSサーバーエラー！		len 19 slot 32
+elf:003282e0	31	ソケットエラー！		len 16 slot 32
+elf:00328300	31	サーバーとの接続に失敗！		len 24 slot 32
+elf:00328320	31	通信がタイムアウトしました！		len 28 slot 32
+elf:00328350	15	IDが無効だよ！		len 14 slot 16
+elf:00328360	31	IDにNGワードが含まれているよ！		len 30 slot 32
+elf:00328380	31	別のIDで登録してね！		len 20 slot 32
+elf:003283a0	47	指定したIDはもう使われているよ！		len 32 slot 48
+elf:003283d0	47	ユーザー名にNGワードが含まれているよ！		len 38 slot 48
+elf:00328400	31	別のユーザー名で登録してね！		len 28 slot 32
+elf:00328420	47	指定したユーザーはもう使われているよ！		len 38 slot 48
+elf:00328450	31	ユーザー名が存在しないよ！		len 26 slot 32
+elf:00328470	31	指定したIDが存在しないよ！		len 26 slot 32
+elf:00328490	47	IDかパスワードが間違っているよ！		len 32 slot 48
+elf:003284c0	31	もう一度入力してね！		len 20 slot 32
+elf:003284e0	31	登録が無効になっているよ！		len 26 slot 32
+elf:00328500	31	すでにログインしているので		len 26 slot 32
+elf:00328520	31	今はログインできないよ！		len 24 slot 32
+elf:00328540	31	ルームが存在しないよ！		len 22 slot 32
+elf:00328560	31	エリアが存在しないよ！		len 22 slot 32
+elf:00328580	31	エリアが満員だよ！		len 18 slot 32
+elf:003285a0	31	ルームが満員だよ！		len 18 slot 32
+elf:003285c0	47	ロビーサーバの認証に失敗したよ！		len 32 slot 48
+elf:003285f0	47	ロビーサーバの準備ができていないよ！		len 36 slot 48
+elf:00328620	31	そのユーザーはいないよ！		len 24 slot 32
+elf:00328640	31	ユーザーが見つからないよ！		len 26 slot 32
+elf:00328660	47	ルーム名にNGワードが含まれているよ！		len 36 slot 48
+elf:00328690	31	別のルーム名で登録してね！		len 26 slot 32
+elf:003286b0	47	ルーム数がいっぱいで作成できないよ！		len 36 slot 48
+elf:003286e0	31	ユーザー名がないよ！		len 20 slot 32
+elf:00328700	31	ルームのパスワードが違うよ！		len 28 slot 32
+elf:003287a0	47	ユーザーがエリアにすでにいるよ！		len 32 slot 48
+elf:003287d0	47	ユーザーがルームにすでにいるよ！		len 32 slot 48
+elf:00328800	31	ルーム作成者ではないよ！		len 24 slot 32
+elf:00328820	15	対戦中だよ！		len 12 slot 16
+elf:00328830	31	初心者卒業おめでとう！		len 22 slot 32
+elf:00328850	47	サーバーとの接続が切れているよ！		len 32 slot 48
+elf:00328880	31	○ボタンを押してね！		len 20 slot 32
+elf:003288a0	31	"DNAS"エラー (-101)		len 19 slot 32
+elf:003288c0	47	現在"DNAS"サーバーが処理を受け付けることが		len 42 slot 48
+elf:003288f0	15	できません。		len 12 slot 16
+elf:00328900	47	しばらく時間をおいてから再接続して下さい。		len 42 slot 48
+elf:00328930	31	"DNAS"エラー (-102)		len 19 slot 32
+elf:00328950	47	タイトルの"DNAS"認証サービス期間以前です。		len 42 slot 48
+elf:00328980	31	"DNAS"エラー (-103)		len 19 slot 32
+elf:003289a0	47	タイトルの"DNAS"認証サービス期間が終了しま		len 42 slot 48
+elf:003289d0	15	した。		len 6 slot 16
+elf:003289e0	31	"DNAS"エラー (-104)		len 19 slot 32
+elf:00328a00	47	全ての"DNAS"サービスが終了しました。		len 36 slot 48
+elf:00328a30	31	"DNAS"エラー (-105)		len 19 slot 32
+elf:00328a50	47	"DNAS"サーバーとの接続がタイムアウトしまし		len 42 slot 48
+elf:00328a80	15	た。		len 4 slot 16
+elf:00328a90	31	"DNAS"エラー (-106)		len 19 slot 32
+elf:00328ab0	47	サーバーが正常に動作しておりません。		len 36 slot 48
+elf:00328ae0	31	"DNAS"エラー (-107)		len 19 slot 32
+elf:00328b00	31	"DNAS"エラーがおこりました。		len 28 slot 32
+elf:00328b20	31	"DNAS"エラー (-108)		len 19 slot 32
+elf:00328b40	31	"DNAS"サーバーエラーです。		len 26 slot 32
+elf:00328b60	31	ユニークIDエラー (-701)		len 23 slot 32
+elf:00328b80	31	ユニークIDエラーです。		len 22 slot 32
+elf:00328ba0	31	ユニークIDエラー (-703)		len 23 slot 32
+elf:00328bc0	31	ダウンロードエラー (-201)		len 25 slot 32
+elf:00328be0	31	ダウンロードエラーです。		len 24 slot 32
+elf:00328c00	31	ダウンロードエラー (-202)		len 25 slot 32
+elf:00328c20	31	ダウンロードエラー (-203)		len 25 slot 32
+elf:00328c40	31	ダウンロードエラー (-204)		len 25 slot 32
+elf:00328c60	31	"DNAS"エラー (-401)		len 19 slot 32
+elf:00328c80	31	機器情報エラーです。		len 20 slot 32
+elf:00328ca0	31	"DNAS"エラー (-402)		len 19 slot 32
+elf:00328cc0	31	"DNAS"エラー (-403)		len 19 slot 32
+elf:00328ce0	31	"DNAS"エラー (-404)		len 19 slot 32
+elf:00328d20	47	ネットワーク接続を中断しました。		len 32 slot 48
+elf:00328d70	47	プロキシの設定にエラーがあります。		len 34 slot 48
+elf:00328dc0	31	通信がタイムアウトしました。		len 28 slot 32
+elf:00328de0	47	しばらく時間をおいてから再接続してくださ		len 40 slot 48
+elf:00328e10	15	い。		len 4 slot 16
+elf:00328e40	47	"DNAS"サーバーへの接続に失敗しました。		len 38 slot 48
+elf:00328e90	47	DNSサーバーの応答にエラーがあります。		len 37 slot 48
+elf:00328ec0	47	ネットワーク設定を確認してください。		len 36 slot 48
+elf:00328f10	47	DNSサーバーからの応答がありません。		len 35 slot 48
+elf:00328fa0	15	DNSエラーです。		len 15 slot 16
+elf:00329070	31	通信エラーです。		len 16 slot 32
+elf:00329130	31	"DNAS"エラー (%d)		len 17 slot 32
+elf:00329150	47	"PlayStation BB Unit"が"PlayStation 2"本体に		len 44 slot 48
+elf:00329180	31	正しく接続されていません。		len 26 slot 32
+elf:003291a0	47	ネットワーク設定に問題があります。		len 34 slot 48
+elf:003291d0	31	改めて"PlayStation BB Unit"の		len 29 slot 32
+elf:003291f0	47	ネットワーク設定を行って下さい。		len 32 slot 48
+elf:00329220	31	"PlayStation BB Unit"が別の		len 27 slot 32
+elf:00329240	47	"PlayStation2"に接続された可能性があります。		len 44 slot 48
+elf:00329270	31	接続に失敗しました。		len 20 slot 32
+elf:00329290	47	"PlayStation BB Unit"の接続方法に		len 33 slot 48
+elf:003292c0	31	問題がある可能性があります。		len 28 slot 32
+elf:003292e0	47	改めて"PlayStation BB Unit"の接続、		len 35 slot 48
+elf:00329310	47	及びネットワーク設定を確認して下さい。		len 38 slot 48
+elf:00329340	31	切断に失敗しました。		len 20 slot 32
+elf:00331c28	23	○×でたま変更		len 14 slot 24
+elf:00331c40	31	L1 L2を押しながらで倍速変更		len 27 slot 32
+elf:00331c60	31	R1 R2で手玉、配置玉切り替え		len 27 slot 32
+elf:00331c80	23	SELECTと△□で問題変更		len 22 slot 24
+elf:00331c98	23	スタートで開始		len 14 slot 24
+elf:00331cb0	23	△□で攻撃だま内容変更		len 22 slot 24
+elf:00331cf0	31	最大同時消し数 %d		len 17 slot 32
+elf:00331d70	31	詰めぱずる問題選択		len 18 slot 32
+elf:00331d90	31	○で決定  ×で戻る		len 18 slot 32
+elf:003321a8	7	あああ		len 6 slot 8
+elf:003322b0	7	セーブ		len 6 slot 8
+elf:003322b8	7	ロード		len 6 slot 8
+elf:00332300	15	カードチェック		len 14 slot 16
+elf:00332310	47	カードチェック失敗   ○ボタンで次へ		len 35 slot 48
+elf:00332340	31	カード無し警告   ○ボタンで次へ		len 31 slot 32
+elf:00332360	39	未フォーマット警告   ○ボタンで次へ		len 35 slot 40
+elf:00332400	31	容量不足警告   ○ボタンで次へ		len 29 slot 32
+elf:003324f0	47	ロードデータ無し警告   ○ボタンで次へ		len 37 slot 48
+elf:003326d8	23	2連鎖してね！		len 13 slot 24
+elf:003326f0	15	よ～く考えよう!		len 15 slot 16
+elf:00332700	31	同時に6個のたまを消してね！		len 27 slot 32
+elf:00332720	15	1連鎖してね！		len 13 slot 16
+elf:00332730	23	全てのたまを消してね！		len 22 slot 24
+elf:00332748	23	8連鎖してね！		len 13 slot 24
+elf:00332760	31	同時に70個のたまを消してね！		len 28 slot 32
+elf:00332780	129	14連鎖してね！		len 14 slot 130

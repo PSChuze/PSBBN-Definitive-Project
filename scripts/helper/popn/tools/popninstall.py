@@ -278,16 +278,22 @@ def fill_loader(disc_root, kelf, hddid, out_path, helper, translate_tsv=None):
     return out_path
 
 def image_en(disc_root, out_image):
-    """Render the English menu/logo textures onto the disc's IMAGE.DAT via
-    apply_textures.py (needs Pillow). The text face is the bundled Comic Neue Bold
-    (ComicNeue-Bold.ttf, a free SIL-OFL rounded Comic-Sans-alike) unless
-    POPN_TEX_FONT overrides -- so it renders the same on any OS without a
-    proprietary font. Writes out_image."""
+    """Render the English menu/logo/dialog/room textures onto the disc's IMAGE.DAT
+    (21 screens). Prefers apply_textures_nat.py - the natural, atlas-safe editor
+    (glyph-mask + background inpaint, with a hard assertion that nothing changes
+    outside each element so a shared sprite sheet is never corrupted); falls back
+    to the older apply_textures.py (flat box+overlay) when the new one is absent.
+    Needs Pillow + numpy; OpenCV (cv2) is used when present for cleaner inpaint but
+    is optional. The text face is the bundled Comic Neue Bold (ComicNeue-Bold.ttf,
+    a free SIL-OFL rounded Comic-Sans-alike) unless POPN_TEX_FONT overrides -- so
+    it renders the same on any OS without a proprietary font. Writes out_image."""
     toolsdir = os.path.dirname(os.path.abspath(__file__))
-    apply_py = os.path.join(toolsdir, "apply_textures.py")
+    apply_py = next((p for p in (os.path.join(toolsdir, "apply_textures_nat.py"),
+                                 os.path.join(toolsdir, "apply_textures.py"))
+                     if os.path.isfile(p)), None)
     src = os.path.join(disc_root, "IMAGE.DAT")
-    if not os.path.isfile(apply_py):
-        raise SystemExit("apply_textures.py not found at %s (texture translation unavailable)" % apply_py)
+    if apply_py is None:
+        raise SystemExit("apply_textures(_nat).py not found in %s (texture translation unavailable)" % toolsdir)
     if not os.path.isfile(src):
         raise SystemExit("IMAGE.DAT not found in the disc at %s" % src)
     env = dict(os.environ)
@@ -439,11 +445,13 @@ def main():
                     "strings before it is embedded in the loader. Requires --loader. (Images are "
                     "left as the stock Japanese IMAGE.DAT; see --translate-images.)")
     ap.add_argument("--translate-images", dest="translate_images", action="store_true",
-                    help="EXPERIMENTAL: also render the English menu/logo textures onto IMAGE.DAT "
-                    "(apply_textures.py; needs Pillow). Off by default -- the current renderer is "
-                    "low fidelity (flat boxes + overlaid text) and can disturb nearby textures "
-                    "(e.g. title/character animations). Without it, IMAGE.DAT stays/restores to "
-                    "stock Japanese.")
+                    help="EXPERIMENTAL: also render the English menu/logo/dialog/room textures onto "
+                    "IMAGE.DAT (apply_textures_nat.py; needs Pillow + numpy, cv2 optional). Uses the "
+                    "natural, atlas-safe renderer (per-glyph erase + background inpaint, asserts it "
+                    "never writes outside each element, so shared sprite sheets are not disturbed) -- "
+                    "a rewrite of the old flat-box renderer that corrupted title/character art. Still "
+                    "off by default pending a real-hardware validation pass. Without it, IMAGE.DAT "
+                    "stays/restores to stock Japanese.")
     ap.add_argument("--four", default=FOUR)
     ap.add_argument("--part-mib", type=int, default=DEFAULT_MIB)
     ap.add_argument("--pfsshell", default="pfsshell")
