@@ -95,7 +95,11 @@ fi
 : "${UI_TEXT[POPN_RESWAP_RUNNING]:=Swapping the boot loader in place...}"
 : "${UI_TEXT[POPN_RESWAP_DONE]:=Loader swapped. Boot HDD-OSD to launch it.}"
 : "${UI_TEXT[POPN_RESWAP_ERROR]:=Loader swap failed. See logs/popn-installer.log}"
-: "${UI_TEXT[POPN_TR_ASK]:=Apply the English translation (UI/system text)? Menus that are textures stay Japanese for now. (y/N)}"
+: "${UI_TEXT[POPN_TR_ASK]:=Apply the English translation (UI text and the menu/logo textures)? (y/N)}"
+: "${UI_TEXT[POPN_RECOVER_ASK]:=The game is installed on this drive, but this machine has no saved drive ID (playonline.hddid). Recover it from the installed loader on the drive? (Y/n)}"
+: "${UI_TEXT[POPN_RECOVER_RUNNING]:=Recovering the drive ID from the installed loader...}"
+: "${UI_TEXT[POPN_RECOVER_DONE]:=Recovered the drive ID:}"
+: "${UI_TEXT[POPN_RECOVER_FAIL]:=Could not recover the drive ID. See logs/popn-installer.log}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
@@ -213,6 +217,43 @@ else
 fi
 echo "HDD ID: ${POL_HDDID_FILE} $([[ -f "${POL_HDDID_FILE}" ]] && echo found || echo absent)" >> "${LOG_FILE}"
 echo
+
+# ---- recover the drive ID from the drive itself -------------------------
+# New machine: the PlayOnline step never ran here, so playonline.hddid is
+# absent. But if pop'n is already installed, the spoof loader on the drive
+# carries the exact 512-byte HDD ID the sealed install was keyed to. Lift it
+# back out of pfs:/dnasload.elf so a fresh machine does not have to re-run the
+# PlayOnline step or reproduce a mint seed. (Nothing to recover if the game is
+# not installed -- there is no loader on the drive yet.)
+if [[ ! -f "${POL_HDDID_FILE}" && -n "${INFO[installed]}" ]]; then
+    POPN_TOOLS="${POPN_TOOLS_OVERRIDE:-${POPN_DIR}/tools}"
+    [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${SCRIPTS_DIR}/../../popn/popn/tools"
+    [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${SCRIPTS_DIR}/../../Pop'N Puzzle Dama Online/popn/tools"
+    [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${HELPER_DIR}/popn/tools"
+    if [[ -f "${POPN_TOOLS}/popninstall.py" ]]; then
+        printf "%s " "${UI_TEXT[POPN_RECOVER_ASK]}"
+        read -r answer </dev/tty
+        case "$answer" in
+            [Nn]*) ;;
+            *)
+                mkdir -p "$(dirname "${POL_HDDID_FILE}")"
+                echo "${UI_TEXT[POPN_RECOVER_RUNNING]}"
+                sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" \
+                    "${POPN_TOOLS}/popninstall.py" "${DEVICE}" \
+                    --recover-hddid "${POL_HDDID_FILE}" \
+                    --helper "${HELPER_DIR}" \
+                    --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
+                    2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                if [[ ${PIPESTATUS[0]} -eq 0 && -f "${POL_HDDID_FILE}" ]]; then
+                    echo "  ${UI_TEXT[POPN_RECOVER_DONE]} ${POL_HDDID_FILE}"
+                else
+                    echo "  ${UI_TEXT[POPN_RECOVER_FAIL]}"
+                fi
+                echo
+                ;;
+        esac
+    fi
+fi
 
 # ---- already installed --------------------------------------------------
 if [[ -n "${INFO[installed]}" ]]; then

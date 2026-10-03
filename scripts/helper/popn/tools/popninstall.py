@@ -344,11 +344,71 @@ def loader_swap(a):
     print("== done: swapped pfs:/dnasload.elf in %s on %s" % (PARTITION, a.device))
 
 
+def recover_hddid(a):
+    """New machine, drive already installed: the PlayOnline step never ran here,
+    so games/POL/playonline.hddid is missing -- but the 512-byte HDD ID the
+    install was keyed to is embedded verbatim in the spoof loader that is already
+    on the drive. Read pfs:/dnasload.elf back from PP.BLJA-00010 and lift the
+    block out, so the install/swap can proceed WITHOUT re-running PlayOnline or
+    guessing a seed.
+
+    (The block is not in a normal addressable sector -- a genuine Sony drive
+    returns it over a proprietary ATA command, and a minted one is otherwise only
+    in the .hddid file -- but the loader carries it so its atad shim can serve it,
+    which is exactly the copy we read here. This is the exact identity the sealed
+    containers decrypt against, so it is correct even if the original mint was
+    random/unseeded.)"""
+    out = a.recover_hddid
+    try:
+        lba = part_lba(a.helper, a.device)
+    except Exception as e:
+        raise SystemExit("%s not found on %s (%r); the game is not installed on "
+                         "this drive, so there is no loader to recover the HDD ID "
+                         "from." % (PARTITION, a.device, e))
+    print("== recover-hddid: %s present at LBA %d" % (PARTITION, lba))
+    work = a.work
+    if os.path.exists(work):
+        shutil.rmtree(work)
+    os.makedirs(work)
+    script = "\n".join(
+        ["device %s" % a.device, "mount %s" % PARTITION,
+         "lcd %s" % _quote(work.replace("\\", "/")),
+         "get dnasload.elf", "umount", "exit", ""])
+    print("== reading pfs:/dnasload.elf back via pfsshell")
+    subprocess.run([a.pfsshell], input=script, text=True, check=True)
+    got = os.path.join(work, "dnasload.elf")
+    if not os.path.isfile(got):
+        raise SystemExit("pfsshell did not copy dnasload.elf out of %s; cannot "
+                         "recover the HDD ID" % PARTITION)
+    if a.helper and a.helper not in sys.path:
+        sys.path.insert(0, a.helper)
+    from playonline import loader as pol_loader
+    blob = open(got, "rb").read()
+    try:
+        info = pol_loader.read(blob)
+    except Exception as e:
+        raise SystemExit("could not parse the loader on %s (%r); it may be a stock "
+                         "dnasload, not our spoof loader -- the HDD ID can only be "
+                         "recovered from a filled loader." % (PARTITION, e))
+    if not info["has_hddid"]:
+        raise SystemExit("the loader on %s serves no HDD ID block (a genuine Sony "
+                         "drive, or an unfilled loader); nothing to recover."
+                         % PARTITION)
+    block = info["hddid"]
+    d = os.path.dirname(os.path.abspath(out))
+    if d and not os.path.isdir(d):
+        os.makedirs(d)
+    open(out, "wb").write(block)
+    print("== recovered the drive's HDD ID -> %s (%d B)" % (out, len(block)))
+    print("   key material: %s" % (block[0x40:0x48] + block[0x50:0x60]).hex())
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("device", help="target drive (a device pfsshell's `device` gets)")
-    ap.add_argument("--disc", required=True, help="extracted disc root")
-    ap.add_argument("--hddid", required=True, help="512-byte hddid block (playonline.hddid)")
+    ap.add_argument("--disc", help="extracted disc root (required to install or swap)")
+    ap.add_argument("--hddid", help="512-byte hddid block (playonline.hddid); required to "
+                    "install or swap, produced by --recover-hddid on a new machine")
     ap.add_argument("--attr", help="attr-area.bin (English title + icon); optional")
     ap.add_argument("--loader", help="the pre-signed spoof loader KELF (polbbnexec-popn.kelf) to "
                     "install as pfs:/dnasload.elf in place of the disc's stock dnasload (which "
@@ -373,11 +433,28 @@ def main():
                     "Only fill the spoof loader for this drive and replace pfs:/dnasload.elf "
                     "(iterate on loader/ELF-patch changes without a full reinstall). Requires "
                     "--loader, --disc, --hddid.")
+    ap.add_argument("--recover-hddid", dest="recover_hddid", metavar="OUT",
+                    help="NEW MACHINE, drive already installed: read the HDD ID the "
+                    "install was keyed to back out of the spoof loader already on the "
+                    "drive (pfs:/dnasload.elf in %s) and write it here as a "
+                    "playonline.hddid, so the install/swap can proceed without "
+                    "re-running the PlayOnline step. Requires --helper." % PARTITION)
     a = ap.parse_args()
 
+    if a.recover_hddid:
+        recover_hddid(a)
+        return
+
     if a.loader_swap:
+        if not (a.disc and a.hddid):
+            raise SystemExit("--loader-swap requires --disc and --hddid")
         loader_swap(a)
         return
+
+    if not (a.disc and a.hddid):
+        raise SystemExit("installing requires --disc and --hddid (on a new machine "
+                         "with the drive already installed, get the HDD ID with "
+                         "--recover-hddid first)")
 
     precheck(a.device, a.helper)
     if a.check_only:
