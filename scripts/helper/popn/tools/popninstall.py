@@ -277,11 +277,33 @@ def fill_loader(disc_root, kelf, hddid, out_path, helper, translate_tsv=None):
         shutil.rmtree(tmp, ignore_errors=True)
     return out_path
 
+def image_en(disc_root, out_image):
+    """Render the English menu/logo textures onto the disc's IMAGE.DAT via
+    apply_textures.py (needs Pillow). The text face is the bundled
+    DejaVuSans-Bold.ttf unless POPN_TEX_FONT overrides -- so it renders the same
+    on any OS without a Windows/proprietary font. Writes out_image."""
+    toolsdir = os.path.dirname(os.path.abspath(__file__))
+    apply_py = os.path.join(toolsdir, "apply_textures.py")
+    src = os.path.join(disc_root, "IMAGE.DAT")
+    if not os.path.isfile(apply_py):
+        raise SystemExit("apply_textures.py not found at %s (texture translation unavailable)" % apply_py)
+    if not os.path.isfile(src):
+        raise SystemExit("IMAGE.DAT not found in the disc at %s" % src)
+    env = dict(os.environ)
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONPATH"] = toolsdir + os.pathsep + env.get("PYTHONPATH", "")
+    env.setdefault("POPN_TEX_FONT", os.path.join(toolsdir, "DejaVuSans-Bold.ttf"))
+    subprocess.run([sys.executable, apply_py, src, out_image], check=True, env=env)
+    return out_image
+
+
 def loader_swap(a):
     """Upgrade in place: fill the spoof loader for THIS drive and replace
     pfs:/dnasload.elf in the EXISTING PP.BLJA-00010, WITHOUT reinstalling. For
     iterating on loader / boot-ELF-patch changes on a drive that already has the
-    game. The sealed containers, attr and APA passwords are left untouched."""
+    game -- and, with --translate, also refresh pfs:/IMAGE.DAT with the English
+    textures (so re-running updates an out-of-date translation). The sealed
+    containers, attr and APA passwords are left untouched."""
     if not a.loader:
         raise SystemExit("--loader-swap requires --loader <polbbnexec-popn.kelf>")
     try:
@@ -299,14 +321,19 @@ def loader_swap(a):
     print("== loader: filled %s for this drive -> dnasload.elf (%d B%s)"
           % (os.path.basename(a.loader), os.path.getsize(filled),
              ", English" if a.translate else ""))
-    script = "\n".join([
-        "device %s" % a.device,
-        "mount %s" % PARTITION,
-        "rm dnasload.elf",
-        "lcd %s" % _quote(work.replace("\\", "/")),
-        "put dnasload.elf",
-        "ls dnasload.elf",
-        "umount", "exit", ""])
+    puts = ["dnasload.elf"]
+    rms = ["rm dnasload.elf"]
+    if a.translate:
+        image_en(a.disc, os.path.join(work, "IMAGE.DAT"))
+        rms.append("rm IMAGE.DAT")
+        puts.append("IMAGE.DAT")
+        print("== translation: English IMAGE.DAT textures prepared for swap")
+    script = "\n".join(
+        ["device %s" % a.device, "mount %s" % PARTITION]
+        + rms
+        + ["lcd %s" % _quote(work.replace("\\", "/"))]
+        + ["put %s" % p for p in puts]
+        + ["ls dnasload.elf", "umount", "exit", ""])
     print("== pfsshell swap script:")
     print("\n".join("   " + ln for ln in script.splitlines() if ln))
     if not a.write:
@@ -330,8 +357,9 @@ def main():
                     "from the disc; no re-signing, so no PS2 keys are needed. Without it the stock "
                     "dnasload is kept and the install will NOT boot disc-less past the DNAS check.")
     ap.add_argument("--translate", help="apply the English translation: an elf.en.tsv "
-                    "(popn/translation/elf.en.tsv). The boot ELF is rebuilt with the "
-                    "translated strings before it is embedded in the loader. Requires --loader.")
+                    "(popn/translation/elf.en.tsv). The boot ELF is rebuilt with the translated "
+                    "strings before it is embedded in the loader, AND the menu/logo textures are "
+                    "rendered onto IMAGE.DAT (apply_textures.py; needs Pillow). Requires --loader.")
     ap.add_argument("--four", default=FOUR)
     ap.add_argument("--part-mib", type=int, default=DEFAULT_MIB)
     ap.add_argument("--pfsshell", default="pfsshell")
@@ -383,6 +411,16 @@ def main():
     else:
         print("== loader: NONE given; keeping the disc's stock dnasload.elf "
               "(install will NOT boot disc-less past the DNAS check without --loader)")
+
+    # English textures: rebuild the staged IMAGE.DAT (copied plaintext by seal_tree)
+    # with the translated menu/logo text, so the put writes the English one.
+    if a.translate:
+        staged_image = os.path.join(staged, "IMAGE.DAT")
+        if os.path.isfile(staged_image):
+            image_en(a.disc, staged_image)
+            print("== translation: English textures applied to IMAGE.DAT")
+        else:
+            print("== translation: IMAGE.DAT not staged; textures skipped")
 
     script = pfsshell_script(a.device, staged, a.part_mib)
     lines = script.splitlines()
