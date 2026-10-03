@@ -279,9 +279,10 @@ def fill_loader(disc_root, kelf, hddid, out_path, helper, translate_tsv=None):
 
 def image_en(disc_root, out_image):
     """Render the English menu/logo textures onto the disc's IMAGE.DAT via
-    apply_textures.py (needs Pillow). The text face is the bundled
-    DejaVuSans-Bold.ttf unless POPN_TEX_FONT overrides -- so it renders the same
-    on any OS without a Windows/proprietary font. Writes out_image."""
+    apply_textures.py (needs Pillow). The text face is the bundled Comic Neue Bold
+    (ComicNeue-Bold.ttf, a free SIL-OFL rounded Comic-Sans-alike) unless
+    POPN_TEX_FONT overrides -- so it renders the same on any OS without a
+    proprietary font. Writes out_image."""
     toolsdir = os.path.dirname(os.path.abspath(__file__))
     apply_py = os.path.join(toolsdir, "apply_textures.py")
     src = os.path.join(disc_root, "IMAGE.DAT")
@@ -292,7 +293,11 @@ def image_en(disc_root, out_image):
     env = dict(os.environ)
     env["PYTHONUTF8"] = "1"
     env["PYTHONPATH"] = toolsdir + os.pathsep + env.get("PYTHONPATH", "")
-    env.setdefault("POPN_TEX_FONT", os.path.join(toolsdir, "DejaVuSans-Bold.ttf"))
+    for _name in ("ComicNeue-Bold.ttf", "DejaVuSans-Bold.ttf"):
+        _f = os.path.join(toolsdir, _name)
+        if os.path.isfile(_f):
+            env.setdefault("POPN_TEX_FONT", _f)
+            break
     subprocess.run([sys.executable, apply_py, src, out_image], check=True, env=env)
     return out_image
 

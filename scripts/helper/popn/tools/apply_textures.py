@@ -33,7 +33,7 @@ DISC_CHECK = dict(fo=0x1ffa90, slot_end=0x213b50, edits=[
 
 # --- online login screen : tex @0x2b1100 ---
 LOGIN = dict(fo=0x2b1100, slot_end=0x2c4e40, edits=[
-    {"erase": (42, 96, 262, 122), "cx": 272},
+    {"erase": (40, 93, 264, 123), "cx": 272},
     {"text": "Enter ID & Password", "cx": 150, "ty": 99, "maxw": 205, "align": "c", "ink": 245, "fs": 16},
     {"erase": (186, 224, 320, 244), "cx": 345},
     {"text": "Press the O button!", "cx": 250, "ty": 226, "maxw": 150, "align": "c", "ink": 245, "fs": 14},
@@ -202,12 +202,36 @@ SCREENS = [DISC_CHECK, LOGIN, COMM_ERROR, USER_SELECT, DATA_UPDATE, MANUAL,
            DELETE_SELECT, DELETE_CONFIRM, DISCONNECT, HANDICAP,
            DATA_UPDATE_RESULT, AUTOLOAD, BBUNIT_SAVE, INSTALL_SPACE]
 
+
+def naturalize(edits):
+    """Make the look match the game: reconstruct the real gradient background
+    under each erased region (interp) instead of a flat rectangle, and render all
+    text as the game's white-fill / dark-outline bold face (drop the old per-region
+    `ink`). Genuinely-black regions keep their flat fill."""
+    out = []
+    for e in edits:
+        e = dict(e)
+        if 'erase' in e:
+            black = e.get('flatg', 255) <= 3 or e.get('flat', 255) <= 3
+            # keep clean-column reconstruction (cx): it copies real gradient pixels
+            # (natural AND compresses like the original). Keep black flats. Only the
+            # flat-rectangle fills become interp.
+            if 'cx' not in e and not black:
+                for k in ('flat', 'flatg'):
+                    e.pop(k, None)
+                e['interp'] = True
+        if 'text' in e:
+            e.pop('ink', None)      # -> default white fill + dark outline
+        out.append(e)
+    return out
+
+
 if __name__ == '__main__':
     src, out = sys.argv[1], sys.argv[2]
     cur = src
     tmp = out + '.tmp'
     for i, s in enumerate(SCREENS):
-        n, slot = edit_texture(cur, tmp, s['fo'], s['slot_end'], s['edits'])
+        n, slot = edit_texture(cur, tmp, s['fo'], s['slot_end'], naturalize(s['edits']))
         print(f"  screen {i} @ {s['fo']:#x}: {n} / {slot} bytes ({'ok' if n <= slot else 'OVERFLOW'})")
         cur = tmp
     os.replace(tmp, out)

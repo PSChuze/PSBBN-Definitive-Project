@@ -20,17 +20,26 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pnimage import decompress, unswizzle8, swizzle8, compress
 from PIL import Image, ImageDraw, ImageFont
 
-# The text face. POPN_TEX_FONT overrides; else a bold font bundled next to this
-# file (DejaVuSans-Bold.ttf, so the install renders the same on any OS without a
-# Windows/proprietary font); else fall back to the old Comic Sans path for dev.
+# The text face. All 18 screens are rendered with Comic Neue Bold (ComicNeue-
+# Bold.ttf, SIL OFL - a free rounded Comic-Sans-alike that matches pop'n's look and
+# is safe to ship in the public toolkit repo). The layout auto-fits each string to
+# its box, so the exact face only needs to be a rounded bold. Resolution:
+# POPN_TEX_FONT override -> a font bundled next to this file (ComicNeue, then
+# DejaVuSans-Bold) -> a system comicbd (dev fallback, works under WSL /mnt/c too).
 def _default_font():
     env = os.environ.get("POPN_TEX_FONT")
     if env and os.path.isfile(env):
         return env
-    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "DejaVuSans-Bold.ttf")
-    if os.path.isfile(here):
-        return here
-    return '/c/Windows/Fonts/comicbd.ttf'
+    d = os.path.dirname(os.path.abspath(__file__))
+    for name in ("ComicNeue-Bold.ttf", "DejaVuSans-Bold.ttf", "comicbd.ttf"):
+        p = os.path.join(d, name)
+        if os.path.isfile(p):
+            return p
+    for p in ("/mnt/c/Windows/Fonts/comicbd.ttf", "/c/Windows/Fonts/comicbd.ttf",
+              r"C:\Windows\Fonts\comicbd.ttf"):
+        if os.path.isfile(p):
+            return p
+    return "ComicNeue-Bold.ttf"
 
 FONT = _default_font()
 W = 512
@@ -47,57 +56,102 @@ def edit_texture(src_dat, out_dat, fo, slot_end, edits, font=FONT, preview_png=N
     gp = lambda x, y: un[y*W+x]
     stp = lambda x, y, i: un.__setitem__(y*W+x, i)
 
-    def do_erase(x0, y0, x1, y1, cx=None, flat=None):
+    def find_clean_col(x0, y0, x1, y1):
+        # a column just outside the text with low vertical variance = real bg
+        # (same per-row gradient as the text region); copying it is natural AND
+        # compresses like the original (real pixels, not a synthesized gradient).
+        # It must match the panel's own bg level (sampled from the rows just
+        # above/below the band) so we never copy the black border beyond a panel.
+        ref = sorted(gray(gp(x, y))
+                     for y in (max(0, y0 - 2), max(0, y0 - 1),
+                               min(W - 1, y1), min(W - 1, y1 + 1))
+                     for x in range(x0, x1))
+        exp = ref[len(ref) // 2] if ref else 128
+        for cx in (list(range(x1 + 2, min(W, x1 + 48))) +
+                   list(range(x0 - 2, max(-1, x0 - 48), -1))):
+            vals = [gray(gp(cx, y)) for y in range(y0, y1)]
+            if vals and max(vals) - min(vals) < 60 and abs(sum(vals) / len(vals) - exp) < 45:
+                return cx
+        return None
+
+    def do_erase(x0, y0, x1, y1, cx=None, flat=None, interp=False):
+        if interp:
+            cc = find_clean_col(x0, y0, x1, y1)
+            if cc is not None:                     # copy real bg column (per row)
+                for y in range(y0, y1):
+                    v = gp(cc, y)
+                    for x in range(x0, x1):
+                        stp(x, y, v)
+                return
+            # else fall through to synthesized vertical interpolation
+            # reconstruct the background by interpolating, per column, between the
+            # clean rows just above and just below the band (preserves vertical
+            # gradients and avoids flat rectangles); horizontal variation is kept
+            # because each column uses its own endpoints.
+            # Used only when no clean bg column exists (full-width text on a
+            # horizontally-uniform panel): synthesize ONE smooth vertical gradient
+            # from the median bg just above/below the band and apply it uniformly
+            # across x (per-column would streak from any text in the ref rows).
+            def med(rows):
+                s = sorted(gray(gp(x, yy)) for yy in rows for x in range(x0, x1))
+                return s[len(s) // 2] if s else 128
+            m = 2; q = 3
+            tv = med(range(max(0, y0 - m), max(1, y0)))
+            bv = med(range(min(W - 1, y1), min(W, y1 + m)))
+            h = y1 - y0
+            for yi, y in enumerate(range(y0, y1)):
+                t = (yi + 1) / (h + 1)
+                idx = inv[max(0, min(255, int(round((tv * (1 - t) + bv * t) / q)) * q))]
+                for x in range(x0, x1):
+                    stp(x, y, idx)
+            return
         for y in range(y0, y1):
             bg = flat if flat is not None else gp(cx, y)
             for x in range(x0, x1):
                 stp(x, y, bg)
 
-    def sample_ink(cx, ty, maxw, align):
-        # ink = extreme gray in a small band near where text will go that
-        # contrasts most with the local bg
-        y0 = max(0, ty-2); y1 = min(W, ty+20)
-        xs = range(max(0, cx-maxw//2), min(W, cx+maxw//2)) if align == 'c' else range(cx, min(W, cx+maxw))
-        vals = [gray(gp(x, y)) for y in range(y0, y1) for x in xs]
-        if not vals:
-            return 30
-        lo, hi = min(vals), max(vals)
-        # bg ~ median; ink ~ whichever extreme is farther from bg
-        import statistics
-        bg = statistics.median(vals)
-        return lo if (bg-lo) >= (hi-bg) else hi
-
-    def draw_text(text, cx, ty, maxw=250, ink=None, align='c', fs=15):
+    def draw_text(text, cx, ty, maxw=250, align='c', fs=15,
+                  fill=250, outline=30, sw=2):
+        # white fill + dark outline, matching the game's beveled bold font.
         tmpd = ImageDraw.Draw(Image.new('L', (1, 1)))
         while fs > 8:
-            f = ImageFont.truetype(font, fs); bb = tmpd.textbbox((0, 0), text, font=f)
-            if bb[2]-bb[0] <= maxw:
+            f = ImageFont.truetype(font, fs)
+            bb = tmpd.textbbox((0, 0), text, font=f, stroke_width=sw)
+            if bb[2] - bb[0] <= maxw:
                 break
             fs -= 1
-        f = ImageFont.truetype(font, fs); bb = tmpd.textbbox((0, 0), text, font=f)
-        tw = bb[2]-bb[0]
-        tx = (cx-tw//2-bb[0]) if align == 'c' else (cx-bb[0])
-        if ink is None:
-            ink = sample_ink(cx, ty, maxw, align)
-        tmp = Image.new('L', (W, 28), 0); ImageDraw.Draw(tmp).text((tx, 0-bb[1]), text, fill=255, font=f)
-        m = tmp.load()
-        for yy in range(28):
-            y = ty+yy
+        f = ImageFont.truetype(font, fs)
+        bb = tmpd.textbbox((0, 0), text, font=f, stroke_width=sw)
+        tw = bb[2] - bb[0]
+        tx = (cx - tw // 2 - bb[0]) if align == 'c' else (cx - bb[0])
+        PAD = sw + 3
+        H = fs + 2 * PAD + 6
+        tmp = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+        ImageDraw.Draw(tmp).text((tx, PAD - bb[1]), text, font=f,
+                                 fill=(fill, fill, fill, 255), stroke_width=sw,
+                                 stroke_fill=(outline, outline, outline, 255))
+        px = tmp.load()
+        for yy in range(H):
+            y = ty - PAD + yy
             if 0 <= y < W:
                 for x in range(W):
-                    a = m[x, yy]
+                    r, g, b, a = px[x, yy]
                     if a:
-                        stp(x, y, inv[int(gray(gp(x, y))*(1-a/255)+ink*(a/255))])
+                        v = gray(gp(x, y)) * (1 - a / 255) + r * (a / 255)
+                        stp(x, y, inv[int(v)])
 
     for e in edits:
         if 'erase' in e:
             flat = e.get('flat')
             if 'flatg' in e:                      # flat fill by gray value
                 flat = inv[e['flatg']]
-            do_erase(*e['erase'], cx=e.get('cx'), flat=flat)
+            do_erase(*e['erase'], cx=e.get('cx'), flat=flat,
+                     interp=e.get('interp', False))
         if 'text' in e:
+            fill = e.get('fill', e.get('ink', 250))   # 'ink' kept as a fill alias
             draw_text(e['text'], e['cx'], e['ty'], e.get('maxw', 250),
-                      e.get('ink'), e.get('align', 'c'), e.get('fs', 15))
+                      e.get('align', 'c'), e.get('fs', 15),
+                      fill=fill, outline=e.get('outline', 30), sw=e.get('sw', 2))
 
     if preview_png:
         Image.frombytes('L', (W, W), bytes(gray(un[i]) for i in range(W*W))).save(preview_png)
