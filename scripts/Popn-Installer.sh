@@ -95,6 +95,7 @@ fi
 : "${UI_TEXT[POPN_RESWAP_RUNNING]:=Swapping the boot loader in place...}"
 : "${UI_TEXT[POPN_RESWAP_DONE]:=Loader swapped. Boot HDD-OSD to launch it.}"
 : "${UI_TEXT[POPN_RESWAP_ERROR]:=Loader swap failed. See logs/popn-installer.log}"
+: "${UI_TEXT[POPN_TR_ASK]:=Apply the English translation (UI/system text)? Menus that are textures stay Japanese for now. (y/N)}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
@@ -228,6 +229,13 @@ if [[ -n "${INFO[installed]}" ]]; then
         read -r answer </dev/tty
         case "$answer" in
             [Yy]*)
+                POPN_TR_FLAG=""
+                POPN_TRANSLATE="${POPN_TRANSLATE_OVERRIDE:-${SCRIPTS_DIR}/assets/popn/elf.en.tsv}"
+                if [[ -f "${POPN_TRANSLATE}" ]]; then
+                    printf "%s " "${UI_TEXT[POPN_TR_ASK]}"
+                    read -r tr_answer </dev/tty
+                    case "$tr_answer" in [Yy]*) POPN_TR_FLAG="--translate ${POPN_TRANSLATE}" ;; esac
+                fi
                 echo "${UI_TEXT[POPN_RESWAP_RUNNING]}"
                 sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" \
                     "${POPN_INSTALL_PY}" "${DEVICE}" \
@@ -236,6 +244,7 @@ if [[ -n "${INFO[installed]}" ]]; then
                     --helper "${HELPER_DIR}" \
                     --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
                     --loader "${POPN_LOADER}" \
+                    ${POPN_TR_FLAG} \
                     --loader-swap --write \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
@@ -307,6 +316,13 @@ if [[ -f "${POPN_DISC}/SYSTEM.CNF" ]] && [[ -f "${POPN_DISC}/MAIN.BIN" ]] \
                 else
                     echo "[!] spoof loader not found at ${POPN_LOADER}; installing with the disc's stock dnasload (will NOT boot disc-less past the DNAS check)." >> "${LOG_FILE}"
                 fi
+                POPN_TR_FLAG=""
+                POPN_TRANSLATE="${POPN_TRANSLATE_OVERRIDE:-${SCRIPTS_DIR}/assets/popn/elf.en.tsv}"
+                if [[ -n "${LOADER_FLAG}" ]] && [[ -f "${POPN_TRANSLATE}" ]]; then
+                    printf "%s " "${UI_TEXT[POPN_TR_ASK]}"
+                    read -r tr_answer </dev/tty
+                    case "$tr_answer" in [Yy]*) POPN_TR_FLAG="--translate ${POPN_TRANSLATE}" ;; esac
+                fi
                 echo "${UI_TEXT[POPN_KIT_INSTALLING]}"
                 sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" \
                     "${POPN_INSTALL_PY}" "${DEVICE}" \
@@ -315,6 +331,7 @@ if [[ -f "${POPN_DISC}/SYSTEM.CNF" ]] && [[ -f "${POPN_DISC}/MAIN.BIN" ]] \
                     --helper "${HELPER_DIR}" \
                     --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
                     ${LOADER_FLAG} \
+                    ${POPN_TR_FLAG} \
                     --write \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[POPN_KIT_ERROR]}"

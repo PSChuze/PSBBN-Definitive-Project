@@ -225,7 +225,7 @@ def write_passwords(device, lba, helper_dir):
         f.write(bytes(hdr))
     return pwd
 
-def fill_loader(disc_root, kelf, hddid, out_path, helper):
+def fill_loader(disc_root, kelf, hddid, out_path, helper, translate_tsv=None):
     """Fill the pre-signed spoof loader for THIS drive and write it to out_path,
     then return it. Mirrors nobuinstall.fill_loader.
 
@@ -253,6 +253,19 @@ def fill_loader(disc_root, kelf, hddid, out_path, helper):
     try:
         ep = os.path.join(tmp, "boot.elf"); ip = os.path.join(tmp, "ioprp.img")
         open(ep, "wb").write(elf); open(ip, "wb").write(ioprp)
+        # Optional English translation: rebuild the boot-patched ELF with the
+        # translated strings (the text lives in the ELF's rodata; pntext.py elf-b
+        # fits each English string into its cp932 slot). The loader then embeds
+        # the English ELF. No other file changes -- the menus-as-textures work is
+        # separate (see popn/HANDOFF-translation.md).
+        if translate_tsv:
+            ep_en = os.path.join(tmp, "boot.en.elf")
+            tenv = dict(os.environ); tenv["PYTHONUTF8"] = "1"
+            pntext_py = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pntext.py")
+            subprocess.run([sys.executable, pntext_py, "elf-b", ep, translate_tsv, ep_en],
+                           check=True, env=tenv)
+            ep = ep_en
+            print("   translation: applied %s -> English boot ELF" % os.path.basename(translate_tsv))
         env = dict(os.environ)
         if helper:
             env["PYTHONPATH"] = helper + os.pathsep + env.get("PYTHONPATH", "")
@@ -282,9 +295,10 @@ def loader_swap(a):
         shutil.rmtree(work)
     os.makedirs(work)
     filled = os.path.join(work, "dnasload.elf")
-    fill_loader(a.disc, a.loader, a.hddid, filled, a.helper)
-    print("== loader: filled %s for this drive -> dnasload.elf (%d B)"
-          % (os.path.basename(a.loader), os.path.getsize(filled)))
+    fill_loader(a.disc, a.loader, a.hddid, filled, a.helper, a.translate)
+    print("== loader: filled %s for this drive -> dnasload.elf (%d B%s)"
+          % (os.path.basename(a.loader), os.path.getsize(filled),
+             ", English" if a.translate else ""))
     script = "\n".join([
         "device %s" % a.device,
         "mount %s" % PARTITION,
@@ -315,6 +329,9 @@ def main():
                     "the drive's HDD ID + the player's own patched boot ELF and DNAS280.IMG carved "
                     "from the disc; no re-signing, so no PS2 keys are needed. Without it the stock "
                     "dnasload is kept and the install will NOT boot disc-less past the DNAS check.")
+    ap.add_argument("--translate", help="apply the English translation: an elf.en.tsv "
+                    "(popn/translation/elf.en.tsv). The boot ELF is rebuilt with the "
+                    "translated strings before it is embedded in the loader. Requires --loader.")
     ap.add_argument("--four", default=FOUR)
     ap.add_argument("--part-mib", type=int, default=DEFAULT_MIB)
     ap.add_argument("--pfsshell", default="pfsshell")
@@ -359,9 +376,10 @@ def main():
     dnasload = os.path.join(staged, "dnasload.elf")
     if a.loader:
         had = os.path.exists(dnasload)
-        fill_loader(a.disc, a.loader, a.hddid, dnasload, a.helper)
-        print("== loader: filled %s for this drive -> dnasload.elf (%s stock)"
-              % (os.path.basename(a.loader), "replaced" if had else "no"))
+        fill_loader(a.disc, a.loader, a.hddid, dnasload, a.helper, a.translate)
+        print("== loader: filled %s for this drive -> dnasload.elf (%s stock%s)"
+              % (os.path.basename(a.loader), "replaced" if had else "no",
+                 ", English" if a.translate else ""))
     else:
         print("== loader: NONE given; keeping the disc's stock dnasload.elf "
               "(install will NOT boot disc-less past the DNAS check without --loader)")
