@@ -264,6 +264,45 @@ def fill_loader(disc_root, kelf, hddid, out_path, helper):
         shutil.rmtree(tmp, ignore_errors=True)
     return out_path
 
+def loader_swap(a):
+    """Upgrade in place: fill the spoof loader for THIS drive and replace
+    pfs:/dnasload.elf in the EXISTING PP.BLJA-00010, WITHOUT reinstalling. For
+    iterating on loader / boot-ELF-patch changes on a drive that already has the
+    game. The sealed containers, attr and APA passwords are left untouched."""
+    if not a.loader:
+        raise SystemExit("--loader-swap requires --loader <polbbnexec-popn.kelf>")
+    try:
+        lba = part_lba(a.helper, a.device)
+    except Exception as e:
+        raise SystemExit("%s not found on %s (%r); it is not installed -- use the full "
+                         "install, not --loader-swap" % (PARTITION, a.device, e))
+    print("== loader-swap: %s present at LBA %d" % (PARTITION, lba))
+    work = a.work
+    if os.path.exists(work):
+        shutil.rmtree(work)
+    os.makedirs(work)
+    filled = os.path.join(work, "dnasload.elf")
+    fill_loader(a.disc, a.loader, a.hddid, filled, a.helper)
+    print("== loader: filled %s for this drive -> dnasload.elf (%d B)"
+          % (os.path.basename(a.loader), os.path.getsize(filled)))
+    script = "\n".join([
+        "device %s" % a.device,
+        "mount %s" % PARTITION,
+        "rm dnasload.elf",
+        "lcd %s" % _quote(work.replace("\\", "/")),
+        "put dnasload.elf",
+        "ls dnasload.elf",
+        "umount", "exit", ""])
+    print("== pfsshell swap script:")
+    print("\n".join("   " + ln for ln in script.splitlines() if ln))
+    if not a.write:
+        print("== dry-run complete; pass --write to swap pfs:/dnasload.elf in place")
+        return
+    print("== swapping the loader via pfsshell")
+    subprocess.run([a.pfsshell], input=script, text=True, check=True)
+    print("== done: swapped pfs:/dnasload.elf in %s on %s" % (PARTITION, a.device))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("device", help="target drive (a device pfsshell's `device` gets)")
@@ -284,7 +323,16 @@ def main():
     ap.add_argument("--work", default=os.path.join(HERE, "_popn_stage"))
     ap.add_argument("--check-only", action="store_true")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--loader-swap", dest="loader_swap", action="store_true",
+                    help="UPGRADE IN PLACE: the partition already exists; do NOT reinstall. "
+                    "Only fill the spoof loader for this drive and replace pfs:/dnasload.elf "
+                    "(iterate on loader/ELF-patch changes without a full reinstall). Requires "
+                    "--loader, --disc, --hddid.")
     a = ap.parse_args()
+
+    if a.loader_swap:
+        loader_swap(a)
+        return
 
     precheck(a.device, a.helper)
     if a.check_only:

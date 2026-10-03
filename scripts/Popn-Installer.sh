@@ -91,6 +91,10 @@ fi
 : "${UI_TEXT[POPN_KIT_DONE]:=pop'n installed. Boot HDD-OSD to launch it.}"
 : "${UI_TEXT[POPN_KIT_NEEDS_HDDID]:=A pop'n disc extract is present, but the PlayOnline step must run first to mint the drive ID.}"
 : "${UI_TEXT[POPN_KIT_NO_DISC]:=No pop'n disc extract found. Drop the SLPM-62464 disc tree into games/POPN/disc/ and run this step again.}"
+: "${UI_TEXT[POPN_RESWAP_ASK]:=Re-swap the boot loader on this existing install (refresh the disc-less bypass) without reinstalling? (y/N)}"
+: "${UI_TEXT[POPN_RESWAP_RUNNING]:=Swapping the boot loader in place...}"
+: "${UI_TEXT[POPN_RESWAP_DONE]:=Loader swapped. Boot HDD-OSD to launch it.}"
+: "${UI_TEXT[POPN_RESWAP_ERROR]:=Loader swap failed. See logs/popn-installer.log}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
@@ -205,6 +209,43 @@ echo
 # ---- already installed --------------------------------------------------
 if [[ -n "${INFO[installed]}" ]]; then
     center_text "${UI_TEXT[POPN_INSTALLED]}"
+    echo
+    # In-place loader re-swap: refresh pfs:/dnasload.elf with the spoof loader
+    # (filled for this drive) WITHOUT reinstalling -- so a tester can iterate on
+    # loader / boot-ELF-patch changes, or add the disc-less bypass to a drive that
+    # was installed with the stock dnasload. Sealed containers, attr and passwords
+    # are untouched. Needs the disc extract, the loader asset, and the drive's ID.
+    POPN_DISC="${POPN_DIR}/disc"
+    POPN_TOOLS="${POPN_TOOLS_OVERRIDE:-${POPN_DIR}/tools}"
+    [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${SCRIPTS_DIR}/../../popn/popn/tools"
+    [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${SCRIPTS_DIR}/../../Pop'N Puzzle Dama Online/popn/tools"
+    [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${HELPER_DIR}/popn/tools"
+    POPN_INSTALL_PY="${POPN_TOOLS}/popninstall.py"
+    POPN_LOADER="${POPN_LOADER_OVERRIDE:-${SCRIPTS_DIR}/assets/popn/polbbnexec-popn.kelf}"
+    if [[ -f "${POPN_DISC}/MAIN.BIN" ]] && [[ -f "${POPN_INSTALL_PY}" ]] \
+       && [[ -f "${POPN_LOADER}" ]] && [[ -f "${POL_HDDID_FILE}" ]]; then
+        printf "%s " "${UI_TEXT[POPN_RESWAP_ASK]}"
+        read -r answer </dev/tty
+        case "$answer" in
+            [Yy]*)
+                echo "${UI_TEXT[POPN_RESWAP_RUNNING]}"
+                sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" \
+                    "${POPN_INSTALL_PY}" "${DEVICE}" \
+                    --disc "${POPN_DISC}" \
+                    --hddid "${POL_HDDID_FILE}" \
+                    --helper "${HELPER_DIR}" \
+                    --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
+                    --loader "${POPN_LOADER}" \
+                    --loader-swap --write \
+                    2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
+                    center_text "${UI_TEXT[POPN_RESWAP_DONE]}"
+                else
+                    error_msg "${UI_TEXT[POPN_RESWAP_ERROR]}"
+                fi
+                ;;
+        esac
+    fi
     echo
     read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
     echo
