@@ -100,6 +100,11 @@ fi
 : "${UI_TEXT[POPN_RECOVER_RUNNING]:=Recovering the drive ID from the installed loader...}"
 : "${UI_TEXT[POPN_RECOVER_DONE]:=Recovered the drive ID:}"
 : "${UI_TEXT[POPN_RECOVER_FAIL]:=Could not recover the drive ID. See logs/popn-installer.log}"
+: "${UI_TEXT[POPN_RESWAP_UNAVAIL]:=This drive is already set up. To refresh the boot loader or apply the English translation in place, this machine also needs:}"
+: "${UI_TEXT[POPN_NEED_DISC]:=the game disc extract (the SLPM-62464 disc tree) in games/POPN/disc/}"
+: "${UI_TEXT[POPN_NEED_HDDID]:=the drive ID (playonline.hddid) - re-run this step to recover it from the drive}"
+: "${UI_TEXT[POPN_NEED_TOOLS]:=the install tools (popninstall.py)}"
+: "${UI_TEXT[POPN_NEED_LOADER]:=the loader asset (polbbnexec-popn.kelf)}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
@@ -302,6 +307,14 @@ if [[ -n "${INFO[installed]}" ]]; then
                 fi
                 ;;
         esac
+    else
+        # Say WHY the in-place update (loader re-swap + translation) is not on
+        # offer, instead of just "installed" and a silent exit.
+        echo "  ${UI_TEXT[POPN_RESWAP_UNAVAIL]}"
+        [[ -f "${POPN_DISC}/MAIN.BIN" ]] || echo "    - ${UI_TEXT[POPN_NEED_DISC]}"
+        [[ -f "${POL_HDDID_FILE}" ]]     || echo "    - ${UI_TEXT[POPN_NEED_HDDID]}"
+        [[ -f "${POPN_INSTALL_PY}" ]]    || echo "    - ${UI_TEXT[POPN_NEED_TOOLS]}"
+        [[ -f "${POPN_LOADER}" ]]        || echo "    - ${UI_TEXT[POPN_NEED_LOADER]}"
     fi
     echo
     read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
