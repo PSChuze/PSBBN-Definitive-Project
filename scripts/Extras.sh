@@ -244,6 +244,9 @@ display_menu() {
     printf "%*s%s\n\n" "$padding" "4) " "${UI_TEXT[EXTRAS_MENU_OPTION_4]}"
     printf "%*s%s\n\n" "$padding" "5) " "${UI_TEXT[EXTRAS_MENU_OPTION_5]}"
     printf "%*s%s\n\n" "$padding" "6) " "${UI_TEXT[EXTRAS_MENU_OPTION_6]}"
+    printf "%*s%s\n\n" "$padding" "7) " "${UI_TEXT[EXTRAS_MENU_OPTION_7]}"
+    printf "%*s%s\n\n" "$padding" "8) " "${UI_TEXT[EXTRAS_MENU_OPTION_8]}"
+    printf "%*s%s\n\n" "$padding" "9) " "${UI_TEXT[EXTRAS_MENU_OPTION_9]}"
     printf "%*s%s\n\n" "$padding" "b) " "${UI_TEXT[MENU_BACK]}"
     printf "%*s%s " "$((padding - 3))" "" "${UI_TEXT[MENU_PROMPT]}"
 }
@@ -1827,6 +1830,25 @@ option_six() {
     "${SCRIPTS_DIR}/Nobunaga-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
 }
 
+# Net de Bomberman: the same shape, but the install is complete from the PC
+# (two partitions, no console step). Handed the drive found at startup.
+option_seven() {
+    "${SCRIPTS_DIR}/Bomb-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
+}
+
+# Minna no Golf Online: fully PC-side, one partition. The player's disc extract
+# supplies the game bytes; the toolkit's kit assets supply the seal + loader.
+option_eight() {
+    "${SCRIPTS_DIR}/Mingol-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
+}
+
+# pop'n Puzzle Dama Online: fully PC-side, one partition. The player's disc
+# extract supplies the game bytes; the toolkit fills a pre-signed loader for the
+# drive so it boots disc-less. Handed the drive found at startup.
+option_nine() {
+    "${SCRIPTS_DIR}/Popn-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
+}
+
 clear
 trap 'echo; exit 130' INT
 trap exit_script EXIT
@@ -1872,6 +1894,9 @@ while true; do
         EXTRAS_MENU_OPTION_4
         EXTRAS_MENU_OPTION_5
         EXTRAS_MENU_OPTION_6
+        EXTRAS_MENU_OPTION_7
+        EXTRAS_MENU_OPTION_8
+        EXTRAS_MENU_OPTION_9
     )
     center_menu
     display_menu
@@ -1895,6 +1920,15 @@ while true; do
             ;;
         6)
             option_six
+            ;;
+        7)
+            option_seven
+            ;;
+        8)
+            option_eight
+            ;;
+        9)
+            option_nine
             ;;
         b|B)
             break

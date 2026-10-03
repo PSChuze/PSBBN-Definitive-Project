@@ -33,7 +33,7 @@ class FakeServer(object):
 
     def __init__(self, listing, blobs, latest, marked=True):
         self.listing, self.blobs, self.latest, self.marked = listing, blobs, latest, marked
-        self.tags = []
+        self.tags, self.versions = [], []
         self.sock = socket.socket()
         self.sock.bind(("127.0.0.1", 0))
         self.sock.listen(8)
@@ -67,6 +67,8 @@ class FakeServer(object):
                 conn.sendall(self.reply(cmd, pkt))
 
     def reply(self, cmd, pkt):
+        if cmd == 7:
+            self.versions.append(pkt[24:0x58].split(b"\0")[0])
         if cmd == 7 and self.region_ok(pkt[16:20].rstrip(b"\0")):
             b = bytearray(0x58)
             b[8:12] = b"POLP"
@@ -224,6 +226,47 @@ class Tests(unittest.TestCase):
                                "pinned.dat": "20160203_0"})
         self.assertTrue(p.tool)
         self.assertTrue(all(t == b"PS2+" for t in srv.tags))
+
+    def plan_unpatched(self, files):
+        listing, blobs = build_listing()
+        srv = FakeServer(listing, blobs, "20160203_0")
+
+        class D(object):
+            class title:
+                partition = "PP.SLPM-65981.0004.FMO"
+
+            def version(self):
+                return None
+        d = D()
+        d.files = files
+        return update.plan(d, "127.0.0.1", srv.port, "PS2"), srv
+
+    def test_plan_without_patch_ver_starts_at_the_base_version(self):
+        # FMO as installed has no patch.ver: ask as the Viewer does, with an
+        # empty version, and take the list's oldest version as the drive's.
+        files = {("a.dat",): {"size": 5}, ("dir", "c.dat"): {"size": 9}}
+        p, srv = self.plan_unpatched(files)
+        self.assertEqual(srv.versions, [b""])
+        self.assertTrue(p.unpatched)
+        self.assertEqual(p.have, "20000101_0")
+        self.assertFalse(p.current)
+        got = {b.path: r.version for b, r in p.chosen}
+        self.assertEqual(got, {"a.dat": "20160203_0", "dir/b.tm2": "20100101_0",
+                               "pinned.dat": "20160203_0"})
+
+    def test_plan_without_patch_ver_fetches_a_base_file_that_differs(self):
+        files = {("a.dat",): {"size": 5}, ("dir", "c.dat"): {"size": 4}}
+        p, _srv = self.plan_unpatched(files)
+        self.assertEqual({b.path: r.version for b, r in p.chosen}["dir/c.dat"],
+                         "20000101_0")
+        p, _srv = self.plan_unpatched({("a.dat",): {"size": 5}})
+        self.assertIn("dir/c.dat", {b.path for b, _r in p.chosen})
+
+    def test_plan_with_patch_ver_leaves_base_files_alone(self):
+        p, srv = self.plan_against(marked=True)
+        self.assertFalse(p.unpatched)
+        self.assertEqual(srv.versions[0], b"20070911_0")
+        self.assertNotIn("dir/c.dat", {b.path for b, _r in p.chosen})
 
     def test_plan_falls_back_to_the_plain_tag(self):
         p, srv = self.plan_against(marked=False)
