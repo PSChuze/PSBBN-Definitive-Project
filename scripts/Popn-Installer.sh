@@ -105,6 +105,11 @@ fi
 : "${UI_TEXT[POPN_NEED_HDDID]:=the drive ID (playonline.hddid) - re-run this step to recover it from the drive}"
 : "${UI_TEXT[POPN_NEED_TOOLS]:=the install tools (popninstall.py)}"
 : "${UI_TEXT[POPN_NEED_LOADER]:=the loader asset (polbbnexec-popn.kelf)}"
+: "${UI_TEXT[POPN_EXTRACT_FOUND]:=Found a disc image:}"
+: "${UI_TEXT[POPN_EXTRACT_ASK]:=Extract it to games/POPN/disc/ now? (Y/n)}"
+: "${UI_TEXT[POPN_EXTRACT_RUNNING]:=Extracting the disc image (this writes the full disc tree, a few minutes)...}"
+: "${UI_TEXT[POPN_EXTRACT_DONE]:=Extracted the disc tree to}"
+: "${UI_TEXT[POPN_EXTRACT_FAIL]:=Extraction failed. See logs/popn-installer.log}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
@@ -253,6 +258,46 @@ if [[ ! -f "${POL_HDDID_FILE}" && -n "${INFO[installed]}" ]]; then
                     echo "  ${UI_TEXT[POPN_RECOVER_DONE]} ${POL_HDDID_FILE}"
                 else
                     echo "  ${UI_TEXT[POPN_RECOVER_FAIL]}"
+                fi
+                echo
+                ;;
+        esac
+    fi
+fi
+
+# ---- extract the disc tree from a .bin / .iso if needed -----------------
+# Both the fresh install and the in-place re-swap/translation need the
+# extracted disc tree at games/POPN/disc/. If it is not there but a Redump
+# .bin (MODE2/2352) or an .iso (2048) is, extract it here with iso.py -- the
+# .cue is only a track list and is not needed. Drop the image in games/POPN/
+# or point POPN_DISC_IMAGE at it.
+POPN_DISC="${POPN_DIR}/disc"
+POPN_TOOLS="${POPN_TOOLS_OVERRIDE:-${POPN_DIR}/tools}"
+[[ -f "${POPN_TOOLS}/iso.py" ]] || POPN_TOOLS="${SCRIPTS_DIR}/../../popn/popn/tools"
+[[ -f "${POPN_TOOLS}/iso.py" ]] || POPN_TOOLS="${SCRIPTS_DIR}/../../Pop'N Puzzle Dama Online/popn/tools"
+[[ -f "${POPN_TOOLS}/iso.py" ]] || POPN_TOOLS="${HELPER_DIR}/popn/tools"
+if [[ ! -f "${POPN_DISC}/MAIN.BIN" && -f "${POPN_TOOLS}/iso.py" ]]; then
+    POPN_IMG="${POPN_DISC_IMAGE:-}"
+    if [[ -z "${POPN_IMG}" ]]; then
+        for cand in "${POPN_DIR}"/*.bin "${POPN_DIR}"/*.BIN "${POPN_DIR}"/*.iso "${POPN_DIR}"/*.ISO; do
+            [[ -f "$cand" ]] && { POPN_IMG="$cand"; break; }
+        done
+    fi
+    if [[ -n "${POPN_IMG}" && -f "${POPN_IMG}" ]]; then
+        echo "  ${UI_TEXT[POPN_EXTRACT_FOUND]} $(basename "${POPN_IMG}")"
+        printf "%s " "${UI_TEXT[POPN_EXTRACT_ASK]}"
+        read -r answer </dev/tty
+        case "$answer" in
+            [Nn]*) ;;
+            *)
+                echo "${UI_TEXT[POPN_EXTRACT_RUNNING]}"
+                mkdir -p "${POPN_DISC}"
+                "${POPN_PY}" "${POPN_TOOLS}/iso.py" x "${POPN_IMG}" "${POPN_DISC}" \
+                    >> "${LOG_FILE}" 2>&1
+                if [[ -f "${POPN_DISC}/MAIN.BIN" ]]; then
+                    echo "  ${UI_TEXT[POPN_EXTRACT_DONE]} ${POPN_DISC}"
+                else
+                    echo "  ${UI_TEXT[POPN_EXTRACT_FAIL]}"
                 fi
                 echo
                 ;;
