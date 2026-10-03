@@ -71,6 +71,11 @@ POPN_DIR="${GAMES_PATH}/POPN"
 [[ -n "${POPN_DIR_OVERRIDE}" ]] && POPN_DIR="${POPN_DIR_OVERRIDE}"
 POL_HDDID_FILE="${POL_HDDID:-$(dirname "${POPN_DIR}")/POL/playonline.hddid}"
 
+# Create the game folder up front so the user has an obvious place to drop the
+# disc (a Redump .bin, or an already-extracted tree in disc/). Harmless if it
+# already exists; the install itself is still gated on finding the disc below.
+mkdir -p "${POPN_DIR}" 2>/dev/null || true
+
 declare -A UI_TEXT
 
 if [[ -f "${LANG_DIR}/$LANG_FILE.txt" ]]; then
@@ -85,12 +90,15 @@ else
 fi
 
 # English fallbacks for the disc/install prompts. Lang files can override.
-: "${UI_TEXT[POPN_KIT_ASK]:=A pop'n disc extract was found. Install pop'n to the drive now? (y/N)}"
-: "${UI_TEXT[POPN_KIT_INSTALLING]:=Installing pop'n to the drive. This can take a few minutes...}"
+# NOTE: keep these default strings free of a lone apostrophe -- a single ' inside
+# a : "${X:=...}" default opens a quote and breaks parsing (hence "Puzzle-dama",
+# not "pop'n", here; lang files that assign UI_TEXT directly may use apostrophes).
+: "${UI_TEXT[POPN_KIT_ASK]:=A Puzzle-dama disc was found. Install it to the drive now? (y/N)}"
+: "${UI_TEXT[POPN_KIT_INSTALLING]:=Installing Puzzle-dama to the drive. This can take a few minutes...}"
 : "${UI_TEXT[POPN_KIT_ERROR]:=Install failed. See logs/popn-installer.log}"
-: "${UI_TEXT[POPN_KIT_DONE]:=pop'n installed. Boot HDD-OSD to launch it.}"
-: "${UI_TEXT[POPN_KIT_NEEDS_HDDID]:=A pop'n disc extract is present, but the PlayOnline step must run first to mint the drive ID.}"
-: "${UI_TEXT[POPN_KIT_NO_DISC]:=No pop'n disc extract found. Drop the SLPM-62464 disc tree into games/POPN/disc/ and run this step again.}"
+: "${UI_TEXT[POPN_KIT_DONE]:=Puzzle-dama installed. Boot HDD-OSD to launch it.}"
+: "${UI_TEXT[POPN_KIT_NEEDS_HDDID]:=A Puzzle-dama disc is present, but the PlayOnline step must run first to mint the drive ID.}"
+: "${UI_TEXT[POPN_KIT_NO_DISC]:=No game disc found. Put the SLPM-62464 disc (a Redump .bin, or an extracted tree in disc/) in this folder and run this step again:}"
 : "${UI_TEXT[POPN_RESWAP_ASK]:=Re-swap the boot loader on this existing install (refresh the disc-less bypass) without reinstalling? (y/N)}"
 : "${UI_TEXT[POPN_RESWAP_RUNNING]:=Swapping the boot loader in place...}"
 : "${UI_TEXT[POPN_RESWAP_DONE]:=Loader swapped. Boot HDD-OSD to launch it.}"
@@ -101,7 +109,7 @@ fi
 : "${UI_TEXT[POPN_RECOVER_DONE]:=Recovered the drive ID:}"
 : "${UI_TEXT[POPN_RECOVER_FAIL]:=Could not recover the drive ID. See logs/popn-installer.log}"
 : "${UI_TEXT[POPN_RESWAP_UNAVAIL]:=This drive is already set up. To refresh the boot loader or apply the English translation in place, this machine also needs:}"
-: "${UI_TEXT[POPN_NEED_DISC]:=the game disc extract (the SLPM-62464 disc tree) in games/POPN/disc/}"
+: "${UI_TEXT[POPN_NEED_DISC]:=the game disc (a Redump .bin in games/POPN/, or an extracted tree in games/POPN/disc/)}"
 : "${UI_TEXT[POPN_NEED_HDDID]:=the drive ID (playonline.hddid) - re-run this step to recover it from the drive}"
 : "${UI_TEXT[POPN_NEED_TOOLS]:=the install tools (popninstall.py)}"
 : "${UI_TEXT[POPN_NEED_LOADER]:=the loader asset (polbbnexec-popn.kelf)}"
@@ -448,6 +456,7 @@ if [[ -f "${POPN_DISC}/SYSTEM.CNF" ]] && [[ -f "${POPN_DISC}/MAIN.BIN" ]] \
     fi
 else
     center_text "${UI_TEXT[POPN_KIT_NO_DISC]}"
+    center_text "${POPN_DIR}"
 fi
 
 echo
