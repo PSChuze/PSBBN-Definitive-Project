@@ -27,6 +27,22 @@ bypass. Both are operator-approved for this title family (Rule 3); no disc data
 is read, kept, or sent. The patched ELF is fed to the loader fill step
 (`playonline.loader --elf ...`), never re-signed on the player's machine.
 
+A fourth, separate patch (RELAY_PATCHES, on by default; --no-relay to skip)
+makes online battles work without port forwarding. Battles are console-to-
+console over TCP 5730: the room owner LISTENS and the guest CONNECTS, then they
+swap on retry, so one player always needs inbound 5730. The patch turns the
+role branch in the P2P setup (FUN_001d5890 in the disc build = 0x1d442c here)
+into an unconditional branch to the connector path, so BOTH consoles wait 45
+frames and connect out, to whatever address the server put in 0x440b -- the
+server's relay, which pairs the two connections. The per-frame exchange
+(FUN_001c94e0) is symmetric and never reads the stored mode, so nothing else
+changes. A relay-patched console can only battle through the relay
+(server/popn/relay.py); see popn/re/RE-match-45xx.md for the P2P code.
+
+  | VA       | file off | orig (word) | new (word)  | effect                      |
+  |----------|----------|-------------|-------------|-----------------------------|
+  | 0x1d442c | 0x0d44ac | 16200010    | 10000010    | P2P: both roles connect out |
+
 Usage:
     # from a disc extract (decrypt MAIN.BIN, carve, patch):
     python3 patch_boot_elf.py --main <disc>/MAIN.BIN -o blja-game.patched.elf
@@ -66,6 +82,13 @@ PATCHES = [
      "in-game DNAS auth skip (other auth call site -> return 0)"),
     (0x1cfddc, 0x0cfe5c, b"\x14\x00\x02\x24", b"\x0a\x00\x02\x24",
      "login disc-check skip (next-scene state 20 begin-disc-check -> 10 login-connect)"),
+]
+
+# bnez $s1, connector-path -> beq $zero,$zero, connector-path (same target; the
+# delay-slot store runs either way).
+RELAY_PATCHES = [
+    (0x1d442c, 0x0d44ac, b"\x10\x00\x20\x16", b"\x10\x00\x00\x10",
+     "P2P relay: listener role takes the connector path (both connect out)"),
 ]
 
 
@@ -143,8 +166,9 @@ def carve_game_elf(kelf_plain):
     return kelf_plain[off:off + span]
 
 
-def patch_game_elf(elf):
-    """Apply the three guarded patches to an EXEC game ELF. Returns
+def patch_game_elf(elf, relay=True):
+    """Apply the guarded patches to an EXEC game ELF: the three disc-less-boot
+    patches, plus the P2P relay patch unless relay=False. Returns
     (patched_bytes, report) where report is a list of (desc, status) with
     status in {"patched", "already"}. Raises PatchError if any site matches
     neither the orig nor the new word, or if the ELF is not the expected one."""
@@ -155,7 +179,7 @@ def patch_game_elf(elf):
                          % (_u32(elf, 24), EXEC_ENTRY))
     out = bytearray(elf)
     report = []
-    for va, off, orig, new, desc in PATCHES:
+    for va, off, orig, new, desc in PATCHES + (RELAY_PATCHES if relay else []):
         # Cross-check the documented VA->offset mapping, so a wrong table is
         # caught instead of corrupting the file.
         if off != va - LOAD_VA_BASE + PHDR0_OFF:
@@ -186,23 +210,23 @@ def carve_ioprp(kelf_plain):
     return kelf_plain[IOPRP_OFF:IOPRP_OFF + IOPRP_LEN]
 
 
-def patch_from_main(main_bin):
+def patch_from_main(main_bin, relay=True):
     """Decrypt a disc MAIN.BIN, carve the EXEC ELF, and patch it. Returns
     (patched_bytes, report)."""
     import disc_dec
     plain = disc_dec.decrypt_disc_container(main_bin)
     elf = carve_game_elf(plain)
-    return patch_game_elf(elf)
+    return patch_game_elf(elf, relay)
 
 
-def boot_sections_from_main(main_bin):
+def boot_sections_from_main(main_bin, relay=True):
     """Decrypt a disc MAIN.BIN once and return (ioprp, patched_elf) -- the two
     inputs the loader fill step needs, both carved from the player's own disc.
     Nothing Konami or Sony is shipped; the disc supplies everything."""
     import disc_dec
     plain = disc_dec.decrypt_disc_container(main_bin)
     ioprp = carve_ioprp(plain)
-    patched, _report = patch_game_elf(carve_game_elf(plain))
+    patched, _report = patch_game_elf(carve_game_elf(plain), relay)
     return ioprp, patched
 
 
@@ -217,7 +241,7 @@ def _selftest():
     if os.path.exists(ref_plain) and os.path.exists(ref_patched):
         elf = open(ref_plain, "rb").read()
         want = open(ref_patched, "rb").read()
-        got, report = patch_game_elf(elf)
+        got, report = patch_game_elf(elf, relay=False)
         for desc, status in report:
             print("  %-9s %s" % (status, desc))
         if got == want:
@@ -227,17 +251,26 @@ def _selftest():
             print("  FAIL patched output differs from reference artifact")
             ok = False
         # idempotence: patching the patched ELF changes nothing
-        again, rep2 = patch_game_elf(got)
+        again, rep2 = patch_game_elf(got, relay=False)
         if again == got and all(s == "already" for _, s in rep2):
             print("  OK   re-patch is idempotent")
         else:
             print("  FAIL re-patch not idempotent")
             ok = False
+        # the relay patch: exactly one word differs from the boot-only output
+        rel, _ = patch_game_elf(elf)
+        diff = [i for i in range(len(rel)) if rel[i] != got[i]]
+        _va, roff, _o, rnew, _d = RELAY_PATCHES[0]
+        if diff and min(diff) >= roff and max(diff) < roff + 4 and rel[roff:roff + 4] == rnew:
+            print("  OK   relay patch changes only the role branch at %#x" % roff)
+        else:
+            print("  FAIL relay patch diff unexpected: %s" % [hex(i) for i in diff[:8]])
+            ok = False
     else:
         print("  skip patch test (reference artifacts missing)")
 
     if os.path.exists(main_bin):
-        got, _ = patch_from_main(open(main_bin, "rb").read())
+        got, _ = patch_from_main(open(main_bin, "rb").read(), relay=False)
         if os.path.exists(ref_patched):
             want = open(ref_patched, "rb").read()
             tag = "== reference" if got == want else "!= reference"
@@ -261,6 +294,8 @@ def main():
     ap.add_argument("-o", "--out", help="write the patched ELF here")
     ap.add_argument("--selftest", action="store_true",
                     help="verify against the reference artifacts")
+    ap.add_argument("--no-relay", dest="relay", action="store_false",
+                    help="skip the P2P relay patch (battles then need inbound TCP 5730)")
     a = ap.parse_args()
 
     if a.selftest:
@@ -269,9 +304,9 @@ def main():
         ap.error("give --main, --elf, or --selftest")
 
     if a.main:
-        patched, report = patch_from_main(open(a.main, "rb").read())
+        patched, report = patch_from_main(open(a.main, "rb").read(), a.relay)
     else:
-        patched, report = patch_game_elf(open(a.elf, "rb").read())
+        patched, report = patch_game_elf(open(a.elf, "rb").read(), a.relay)
     for desc, status in report:
         print("  %-9s %s" % (status, desc))
     if a.out:
