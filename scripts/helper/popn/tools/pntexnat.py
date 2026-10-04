@@ -500,7 +500,10 @@ def apply_edits(G, edits, idx=None, pal=None):
             # (its plate, the old text's fill and outline). Some sheets animate by
             # cycling palette entries (button hover); a lookalike entry from elsewhere
             # in the palette would not animate with the rest of the element.
-            local = np.unique(idx[y0:y1, x0:x1])
+            # "local_rect": take the allowed entries from a wider rect instead (e.g. a
+            # whole panel), so sibling labels map to the SAME text colours
+            lx0, ly0, lx1, ly1 = e.get("local_rect", clip)
+            local = np.unique(idx[ly0:ly1, lx0:lx1])
             local = local[pal[local, 3] > 0]
             if not local.size:
                 force[txt] = -1

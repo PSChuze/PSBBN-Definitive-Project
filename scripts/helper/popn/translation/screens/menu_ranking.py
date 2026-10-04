@@ -33,7 +33,11 @@ except Exception:
 # reads as dark green / near-black, so the outline uses the dark green.
 HL_FILL = (255, 247, 222)
 HL_OUT = (2, 64, 27)
-LS_FILL, LS_OUT = 252, 175          # unselected list labels: soft white, light outline
+# unselected list labels: soft white, tan outline (the JP labels' own outline colour).
+# Text colours map through the WHOLE panel's palette entries (local_rect) so every row
+# gets the same fill/outline entries: with per-label entries "Win%" (on a pale bubble)
+# mapped to a lighter tan than its siblings and read paler (live test).
+LS_FILL, LS_OUT = 252, (197, 174, 156)
 
 # SELECTED / NORMAL PAIRS. Each highlighted sprite is drawn in place of its normal label;
 # matching the Japanese fill masks gives where it lands on the normal art: the 12
@@ -261,7 +265,8 @@ for _k, (_n, _t, (_tex, _r), (_lx, _ly), _cap) in enumerate(PAIRS):
         (HUB_RM if _tex == 1 else OV_HL_RM).append(_rm_hl(_r))
     (HUB_TX if _tex == 1 else OV_HL_TX).append(
         _text(_r[0], _r[1], _w, _h, _t, _fs, _dy, HL_FILL, HL_OUT))
-    OV_LS_TX.append(_text(_lx, _ly, _w, _h, _t, _fs, _dy, LS_FILL, LS_OUT))
+    OV_LS_TX.append(dict(_text(_lx, _ly, _w, _h, _t, _fs, _dy, LS_FILL, LS_OUT),
+                         local_rect=LIST_PANEL if _k < CAT_N else LOBBY_PANEL))
 
 # clips = each normal label's own rect (the highlight sprite's size at its list
 # origin) + 3 px: the pale bottom of the panel is cream-light too and must not be
@@ -330,7 +335,7 @@ HUB = [
     # clip from x 230: the JP "(" and its halo start at ~x 236 (left a white smear)
     dict(clip=(230, 190, 388, 228), lines=["(Coming soon!)"], ty0=196, lh=22, fs=18,
          bg="inpaint", hat=14, kk=9, dil=2, fill=(240, 240, 236), outline=(108, 196, 96),
-         sw=3),
+         sw=3, aa=False),   # aliased: AA edges mapped to the JP's grey shading entries
     _green((0, 448, 260, 492), ["It's the Beginner Lobby!", "Only for 6 Kyu and below!"]),
     _green((260, 448, 436, 492), ["It's the Normal Lobby!", "Anyone can join!"]),
 ] + HUB_RM + HUB_CP + HUB_TX
