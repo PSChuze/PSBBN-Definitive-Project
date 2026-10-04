@@ -179,7 +179,16 @@ HELP_MSGS = dict(name="help-msgs", file="IMAGE.DAT", fo=0x1e0a40, slot_end=0x1ff
      _msg((345, 133, 464, 153), "Checking DNAS!"),           # (340,130,464,154)
      _msg((345, 157, 430, 175), "Saved!"),                   # (340,154,430,178)
      _msg((345, 181, 430, 199), "Save failed!"),             # (340,178,430,202)
-     _msg((340, 250, 484, 268), "Connecting to the server!", ty0=250),  # (340,250,484,268); サ/メ reach x 340
+     # fix7 (live test: light text fragments "clipping in" at the TOP edge of the
+     # highlighted Connect): the game samples a few rows ABOVE a highlighted button's
+     # sprite rect (>= 5: the build with 4 clean key rows still showed it). The strips
+     # directly above the red buttons therefore end in >= 6 rows of pure key colour:
+     # "Connecting" -> "Connect to the server!" (no descenders), 12 px, one row higher,
+     # and the strip's bottom rows (and Save failed!'s JP leftovers in rows 199-201,
+     # above the red pop'n ID) are wiped to the key index.
+     _msg((340, 250, 484, 268), "Connect to the server!", fs=12, ty0=249),  # (340,250,484,268); text rows 250..261
+     dict(clip=(340, 262, 484, 268), bg="key", key=106, wht=-1, dil=0),     # rows 262-267 = key
+     dict(clip=(342, 196, 430, 202), bg="key", key=106, wht=-1, dil=0),     # Save failed! rows 196-201 = key (x 340-341 = strip border)
      _msg((340, 316, 452, 334), "Back to the menu!", ty0=316),          # (340,316,452,334)
      _msg((1, 403, 166, 420), "Enter your pop'n ID!"),                 # (0,402,312,440)
      _msg((1, 421, 312, 439), "First time? Register on the sign-up screen!"),

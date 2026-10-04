@@ -59,6 +59,62 @@ PAIRS = [
     ("normal",   "Normal Lobby",     (2, (156, 116, 278, 140)), (168, 18), 19),
     ("beginner", "Beginner Lobby",   (2, (278, 116, 392, 140)), (168, 49), 19),
 ]
+# twin glyph masks for the bg="patch" panel cleanup: every texture-2 highlight sprite
+# mapped onto its normal label (the 12 categories' list origin, the lobby labels)
+TWINS = [dict(src=r, to=(lx, ly), wht=200, drk=120, dil=1)
+         for _n, _t, (tex, r), (lx, ly), _c in PAIRS if tex == 2]
+# Prefecture / High score highlights live on the hub texture: their masks (white fill
+# min > 200 or dark outline lum < 120) precomputed from the disc hub texture 0x101bc0
+TWINS += [
+    dict(to=(13, 185), dil=2, bits=[  # pref (hub tex (436, 470, 502, 492))
+        '.....##.......##........##...#...........##.#...........#####.....',
+        '....#################..#########.......#####......#############...',
+        '...###.#######..########..###.###.######...############......##...',
+        '..###.#...#......#..####...##..#########...#######..##........##..',
+        '.##..............#....##...#...####..##......##..#..##........##..',
+        '.##.......#..##..##...#..........#...............#..##........##..',
+        '.##......##..#.#.###.##..........#...##..####..##...#.........##..',
+        '.####....##..#..#######........###...##..####..##...#.........##..',
+        '.#..............#######...#...#.##.#.#.#.####...#.#.#.........##..',
+        '.#..#......#....##....#.#...##..##.#...#..........#.#.#.###.#.##..',
+        '.###.#..######.#####..#.#......###.#..##..####....#.#.##...#####..',
+        '.##.###...##.#.#.##.#.#.#.#.############.####.###.#.#.......#####.',
+        '.##.######.#.#.#.##.#.#.########.##########.#.###.#.####.#########',
+        '.#.##.####.#.######.#.#.#.######.###.#.##.###.#################.##',
+        '.#####..##.#.##########.#..#####.###.####.###.#####.#...##.#.####.',
+        '.##.#..###.#..#######.#####.##############.#########..#.####..###.',
+        '..#.#.####.##.##.#.####..####################.#####.##..##..##.##.',
+        '.##.##.###.####.####.######.......##########.########.#.####.##.##',
+        '.#######...#.#####...#.##########.#########.######.####.#####.#.#.',
+        '.##.########.##..#######.........#..##..####...####.###...####.##.',
+        '..############....###.###################.######..###.######.###..',
+        '..........###............########..#..##...####........###........',
+    ]),
+    dict(to=(13, 258), dil=2, bits=[  # hs (hub tex (436, 448, 508, 470))
+        '........................................................................',
+        '.....###...................##.....########...................########...',
+        '.....#####...............##################..#########...##############.',
+        '....##..##..............###..###.........####################........##.',
+        '....##...#.............##.....#...........###.........###.............##',
+        '....#...#####........###.....##...........##...........#.......#......##',
+        '....#...######......###.....###.....##....##....##.....##.#...#####...##',
+        '...##...##...#.....###.....###########....###..######...#.#########...##',
+        '...##...##...##.#.##......##...######....############.#.#####...##....#.',
+        '...#.#.###.##.#..##.#...#.#.......##.#.###.........##.#.##.##.#.##..###.',
+        '..##.#.######.####.##..##.#......######.##.........##.#.#..##.#.##.#.##.',
+        '..####.#.##.#####.###.###.#......##.##.##..........##.#.#..#.##.##.#.#..',
+        '#.#.####..####.##.##.######.....##.####.##.........##.#.#.##.#.#######..',
+        '.#######..##.####.#.#######....#########.##############.#.####.##.###.#.',
+        '.####.##...#.##.##.########...##.###..###.###.........#.#.#.##.#........',
+        '.#.##.#....#########.#.####...#.###.##.###.############.###.####........',
+        '.#.##.#....####.###..#.####..#####.####.###..##########.########........',
+        '.##.###.....#..##....#.####..##.####..##.#.#...........####.####........',
+        '..#####.....#####....#...##...##.###...##.##################..#.........',
+        '#...##.......#.......#####.....####.....###.####.#........#####.........',
+        '......................###............................#..................',
+        '..............................................#.........................',
+    ]),
+]
 DX = 1          # text starts 1 px in from the sprite's left edge (where the JP glyph starts)
 SW = 3          # heavy outline like the original selected glyphs
 MARGIN = 2      # squeeze width = sprite width - DX - MARGIN
@@ -114,17 +170,25 @@ def _rm_hl(clip):
     return dict(clip=clip, bg="outlined", wht=130, drk=120, reach=3, dil=1, local=True)
 
 
-def _rm_panel(clip):
-    # Remove the soft white JP from the bubbly list / lobby panels WITHOUT smoothing
-    # the panel (live test: inpaint left pale smears where the labels were). The panel
-    # is rows of a 2-px dither plus dotted lines and large dotted-rim bubbles. Glyph =
-    # cream fill (min channel > 215; ~2 % of the panel is that light, and those
-    # pixels just get their own row's neighbour) grown 3 px over its tan outline; each glyph pixel takes the ORIGINAL palette index of
-    # the nearest clean pixel in the same row an even number of px away (dir (2, 0)),
-    # so the dither phase and the original indices are kept. The highlighted twins do
-    # not help here: their bold glyphs cover ~96 % of the normal glyph pixels and their
-    # plates are not index-identical to the panel.
-    return dict(clip=clip, bg="rows", dir=(2, 0), wht=215, dil=3, drk=-1)
+LIST_PANEL = (6, 6, 150, 314)        # list panel sprite (0,0)-(156,320) interior
+LOBBY_PANEL = (160, 4, 306, 88)      # lobby panel sprite (156,0)-(310,92) interior
+
+
+def _rm_panel(clip, region):
+    # Remove the soft white JP from the bubbly list / lobby panels by EXEMPLAR fill
+    # (pntexnat bg="patch"): live tests showed inpaint leaves pale smears and a row
+    # copy (bg="rows") streaks band colours sideways (Win% ended up on a tan strip).
+    # Each small chunk of the glyph mask (cream fill, min channel > 215, grown 3 px over
+    # the tan outline) takes the ORIGINAL palette indices of the best-matching clean
+    # spot of the same panel (ring SSD + |dy| penalty, even offsets for the dither).
+    # The highlighted twins do not help: their bold glyphs cover ~96 % of the normal
+    # glyph pixels and their plates are not index-identical to the panel.
+    # The soft glyphs are part translucent (pale-green panel pixels show through the
+    # fill) and their tan outline matches the tan bands, so a colour threshold alone
+    # misses much of them. Each label's highlighted twin (bold white fill + dark
+    # outline, same glyphs at the same offset) gives a crisp superset mask: TWINS.
+    return dict(clip=clip, bg="patch", region=region, wht=215, dil=2, ring=3,
+                chunk=6, lam=2.0, maxdy=64, twins=TWINS)
 
 
 def _rm_soft(clip):
@@ -199,9 +263,22 @@ for _k, (_n, _t, (_tex, _r), (_lx, _ly), _cap) in enumerate(PAIRS):
         _text(_r[0], _r[1], _w, _h, _t, _fs, _dy, HL_FILL, HL_OUT))
     OV_LS_TX.append(_text(_lx, _ly, _w, _h, _t, _fs, _dy, LS_FILL, LS_OUT))
 
-LIST_RM = [_rm_panel((12, 17 + round(24.3 * i) - 3, 149, 17 + round(24.3 * i) + 21))
-           for i in range(12)]
-LOBBY_RM = [_rm_panel((164, 18, 304, 46)), _rm_panel((164, 48, 304, 78))]
+# clips = each normal label's own rect (the highlight sprite's size at its list
+# origin) + 3 px: the pale bottom of the panel is cream-light too and must not be
+# treated as glyph outside a label
+def _lab_clip(n, pad=3):
+    tex, r = _HL[n]; lx, ly = LAYOUT[n]["list"]
+    x0, y0 = max(lx - pad, 8), max(ly - pad, 8)
+    return (x0, y0, min(lx + r[2] - r[0] + pad, 304), ly + r[3] - r[1] + pad)
+
+
+# Points sits on the near-white bottom of the panel where the exemplar fill found no
+# matching pale source and left a darker tile right of the word; the old soft inpaint
+# is invisible on that flat pale area, so that row keeps it (per-row best of v14/v16).
+INPAINT_ROWS = {"pts"}
+LIST_RM = [(_rm_soft(_lab_clip(p[0])) if p[0] in INPAINT_ROWS else
+            _rm_panel(_lab_clip(p[0]), LIST_PANEL)) for p in PAIRS[:CAT_N]]
+LOBBY_RM = [_rm_panel(_lab_clip(n), LOBBY_PANEL) for n in ("normal", "beginner")]
 
 # Menu Select plate interior x 38..156, rows 87..116: per row the colours of the
 # 2-px dither at x (38, 39), sampled from the disc texture (each is a unique palette

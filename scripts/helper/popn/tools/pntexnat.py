@@ -153,9 +153,11 @@ def _draw_lines(G, e):
     outline = e.get("outline", 28); sw = e.get("sw", 2)
     ty0 = e["ty0"]; lh = e.get("lh", 22); fs0 = e.get("fs", 14)
     img = Image.fromarray(G, "RGB"); dr = ImageDraw.Draw(img)
-    if not e.get("aa", True):
+    if not e.get("aa", e.get("bg") != "key"):
         # aliased glyphs (no edge blending): for text over a TRANSPARENT entry, where
-        # an antialiased edge would blend with its black RGB and map to a dark halo
+        # an antialiased edge would blend with its black RGB and map to a dark halo.
+        # Default for bg="key": the key colour is hidden at draw time but edge blends
+        # toward it are opaque (live test: a muddy brown fringe on the room HELP line)
         dr.fontmode = "1"
     margin = e.get("margin", 8)
     bold = e.get("bold", 0)          # optional faux bold (px), see _text
@@ -183,6 +185,114 @@ def _draw_lines(G, e):
     arr = np.array(img)
     out = G.copy(); out[y0:y1, x0:x1] = arr[y0:y1, x0:x1]
     return out
+
+
+def _patch_fill(G, force, idx, pal, e):
+    """bg="patch": exemplar / block-match fill for text on a NON-periodic panel art
+    (bubbles, bands, a 2-px dither), where inpaint smooths and a row copy streaks.
+
+    The glyph mask is built for the whole `region` (the panel's sprite rect) from the
+    ORIGINAL texture: cream fill (min channel > wht) grown `dil` px, plus optional
+    `twins` masks (see below). The masked pixels inside the clip are cut into
+    `chunk` x `chunk` tiles, filled outside-in. For each tile, every offset (dx, dy)
+    with both even (keeps the dither phase) whose shifted bbox + `ring` px lies
+    entirely on clean region pixels is scored: mean RGB SSD on the tile's known ring
+    (clean pixels and tiles already filled) + `lam` * |dy|. The best source's ORIGINAL
+    palette indices are copied into the tile's masked pixels (forced, so indices stay
+    original). Tiles with no valid source fall back to a local inpaint."""
+    rx0, ry0, rx1, ry1 = e["region"]
+    x0, y0, x1, y1 = e["clip"]
+    wht, dil = e.get("wht", 215), e.get("dil", 3)
+    ring, chunk, lam = e.get("ring", 3), e.get("chunk", 10), e.get("lam", 4.0)
+    maxdy = e.get("maxdy", 64)
+    orig = pal[idx][:, :, :3].astype(np.int32)
+    inreg = np.zeros((W, W), bool); inreg[ry0:ry1, rx0:rx1] = True
+    cream = (orig.min(axis=2) > wht) & inreg
+    gmask = np.zeros((W, W), bool)
+    # extra glyph masks borrowed from TWIN sprites (e.g. a highlighted copy of the label
+    # elsewhere on the sheet, whose bold white fill + dark outline is a crisp superset
+    # of the soft label's glyph): each {"src": rect, "to": (x, y), "wht", "drk", "dil"}
+    oL = (0.299 * orig[:, :, 0] + 0.587 * orig[:, :, 1] + 0.114 * orig[:, :, 2])
+    # A twin on ANOTHER sheet is given as "bits" instead: rows of "#"/"." (its mask
+    # precomputed from that sheet).
+    for t in e.get("twins", ()):
+        tx, ty = t["to"]
+        if "bits" in t:
+            sub = np.array([[c == "#" for c in r] for r in t["bits"]], bool)
+        else:
+            sx0, sy0, sx1, sy1 = t["src"]
+            sub = (orig[sy0:sy1, sx0:sx1].min(axis=2) > t.get("wht", 200)) |                 (oL[sy0:sy1, sx0:sx1] < t.get("drk", 120))
+        m = np.zeros((W, W), bool); m[ty:ty + sub.shape[0], tx:tx + sub.shape[1]] = sub
+        gmask |= _dilate(m, t.get("dil", 1)) & inreg
+    if e.get("twins") and e.get("cream_near_twins", True):
+        # cream only counts as glyph near a twin mask: a pale part of the panel itself
+        # (e.g. its near-white bottom) stays a valid, clean source
+        cream &= _dilate(gmask, dil + 2)
+    gmask |= _dilate(cream, dil) & inreg
+    clean = inreg & ~gmask
+    # summed-area table of NOT-clean, to test a rect for cleanliness in O(1)
+    bad = np.pad((~clean).astype(np.int32), ((1, 0), (1, 0))).cumsum(0).cumsum(1)
+
+    def rect_clean(ax0, ay0, ax1, ay1):
+        if ax0 < 0 or ay0 < 0 or ax1 > W or ay1 > W:
+            return False
+        return bad[ay1, ax1] - bad[ay0, ax1] - bad[ay1, ax0] + bad[ay0, ax0] == 0
+
+    inclip = np.zeros((W, W), bool); inclip[y0:y1, x0:x1] = True
+    tgt = gmask & inclip
+    if not tgt.any():
+        return G
+    G = G.copy()
+    cur = G.astype(np.int32)
+    known = clean | ~inreg                       # ring pixels we may compare against
+    known &= ~tgt
+    # tiles of `chunk` x `chunk` over the masked pixels, filled outside-in (onion
+    # peel: tiles nearest the clean surroundings first), each compared on its known
+    # ring, which includes tiles filled before it, so the fill propagates coherently
+    ys_all, xs_all = np.nonzero(tgt)
+    tiles = {}
+    for yy, xx in zip(ys_all, xs_all):
+        tiles.setdefault(((yy - y0) // chunk, (xx - x0) // chunk), []).append((yy, xx))
+    if _HAVE_CV2:
+        dist = cv2.distanceTransform(tgt.astype(np.uint8), cv2.DIST_L2, 3)
+    else:
+        dist = np.zeros((W, W), np.float32)
+    order = sorted(tiles.values(), key=lambda pts: min(dist[p] for p in pts))
+    left = np.zeros((W, W), bool)
+    for pts in order:
+        ys = np.array([p[0] for p in pts]); xs = np.array([p[1] for p in pts])
+        bx0, by0, bx1, by1 = xs.min(), ys.min(), xs.max() + 1, ys.max() + 1
+        ox0, oy0, ox1, oy1 = bx0 - ring, by0 - ring, bx1 + ring, by1 + ring
+        if ox0 < 0 or oy0 < 0 or ox1 > W or oy1 > W:
+            left[ys, xs] = True; continue
+        win = np.zeros((oy1 - oy0, ox1 - ox0), bool)
+        win[ys - oy0, xs - ox0] = True
+        ringm = ~win & known[oy0:oy1, ox0:ox1]
+        if not ringm.any():
+            left[ys, xs] = True; continue
+        tref = cur[oy0:oy1, ox0:ox1][ringm]
+        best = None
+        for dy in range(-maxdy, maxdy + 1, 2):
+            if oy0 + dy < ry0 or oy1 + dy > ry1:
+                continue
+            for dx in range(rx0 - ox0 + ((ox0 - rx0) % 2), rx1 - ox1 + 1, 2):
+                if (dx == 0 and dy == 0) or                         not rect_clean(ox0 + dx, oy0 + dy, ox1 + dx, oy1 + dy):
+                    continue
+                sv = orig[oy0 + dy:oy1 + dy, ox0 + dx:ox1 + dx][ringm]
+                score = ((sv - tref) ** 2).sum(axis=1).mean() + lam * abs(dy)
+                if best is None or score < best[0]:
+                    best = (score, dx, dy)
+        if best is None:
+            left[ys, xs] = True; continue
+        _, dx, dy = best
+        src = idx[ys + dy, xs + dx]
+        force[ys, xs] = src
+        G[ys, xs] = pal[src, :3]
+        cur[ys, xs] = pal[src, :3]
+        known[ys, xs] = True
+    if left.any():
+        G[y0:y1, x0:x1] = _inpaint(np.ascontiguousarray(G[y0:y1, x0:x1]), left[y0:y1, x0:x1])
+    return G
 
 
 def apply_edits(G, edits, idx=None, pal=None):
@@ -307,6 +417,8 @@ def apply_edits(G, edits, idx=None, pal=None):
             # a uint8 array for an out-of-range Python int; same values on NumPy 1)
             force[y0:y1, x0:x1] = np.where(s_frc >= 0, s_frc,
                                            np.where(same, s_idx.astype(np.int32), -1))
+        elif bg == "patch" and idx is not None and pal is not None:
+            G = _patch_fill(G, force, idx, pal, e)
         elif bg == "lerp" and idx is not None and pal is not None:
             # Like bg="rows" with dir (1, 0), but each masked run in a row is filled
             # with a linear blend from its left neighbour's colour to its right one's

@@ -322,12 +322,17 @@ def _tile(clip, txt, fill, outline, fs=13, dy=2, align="l", sw=2):
 # Rank tiles: every rank sprite on every sheet is 38x20 on the transparent entry, and
 # the game draws it over the player row plate (orange/brown, teal, ...). fix5 (live
 # test: "8 Kyu" illegible above Hi-Score): the old labels were fs 12 with a 1 px
-# outline and auto-shrunk per word. Now ONE size for the whole family: fs 15, 2 px
-# dark outline, no space ("8Kyu", "1Dan": the widest, "8Dan", is 37 px), every label
-# centred in its sprite on the same "Hg" baseline box; "Master" (48 px) keeps the
-# height and is compressed horizontally (squeeze) instead of shrinking. The sprite rects
-# are written out exactly (they are 38x20 everywhere), so _fit leaves them alone.
-RANK_FS, RANK_SW = 15, 2
+# outline and auto-shrunk per word; they became "8Kyu"/"1Dan" (no space) at one size
+# for the whole family, centred in the sprite on the same "Hg" baseline box, with
+# "Master" compressed horizontally (squeeze) instead of shrinking.
+# fix6 (live test: fs 15 + 2 px aliased outline looked clotted at 1x, the outline ate
+# the letter interiors): fs 15 with a 1 px dark outline, aliased. Compared at 1x over
+# orange / tan / teal / maroon / purple row plates against sw 2, AA (+ ramp mapper:
+# fuzzy, blends toward the transparent black), faux bold 1 (closes the counters), the
+# JP's lighter second-ring outline colour (weak on the orange row) and fs 13/14 (the
+# top counter of "8" fills in, it reads as a 9); this one keeps the counters open and
+# the edge crisp on every plate. Widest label "8Dan" = 35 px.
+RANK_FS, RANK_SW = 15, 1
 
 
 def _rank(rect, txt, fill, outline):
@@ -342,8 +347,8 @@ def _rank(rect, txt, fill, outline):
     e = _clear(rect)
     e.update(lines=[txt], ty0=ty0, lh=20, fs=RANK_FS, align="c", fill=fill, outline=outline,
              sw=RANK_SW, margin=1, squeeze=True,
-             # aliased: the AA edge of the fill mapped to the clip's dark JP entries and
-             # speckled the strokes; solid fill + solid outline reads better at 1x
+             # aliased (set explicitly; pntexnat's default depends on bg): AA blends the
+             # edge toward the transparent entry's black and reads fuzzy at 1x
              aa=False)
     return e
 

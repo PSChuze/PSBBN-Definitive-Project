@@ -165,9 +165,11 @@ def _wipe(clip):
 
 
 # fix5 (same live report as the lobby rank tiles: tiny squeezed labels): no space in
-# the word ("1Kyu", like lobby_room.py), fs 13 with a 2 px outline for every tile (was
+# the word ("1Kyu", like lobby_room.py), fs 13 with a dark outline for every tile (was
 # fs 10 / 1 px), drawn aliased (solid fill, no speckle), centred on one "Hg" box.
-RANK_FS, RANK_SW = 13, 2
+# fix6: 1 px outline (the 2 px aliased outline closed the counters at 1x, same live
+# report as the lobby rank tiles).
+RANK_FS, RANK_SW = 13, 1
 
 
 def _rank(rect, txt, fs=RANK_FS):
