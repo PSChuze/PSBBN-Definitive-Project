@@ -643,6 +643,26 @@ def container_form(served, path, plaintext):
     return ci_universal.module(served[off:off + size])[0]
 
 
+def plain_form_pending(drive, plaintext):
+    """Containers that should hold their module on this drive and do not,
+    judged without keys: on a plaintext Viewer a container the title has the
+    Viewer decrypt must equal the module written beside it (`dancer.enc` ==
+    `dancer.bin`). Returns their paths; restore_served puts them right."""
+    if not plaintext:
+        return []
+    out = []
+    for path in sorted(drive.files):
+        name = "/".join(path)
+        if name.endswith(".tmp2") or not opened_through_viewer(name):
+            continue
+        beside = module_name(name)
+        if beside is None or tuple(beside.split("/")) not in drive.files:
+            continue
+        if drive.read(name) != drive.read(beside):
+            out.append(name)
+    return out
+
+
 def restore_served(drive, stage, skip=(), plaintext=False):
     """For a title-keyed title: every container on the partition that is not
     in the form this drive needs (the served file its `.tmp2` holds, or on a
