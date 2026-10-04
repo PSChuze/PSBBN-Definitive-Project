@@ -120,8 +120,10 @@ ROOM_VIEW = dict(fo=0x3bbd70, slot_end=0x3d38da, edits=[
 # Connect/Cancel/Register buttons from THIS sheet. The DNAS trademark notice
 # (y 448-482) wraps around an embedded DNAS logo and is left as-is for now.
 def _btn(clip, txt, fs):
-    return dict(clip=clip, lines=[txt], ty0=clip[1] + 2, lh=20, fs=fs,
-                fill=250, outline=28, sw=2, hat=22, kk=13, dil=2)
+    # bg="outlined": white letters with a dark outline on a busy plate (cream, stripes,
+    # gradient); only the letters are removed and inpainted from the plate itself
+    return dict(clip=clip, lines=[txt], ty0=clip[1] + 2, lh=20, fs=fs, bg="outlined",
+                fill=250, outline=28, sw=2, wht=200, drk=90, reach=2, dil=1)
 
 LOGIN_MAIN = dict(fo=0x1ccd20, slot_end=0x1e0a40, edits=[
     _btn((44, 88, 222, 116), "Enter ID & Password", 16),
@@ -152,11 +154,11 @@ HELP_MSGS = dict(fo=0x1e0a40, slot_end=0x1ffa90, edits=[
     _msg((345, 133, 468, 153), "Checking DNAS!"),
     _msg((345, 157, 432, 175), "Saved!"),
     _msg((345, 181, 432, 199), "Save failed!"),
-    dict(_btn((348, 204, 426, 221), "pop'n ID", 12), bg="flat"),
-    dict(_btn((348, 228, 426, 244), "Password", 12), bg="flat"),
+    _btn((348, 204, 426, 221), "pop'n ID", 12),
+    _btn((348, 228, 426, 244), "Password", 12),
     _msg((343, 249, 487, 268), "Connecting to the server!"),
-    dict(_btn((348, 272, 426, 287), "Connect", 12), bg="flat"),
-    dict(_btn((348, 294, 426, 311), "Cancel", 12), bg="flat"),
+    _btn((348, 272, 426, 287), "Connect", 12),
+    _btn((348, 294, 426, 311), "Cancel", 12),
     _msg((341, 315, 454, 336), "Back to the menu!"),
     _msg((1, 403, 166, 420), "Enter your pop'n ID!"),
     _msg((1, 421, 312, 439), "First time? Register on the sign-up screen!"),
@@ -175,18 +177,41 @@ NAMES = ['disc-check', 'login', 'comm-error', 'user-select', 'data-update',
          'room-create', 'room-view', 'login-main', 'help-msgs']
 
 
-def build_screens():
+def _builtin():
     out = []
-    for s in old.SCREENS:
-        if s["fo"] == AUTOLOAD["fo"]:
-            out.append(AUTOLOAD)
-        else:
-            out.append(convert(s))
-    out.append(ROOM)
-    out.append(ROOM_VIEW)
-    out.append(LOGIN_MAIN)
-    out.append(HELP_MSGS)
+    for nm, s in zip(NAMES, [AUTOLOAD if s["fo"] == AUTOLOAD["fo"] else convert(s)
+                             for s in old.SCREENS] + [ROOM, ROOM_VIEW, LOGIN_MAIN, HELP_MSGS]):
+        out.append(dict(s, name=nm))
     return out
+
+
+def _modules():
+    """Screens from popn/translation/screens/*.py (one file per area, each exporting
+    SCREENS = [dict(name, file="IMAGE.DAT", fo, slot_end, edits), ...])."""
+    import importlib.util, glob
+    out = []
+    for path in sorted(glob.glob(os.path.join(_here, "screens", "*.py"))):
+        if os.path.basename(path).startswith("_"):
+            continue
+        spec = importlib.util.spec_from_file_location("popn_screens_" + os.path.basename(path)[:-3], path)
+        mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+        out += [dict(s, _src=os.path.basename(path)) for s in mod.SCREENS]
+    return out
+
+
+def build_screens():
+    """All screens, each with name/file/fo/slot_end/edits. Module screens replace a
+    built-in with the same (file, fo); order is by file then offset."""
+    by = {}
+    for s in _builtin():
+        by[(s.get("file", "IMAGE.DAT"), s["fo"])] = s
+    for s in _modules():
+        k = (s.get("file", "IMAGE.DAT"), s["fo"])
+        if k in by and by[k].get("_src") and by[k]["_src"] != s["_src"]:
+            print("WARNING: %s %#x is defined in both %s and %s; using %s"
+                  % (k[0], k[1], by[k]["_src"], s["_src"], s["_src"]))
+        by[k] = s
+    return sorted(by.values(), key=lambda s: (s.get("file", "IMAGE.DAT"), s["fo"]))
 
 
 # widening margin + mask dilation, tried most-aggressive first (best coverage)
@@ -216,12 +241,12 @@ def _tune(edits, mx, dil, flat=False):
 VARIANTS = [False, True]
 
 
-def main(src, dst, preview=None):
-    screens = build_screens()
+def build(src, dst, screens, preview=None):
+    """Apply `screens` (all for one file) to `src`, writing `dst`."""
     cur_src = src
-    for i, s in enumerate(screens):
-        pv = (os.path.join(preview, "%02d_%s.png" % (i, NAMES[i]))
-              if preview else None)
+    for s in screens:
+        name = s.get("name", hex(s["fo"]))
+        pv = os.path.join(preview, "%s_%x.png" % (name, s["fo"])) if preview else None
         last = None
         done = False
         for flat in VARIANTS:
@@ -230,8 +255,8 @@ def main(src, dst, preview=None):
                     comp, slot = pntexnat.edit_texture(
                         cur_src, dst, s["fo"], s["slot_end"],
                         _tune(s["edits"], mx, dil, flat), preview_png=pv)
-                    print("%-20s @%#x  %d/%d  mx=%d dil=%d%s  OK"
-                          % (NAMES[i], s["fo"], comp, slot, mx, dil,
+                    print("%-22s %-10s @%#x  %d/%d  mx=%d dil=%d%s  OK"
+                          % (name, s.get("file", "IMAGE.DAT"), s["fo"], comp, slot, mx, dil,
                              " flat" if flat else ""))
                     done = True
                     break
@@ -242,9 +267,28 @@ def main(src, dst, preview=None):
             if done:
                 break
         if not done:
-            raise SystemExit("%s: %s" % (NAMES[i], last))
+            raise SystemExit("%s: %s" % (name, last))
         cur_src = dst   # chain edits onto the growing output
+    if cur_src == src:              # nothing applied: still produce the output file
+        import shutil
+        shutil.copyfile(src, dst)
     print("wrote", dst)
+
+
+def main(src, dst, preview=None):
+    """Two forms:
+      main(<disc>/IMAGE.DAT, <out IMAGE.DAT>)   only IMAGE.DAT screens (installer form)
+      main(<disc dir>, <out dir>)              every file that has screens
+                                               (IMAGE.DAT, IMAGE1.DAT, ...)"""
+    screens = build_screens()
+    if os.path.isdir(src):
+        os.makedirs(dst, exist_ok=True)
+        for f in sorted({s.get("file", "IMAGE.DAT") for s in screens}):
+            build(os.path.join(src, f), os.path.join(dst, f),
+                  [s for s in screens if s.get("file", "IMAGE.DAT") == f], preview)
+    else:
+        build(src, dst, [s for s in screens if s.get("file", "IMAGE.DAT") == "IMAGE.DAT"],
+              preview)
 
 
 if __name__ == "__main__":

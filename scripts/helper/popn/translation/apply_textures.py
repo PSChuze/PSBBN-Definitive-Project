@@ -21,12 +21,12 @@ from pntexedit import edit_texture
 DISC_CHECK = dict(fo=0x1ffa90, slot_end=0x213b50, edits=[
     {"erase": (100, 33, 320, 55), "cx": 300}, {"text": "Wrong disc!", "cx": 180, "ty": 38, "ink": 40},
     {"erase": (88, 59, 336, 79), "cx": 300},  {"text": "Please insert the correct disc!", "cx": 180, "ty": 60, "ink": 40},
-    {"erase": (76, 79, 338, 103), "cx": 300}, {"text": "Press O to start the disc check!", "cx": 180, "ty": 82, "ink": 40},
+    {"erase": (76, 79, 338, 103), "cx": 300}, {"text": "Press X to start the disc check!", "cx": 180, "ty": 82, "ink": 40},
     {"erase": (88, 183, 336, 203), "cx": 300},{"text": "The disc has not been ejected!", "cx": 180, "ty": 184, "ink": 40},
-    {"erase": (70, 203, 340, 228), "cx": 300},{"text": "Eject the disc and press O!", "cx": 180, "ty": 205, "ink": 40},
+    {"erase": (70, 203, 340, 228), "cx": 300},{"text": "Eject the disc and press X!", "cx": 180, "ty": 205, "ink": 40},
     {"erase": (90, 301, 332, 321), "cx": 300},{"text": "No disc is inserted!", "cx": 180, "ty": 302, "ink": 40},
     {"erase": (88, 321, 336, 341), "cx": 300},{"text": "Please insert the correct disc!", "cx": 180, "ty": 322, "ink": 40},
-    {"erase": (74, 341, 340, 379), "cx": 300},{"text": "Press O to start the disc check!", "cx": 180, "ty": 343, "ink": 40},
+    {"erase": (74, 341, 340, 379), "cx": 300},{"text": "Press X to start the disc check!", "cx": 180, "ty": 343, "ink": 40},
     {"erase": (0, 397, 292, 415), "flatg": 147}, {"text": "Create an account!", "cx": 6, "ty": 398, "maxw": 280, "align": "l", "ink": 40},
     {"erase": (0, 416, 292, 435), "flatg": 147}, {"text": "First-time players, register here!", "cx": 6, "ty": 417, "maxw": 285, "align": "l", "ink": 40},
 ])
@@ -36,7 +36,7 @@ LOGIN = dict(fo=0x2b1100, slot_end=0x2c4e40, edits=[
     {"erase": (40, 93, 264, 123), "cx": 272},
     {"text": "Enter ID & Password", "cx": 150, "ty": 99, "maxw": 205, "align": "c", "ink": 245, "fs": 16},
     {"erase": (186, 224, 320, 244), "cx": 345},
-    {"text": "Press the O button!", "cx": 250, "ty": 226, "maxw": 150, "align": "c", "ink": 245, "fs": 14},
+    {"text": "Press the X button!", "cx": 250, "ty": 226, "maxw": 150, "align": "c", "ink": 245, "fs": 14},
     {"erase": (126, 150, 183, 166), "flatg": 183},
     {"text": "pop'n ID", "cx": 152, "ty": 151, "maxw": 56, "align": "c", "ink": 25, "fs": 12},
     {"erase": (126, 178, 185, 194), "flatg": 181},
@@ -53,7 +53,7 @@ COMM_ERROR = dict(fo=0x1b40a0, slot_end=0x1bd9c0, edits=[
     {"erase": (28, 449, 300, 467), "cx": 305},
     {"text": "Sending data... please wait!", "cx": 30, "ty": 450, "maxw": 270, "align": "l", "ink": 25, "fs": 14},
     {"erase": (316, 449, 484, 467), "cx": 489},
-    {"text": "Press the O button!", "cx": 320, "ty": 450, "maxw": 165, "align": "l", "ink": 25, "fs": 14},
+    {"text": "Press the X button!", "cx": 320, "ty": 450, "maxw": 165, "align": "l", "ink": 25, "fs": 14},
 ])
 
 # --- user-data select : tex @0x3312a0 ---
@@ -123,7 +123,7 @@ REG_CONFIRM = dict(fo=0x307970, slot_end=0x31c190, edits=(
 REG_DONE = dict(fo=0x31c8e0, slot_end=0x3308a0, edits=(
     [{"erase": (36, 97, 138, 118), "flatg": 85}, {"text": "Signup Done", "cx": 84, "ty": 99, "maxw": 100, "align": "c", "ink": 245, "fs": 12}]
     + _fields([150, 176, 202, 228, 258], _REG_FIELDS)
-    + [{"erase": (186, 308, 334, 326), "flatg": 177}, {"text": "Press the O button!", "cx": 256, "ty": 309, "maxw": 155, "align": "c", "ink": 25, "fs": 12}]
+    + [{"erase": (186, 308, 334, 326), "flatg": 177}, {"text": "Press the X button!", "cx": 256, "ty": 309, "maxw": 155, "align": "c", "ink": 25, "fs": 12}]
 ))
 
 # --- delete / disconnect confirmation dialogs : tex 018/019/017 ---
@@ -159,9 +159,9 @@ HANDICAP = dict(fo=0x168490, slot_end=0x1729a0, edits=[
 DATA_UPDATE_RESULT = dict(fo=0x39ab00, slot_end=0x3a73a0, edits=[
     {"erase": (95, 33, 325, 53), "flatg": 205}, {"text": "Update complete!", "cx": 210, "ty": 35, "maxw": 215, "align": "c", "ink": 25, "fs": 14},
     {"erase": (40, 60, 436, 81), "flatg": 188}, {"text": "Quit the game, then power on again!", "cx": 215, "ty": 62, "maxw": 380, "align": "c", "ink": 25, "fs": 13},
-    {"erase": (95, 86, 365, 106), "flatg": 172}, {"text": "Press O to quit!", "cx": 215, "ty": 88, "maxw": 260, "align": "c", "ink": 25, "fs": 13},
+    {"erase": (95, 86, 365, 106), "flatg": 172}, {"text": "Press X to quit!", "cx": 215, "ty": 88, "maxw": 260, "align": "c", "ink": 25, "fs": 13},
     {"erase": (88, 178, 372, 198), "flatg": 152}, {"text": "Data update failed!", "cx": 205, "ty": 180, "maxw": 270, "align": "c", "ink": 25, "fs": 14},
-    {"erase": (88, 203, 372, 223), "flatg": 140}, {"text": "Press the O button!", "cx": 205, "ty": 205, "maxw": 270, "align": "c", "ink": 25, "fs": 13},
+    {"erase": (88, 203, 372, 223), "flatg": 140}, {"text": "Press the X button!", "cx": 205, "ty": 205, "maxw": 270, "align": "c", "ink": 25, "fs": 13},
 ])
 
 # --- Auto-Load (BB Unit) dialogs : tex @0x28716c0 ---

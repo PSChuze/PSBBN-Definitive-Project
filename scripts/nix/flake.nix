@@ -26,6 +26,9 @@
             pyicu
             pykakasi
             pillow
+            # pop'n English menu images (Popn-Installer.sh; pip cannot write here)
+            numpy
+            opencv4
             unidecode
             textual
             wcwidth

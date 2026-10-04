@@ -160,14 +160,19 @@ elf:0031d760	31	ちょっと席を離れます。	Away for a bit.	len 22 slot 32
 elf:0031d780	31	そろそろやめます。	I'll stop soon.	len 18 slot 32
 elf:0031d7a0	31	ありがとうございました。	Thank you!	len 24 slot 32
 elf:00324820	23	エラーコード  %d	Error code  %d	len 16 slot 24
+elf:00324838	7	学生	Pupil	len 4 slot 8
+elf:00324840	7	会社員	Office	len 6 slot 8
+elf:00324848	7	自営業	Owner	len 6 slot 8
+elf:00324850	7	公務員	Civil	len 6 slot 8
+elf:00324858	7	主婦	Wife	len 4 slot 8
 elf:00324860	15	家事手伝い	Homemaker	len 10 slot 16
 elf:00324870	15	フリーター	Part-timer	len 10 slot 16
 elf:00324880	7	その他	Other	len 6 slot 8
 elf:003249c0	15	入室しました。	has entered.	len 14 slot 16
 elf:003249d0	15	退室しました。	has left.	len 14 slot 16
 elf:003249e8	23	さんが、	 	len 8 slot 24
-elf:00324a00	15	ようこそ！	Welcome!	len 10 slot 16
-elf:00324a10	7	さん	 	len 4 slot 8
+elf:00324a00	15	ようこそ！	Welcome, 	len 10 slot 16
+elf:00324a10	7	さん	!	len 4 slot 8
 elf:00328090	15	エラーなし	No error	len 10 slot 16
 elf:003280b0	47	ご利用のルータが正しく設定されていない	Your router may not be set up	len 38 slot 48
 elf:003280e0	47	可能性があります。TCPポートの5730が	correctly. Check that TCP port	len 35 slot 48
@@ -176,7 +181,7 @@ elf:00328140	47	対戦相手のヴァージョンが古いです。	Your opponen
 elf:00328170	47	あなたのヴァージョンが古いです。	Your game version is old.	len 32 slot 48
 elf:003281a0	31	対戦が開始できませんでした。	The match could not start.	len 28 slot 32
 elf:003281c0	15	エラーコード %d	Error code %d	len 15 slot 16
-elf:003281d0	31	○ボタンを押してください。	Press the ○ button.	len 26 slot 32
+elf:003281d0	31	○ボタンを押してください。	Press the × button.	len 26 slot 32
 elf:00328230	15	エラーなし。	No error.	len 12 slot 16
 elf:00328240	15	エラー！	Error!	len 8 slot 16
 elf:00328250	47	ネットワーク設定ファイルのロードに失敗！	Failed to load network settings!	len 40 slot 48
@@ -219,7 +224,7 @@ elf:00328800	31	ルーム作成者ではないよ！	You aren't the room's creat
 elf:00328820	15	対戦中だよ！	In a match!	len 12 slot 16
 elf:00328830	31	初心者卒業おめでとう！	You're a beginner no more!	len 22 slot 32
 elf:00328850	47	サーバーとの接続が切れているよ！	Connection to the server was lost!	len 32 slot 48
-elf:00328880	31	○ボタンを押してね！	Press the ○ button!	len 20 slot 32
+elf:00328880	31	○ボタンを押してね！	Press the × button!	len 20 slot 32
 elf:003288a0	31	"DNAS"エラー (-101)	"DNAS" error (-101)	len 19 slot 32
 elf:003288c0	47	現在"DNAS"サーバーが処理を受け付けることが	The "DNAS" server is not accepting	len 42 slot 48
 elf:003288f0	15	できません。	requests now.	len 12 slot 16
@@ -291,11 +296,11 @@ elf:003321a8	7	あああ	aaa	len 6 slot 8
 elf:003322b0	7	セーブ	Save	len 6 slot 8
 elf:003322b8	7	ロード	Load	len 6 slot 8
 elf:00332300	15	カードチェック	Card Check	len 14 slot 16
-elf:00332310	47	カードチェック失敗   ○ボタンで次へ	Card check failed   ○: Next	len 35 slot 48
-elf:00332340	31	カード無し警告   ○ボタンで次へ	No card   ○: Next	len 31 slot 32
-elf:00332360	39	未フォーマット警告   ○ボタンで次へ	Not formatted   ○: Next	len 35 slot 40
-elf:00332400	31	容量不足警告   ○ボタンで次へ	Not enough space   ○: Next	len 29 slot 32
-elf:003324f0	47	ロードデータ無し警告   ○ボタンで次へ	No save data   ○: Next	len 37 slot 48
+elf:00332310	47	カードチェック失敗   ○ボタンで次へ	Card check failed   ×: Next	len 35 slot 48
+elf:00332340	31	カード無し警告   ○ボタンで次へ	No card   ×: Next	len 31 slot 32
+elf:00332360	39	未フォーマット警告   ○ボタンで次へ	Not formatted   ×: Next	len 35 slot 40
+elf:00332400	31	容量不足警告   ○ボタンで次へ	Not enough space   ×: Next	len 29 slot 32
+elf:003324f0	47	ロードデータ無し警告   ○ボタンで次へ	No save data   ×: Next	len 37 slot 48
 elf:003326d8	23	2連鎖してね！	Make 2 chains!	len 13 slot 24
 elf:003326f0	15	よ～く考えよう!	Think hard!	len 15 slot 16
 elf:00332700	31	同時に6個のたまを消してね！	Clear 6 balls at once!	len 27 slot 32

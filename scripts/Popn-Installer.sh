@@ -103,7 +103,7 @@ fi
 : "${UI_TEXT[POPN_RESWAP_RUNNING]:=Swapping the boot loader in place...}"
 : "${UI_TEXT[POPN_RESWAP_DONE]:=Loader swapped. Boot HDD-OSD to launch it.}"
 : "${UI_TEXT[POPN_RESWAP_ERROR]:=Loader swap failed. See logs/popn-installer.log}"
-: "${UI_TEXT[POPN_TR_ASK]:=Apply the English text translation? (Menu/logo images stay/restore to the original Japanese.) (y/N)}"
+: "${UI_TEXT[POPN_TR_ASK]:=Apply the English translation (text and menu images)? Building the images takes several minutes. (y/N)}"
 : "${UI_TEXT[POPN_RECOVER_ASK]:=The game is installed on this drive, but this machine has no saved drive ID (playonline.hddid). Recover it from the installed loader on the drive? (Y/n)}"
 : "${UI_TEXT[POPN_RECOVER_RUNNING]:=Recovering the drive ID from the installed loader...}"
 : "${UI_TEXT[POPN_RECOVER_DONE]:=Recovered the drive ID:}"
@@ -154,8 +154,8 @@ POPN_PY="${SCRIPTS_DIR}/venv/bin/python3"
 [[ -x "${POPN_PY}" ]] || POPN_PY="python3"
 popnsudo() { local m="$1"; shift; sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" -m "$m" "$@"; }
 
-# The name in HDD-OSD and PSBBN's list. English by default (the game has no
-# English translation yet; the Latin title is a browser convenience);
+# The name in HDD-OSD and PSBBN's list. English by default (a browser
+# convenience, set whether or not the in-game English translation is applied);
 # --language japanese restores the disc's own text.
 popn_retitle() {
     popnsudo popn.retitle "${DEVICE}" "$1" --write >> "${LOG_FILE}" 2>&1 \
@@ -180,12 +180,17 @@ echo "=== run $(date) ===" >> "${LOG_FILE}"
     echo "[X] Error: could not install pycryptodome into the venv." >> "${LOG_FILE}"
     error_msg "${UI_TEXT[ERROR_ACTIVATE_PYTHON]}"
 }
-# Pillow is only needed for the EXPERIMENTAL English texture rendering
-# (popninstall.py --translate-images -> apply_textures.py). The installer does
-# not use that path -- the default English is text-only and images stay stock --
-# so a missing Pillow is a warning here, not a hard error.
+# The English translation also rebuilds the menu images (IMAGE.DAT, IMAGE1.DAT, IMAGE3.DAT,
+# popninstall.py --translate -> translation/apply_textures_nat.py). That needs
+# Pillow + numpy, and OpenCV for the reference result (it drives the background
+# inpaint). A missing package is a warning, not a hard error: popninstall then
+# keeps the Japanese images and still applies the English text.
 "${POPN_PY}" -c "import PIL" 2>/dev/null || "${POPN_PY}" -m pip install Pillow >> "${LOG_FILE}" 2>&1 \
-    || echo "[!] Pillow not installed; experimental texture rendering (--translate-images) unavailable." >> "${LOG_FILE}"
+    || echo "[!] Pillow not installed; the English images will be skipped." >> "${LOG_FILE}"
+"${POPN_PY}" -c "import numpy" 2>/dev/null || "${POPN_PY}" -m pip install numpy >> "${LOG_FILE}" 2>&1 \
+    || echo "[!] numpy not installed; the English images will be skipped." >> "${LOG_FILE}"
+"${POPN_PY}" -c "import cv2" 2>/dev/null || "${POPN_PY}" -m pip install opencv-python-headless >> "${LOG_FILE}" 2>&1 \
+    || echo "[!] OpenCV not installed; the English images are built without it (flatter backgrounds)." >> "${LOG_FILE}"
 sudo -v || error_msg "${UI_TEXT[POPN_ERROR_SUDO]}"
 ( while true; do
       sleep 50
@@ -340,6 +345,8 @@ if [[ -n "${INFO[installed]}" ]]; then
                     printf "%s " "${UI_TEXT[POPN_TR_ASK]}"
                     read -r tr_answer </dev/tty
                     case "$tr_answer" in [Yy]*) POPN_TR_FLAG="--translate ${POPN_TRANSLATE}" ;; esac
+                    # English text + menu images; POPN_NO_TEXTURES=1 keeps the Japanese images
+                    [[ -n "${POPN_TR_FLAG}" && -n "${POPN_NO_TEXTURES}" ]] && POPN_TR_FLAG+=" --no-textures"
                 fi
                 echo "${UI_TEXT[POPN_RESWAP_RUNNING]}"
                 sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" \
@@ -435,6 +442,8 @@ if [[ -f "${POPN_DISC}/SYSTEM.CNF" ]] && [[ -f "${POPN_DISC}/MAIN.BIN" ]] \
                     printf "%s " "${UI_TEXT[POPN_TR_ASK]}"
                     read -r tr_answer </dev/tty
                     case "$tr_answer" in [Yy]*) POPN_TR_FLAG="--translate ${POPN_TRANSLATE}" ;; esac
+                    # English text + menu images; POPN_NO_TEXTURES=1 keeps the Japanese images
+                    [[ -n "${POPN_TR_FLAG}" && -n "${POPN_NO_TEXTURES}" ]] && POPN_TR_FLAG+=" --no-textures"
                 fi
                 echo "${UI_TEXT[POPN_KIT_INSTALLING]}"
                 sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" \

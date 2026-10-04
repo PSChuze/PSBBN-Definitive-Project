@@ -160,14 +160,19 @@ elf:0031d760	31	ちょっと席を離れます。	Away for a bit.	len 22 slot 32
 elf:0031d780	31	そろそろやめます。	I'll stop soon.	len 18 slot 32
 elf:0031d7a0	31	ありがとうございました。	Thank you!	len 24 slot 32
 elf:00324820	23	エラーコード  %d	Error code  %d	len 16 slot 24
+elf:00324838	7	学生	Pupil	len 4 slot 8
+elf:00324840	7	会社員	Office	len 6 slot 8
+elf:00324848	7	自営業	Owner	len 6 slot 8
+elf:00324850	7	公務員	Civil	len 6 slot 8
+elf:00324858	7	主婦	Wife	len 4 slot 8
 elf:00324860	15	家事手伝い	Homemaker	len 10 slot 16
 elf:00324870	15	フリーター	Part-timer	len 10 slot 16
 elf:00324880	7	その他	Other	len 6 slot 8
 elf:003249c0	15	入室しました。	has entered.	len 14 slot 16
 elf:003249d0	15	退室しました。	has left.	len 14 slot 16
 elf:003249e8	23	さんが、	 	len 8 slot 24
-elf:00324a00	15	ようこそ！	Welcome!	len 10 slot 16
-elf:00324a10	7	さん	 	len 4 slot 8
+elf:00324a00	15	ようこそ！	Welcome, 	len 10 slot 16
+elf:00324a10	7	さん	!	len 4 slot 8
 elf:00328090	15	エラーなし	No error	len 10 slot 16
 elf:003280b0	47	ご利用のルータが正しく設定されていない	Your router may not be set up	len 38 slot 48
 elf:003280e0	47	可能性があります。TCPポートの5730が	correctly. Check that TCP port	len 35 slot 48
@@ -176,7 +181,7 @@ elf:00328140	47	対戦相手のヴァージョンが古いです。	Your opponen
 elf:00328170	47	あなたのヴァージョンが古いです。	Your game version is old.	len 32 slot 48
 elf:003281a0	31	対戦が開始できませんでした。	The match could not start.	len 28 slot 32
 elf:003281c0	15	エラーコード %d	Error code %d	len 15 slot 16
-elf:003281d0	31	○ボタンを押してください。	Press the ○ button.	len 26 slot 32
+elf:003281d0	31	○ボタンを押してください。	Press the × button.	len 26 slot 32
 elf:00328230	15	エラーなし。	No error.	len 12 slot 16
 elf:00328240	15	エラー！	Error!	len 8 slot 16
 elf:00328250	47	ネットワーク設定ファイルのロードに失敗！	Failed to load network settings!	len 40 slot 48
@@ -219,7 +224,7 @@ elf:00328800	31	ルーム作成者ではないよ！	You aren't the room's creat
 elf:00328820	15	対戦中だよ！	In a match!	len 12 slot 16
 elf:00328830	31	初心者卒業おめでとう！	You're a beginner no more!	len 22 slot 32
 elf:00328850	47	サーバーとの接続が切れているよ！	Connection to the server was lost!	len 32 slot 48
-elf:00328880	31	○ボタンを押してね！	Press the ○ button!	len 20 slot 32
+elf:00328880	31	○ボタンを押してね！	Press the × button!	len 20 slot 32
 elf:003288a0	31	"DNAS"エラー (-101)	"DNAS" error (-101)	len 19 slot 32
 elf:003288c0	47	現在"DNAS"サーバーが処理を受け付けることが	The "DNAS" server is not accepting	len 42 slot 48
 elf:003288f0	15	できません。	requests now.	len 12 slot 16
@@ -291,11 +296,11 @@ elf:003321a8	7	あああ	aaa	len 6 slot 8
 elf:003322b0	7	セーブ	Save	len 6 slot 8
 elf:003322b8	7	ロード	Load	len 6 slot 8
 elf:00332300	15	カードチェック	Card Check	len 14 slot 16
-elf:00332310	47	カードチェック失敗   ○ボタンで次へ	Card check failed   ○: Next	len 35 slot 48
-elf:00332340	31	カード無し警告   ○ボタンで次へ	No card   ○: Next	len 31 slot 32
-elf:00332360	39	未フォーマット警告   ○ボタンで次へ	Not formatted   ○: Next	len 35 slot 40
-elf:00332400	31	容量不足警告   ○ボタンで次へ	Not enough space   ○: Next	len 29 slot 32
-elf:003324f0	47	ロードデータ無し警告   ○ボタンで次へ	No save data   ○: Next	len 37 slot 48
+elf:00332310	47	カードチェック失敗   ○ボタンで次へ	Card check failed   ×: Next	len 35 slot 48
+elf:00332340	31	カード無し警告   ○ボタンで次へ	No card   ×: Next	len 31 slot 32
+elf:00332360	39	未フォーマット警告   ○ボタンで次へ	Not formatted   ×: Next	len 35 slot 40
+elf:00332400	31	容量不足警告   ○ボタンで次へ	Not enough space   ×: Next	len 29 slot 32
+elf:003324f0	47	ロードデータ無し警告   ○ボタンで次へ	No save data   ×: Next	len 37 slot 48
 elf:003326d8	23	2連鎖してね！	Make 2 chains!	len 13 slot 24
 elf:003326f0	15	よ～く考えよう!	Think hard!	len 15 slot 16
 elf:00332700	31	同時に6個のたまを消してね！	Clear 6 balls at once!	len 27 slot 32
@@ -304,3 +309,68 @@ elf:00332730	23	全てのたまを消してね！	Clear all the balls!	len 22 sl
 elf:00332748	23	8連鎖してね！	Make 8 chains!	len 13 slot 24
 elf:00332760	31	同時に70個のたまを消してね！	Clear 70 balls at once!	len 28 slot 32
 elf:00332780	129	14連鎖してね！	Make 14 chains!	len 14 slot 130
+pref:00329b08	15	北海道	Hokkaido	repack 47-prefecture table
+pref:00329b10	15	青森県	Aomori	repack 47-prefecture table
+pref:00329b18	15	岩手県	Iwate	repack 47-prefecture table
+pref:00329b20	15	宮城県	Miyagi	repack 47-prefecture table
+pref:00329b28	15	秋田県	Akita	repack 47-prefecture table
+pref:00329b30	15	山形県	Yamagata	repack 47-prefecture table
+pref:00329b38	15	福島県	Fukushima	repack 47-prefecture table
+pref:00329b40	15	茨城県	Ibaraki	repack 47-prefecture table
+pref:00329b48	15	栃木県	Tochigi	repack 47-prefecture table
+pref:00329b50	15	群馬県	Gunma	repack 47-prefecture table
+pref:00329b58	15	埼玉県	Saitama	repack 47-prefecture table
+pref:00329b60	15	千葉県	Chiba	repack 47-prefecture table
+pref:00329b68	15	東京都	Tokyo	repack 47-prefecture table
+pref:00329b70	15	神奈川県	Kanagawa	repack 47-prefecture table
+pref:00329b80	15	新潟県	Niigata	repack 47-prefecture table
+pref:00329b88	15	富山県	Toyama	repack 47-prefecture table
+pref:00329b90	15	石川県	Ishikawa	repack 47-prefecture table
+pref:00329b98	15	福井県	Fukui	repack 47-prefecture table
+pref:00329ba0	15	山梨県	Yamanashi	repack 47-prefecture table
+pref:00329ba8	15	長野県	Nagano	repack 47-prefecture table
+pref:00329bb0	15	岐阜県	Gifu	repack 47-prefecture table
+pref:00329bb8	15	静岡県	Shizuoka	repack 47-prefecture table
+pref:00329bc0	15	愛知県	Aichi	repack 47-prefecture table
+pref:00329bc8	15	三重県	Mie	repack 47-prefecture table
+pref:00329bd0	15	滋賀県	Shiga	repack 47-prefecture table
+pref:00329bd8	15	京都府	Kyoto	repack 47-prefecture table
+pref:00329be0	15	大阪府	Osaka	repack 47-prefecture table
+pref:00329be8	15	兵庫県	Hyogo	repack 47-prefecture table
+pref:00329bf0	15	奈良県	Nara	repack 47-prefecture table
+pref:00329bf8	15	和歌山県	Wakayama	repack 47-prefecture table
+pref:00329c08	15	鳥取県	Tottori	repack 47-prefecture table
+pref:00329c10	15	島根県	Shimane	repack 47-prefecture table
+pref:00329c18	15	岡山県	Okayama	repack 47-prefecture table
+pref:00329c20	15	広島県	Hiroshima	repack 47-prefecture table
+pref:00329c28	15	山口県	Yamaguchi	repack 47-prefecture table
+pref:00329c30	15	徳島県	Tokushima	repack 47-prefecture table
+pref:00329c38	15	香川県	Kagawa	repack 47-prefecture table
+pref:00329c40	15	愛媛県	Ehime	repack 47-prefecture table
+pref:00329c48	15	高知県	Kochi	repack 47-prefecture table
+pref:00329c50	15	福岡県	Fukuoka	repack 47-prefecture table
+pref:00329c58	15	佐賀県	Saga	repack 47-prefecture table
+pref:00329c60	15	長崎県	Nagasaki	repack 47-prefecture table
+pref:00329c68	15	熊本県	Kumamoto	repack 47-prefecture table
+pref:00329c70	15	大分県	Oita	repack 47-prefecture table
+pref:00329c78	15	宮崎県	Miyazaki	repack 47-prefecture table
+pref:00329c80	15	鹿児島県	Kagoshima	repack 47-prefecture table
+pref:00329c90	15	沖縄県	Okinawa	repack 47-prefecture table
+elf:00331dc8	7	八級	8 Kyu	rank table
+elf:00331dd0	7	七級	7 Kyu	rank table
+elf:00331dd8	7	六級	6 Kyu	rank table
+elf:00331de0	7	五級	5 Kyu	rank table
+elf:00331de8	7	四級	4 Kyu	rank table
+elf:00331df0	7	三級	3 Kyu	rank table
+elf:00331df8	7	二級	2 Kyu	rank table
+elf:00331e00	7	一級	1 Kyu	rank table
+elf:00331e08	7	初段	1 Dan	rank table
+elf:00331e10	7	二段	2 Dan	rank table
+elf:00331e18	7	三段	3 Dan	rank table
+elf:00331e20	7	四段	4 Dan	rank table
+elf:00331e28	7	五段	5 Dan	rank table
+elf:00331e30	7	六段	6 Dan	rank table
+elf:00331e38	7	七段	7 Dan	rank table
+elf:00331e40	7	八段	8 Dan	rank table
+elf:00331e48	7	名人	Master	rank table
+elf:00331e50	15	 神 	God	rank table

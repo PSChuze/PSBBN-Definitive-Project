@@ -20,6 +20,10 @@ Mirrors the shape of Nobunaga's nobuinstall.py, minus the neutral-bundle step
             (patch_boot_elf). No re-signing, so no PS2 keys on the player's
             machine. Required for a disc-less boot; without it the install
             stays on stock dnasload and stops at the DNAS console check.
+  1c. english (optional, --translate) The boot ELF gets the English strings
+            (pntext elf-b) + patch_boot_elf ENGLISH_PATCHES, and IMAGE.DAT /
+            IMAGE1.DAT / IMAGE3.DAT are rebuilt with English textures from the disc's
+            originals (translation/apply_textures_nat.py; --no-textures skips).
   2. mkpart Create PP.BLJA-00010 (128 MiB) as PFS via pfsshell, password
             POPNPUZZ for both fpwd and rpwd (SLPM_624.64 opens it as
             `hdd0:PP.BLJA-00010,POPNPUZZ,POPNPUZZ`, see FACTS.md).
@@ -35,7 +39,7 @@ Never edits or touches the PlayOnline package; reads it only if --helper is
 supplied to reuse the fit/jail safety gate.
 
     python3 popninstall.py <device> --disc <disc-root> --hddid <file> \
-        [--loader polbbnexec-popn.kelf] \
+        [--loader polbbnexec-popn.kelf] [--translate elf.en.tsv [--no-textures]] \
         [--attr <attr-area.bin>] [--four 00001301] [--part-mib 128] \
         [--pfsshell PFSSHELL] [--helper <toolkit>/scripts/helper] \
         [--work DIR] [--write]
@@ -248,7 +252,9 @@ def fill_loader(disc_root, kelf, hddid, out_path, helper, translate_tsv=None):
         sys.path.insert(0, helper)
     import patch_boot_elf
     main_bin = open(os.path.join(disc_root, "MAIN.BIN"), "rb").read()
-    ioprp, elf = patch_boot_elf.boot_sections_from_main(main_bin)
+    # English path: also the English-release behaviour patches (English keyboard
+    # by default, ...), patch_boot_elf.ENGLISH_PATCHES
+    ioprp, elf = patch_boot_elf.boot_sections_from_main(main_bin, english=bool(translate_tsv))
     tmp = tempfile.mkdtemp(prefix="popnloader-")
     try:
         ep = os.path.join(tmp, "boot.elf"); ip = os.path.join(tmp, "ioprp.img")
@@ -256,8 +262,7 @@ def fill_loader(disc_root, kelf, hddid, out_path, helper, translate_tsv=None):
         # Optional English translation: rebuild the boot-patched ELF with the
         # translated strings (the text lives in the ELF's rodata; pntext.py elf-b
         # fits each English string into its cp932 slot). The loader then embeds
-        # the English ELF. No other file changes -- the menus-as-textures work is
-        # separate (see popn/HANDOFF-translation.md).
+        # the English ELF. The menu images are a separate step (stage_images).
         if translate_tsv:
             ep_en = os.path.join(tmp, "boot.en.elf")
             tenv = dict(os.environ); tenv["PYTHONUTF8"] = "1"
@@ -277,44 +282,210 @@ def fill_loader(disc_root, kelf, hddid, out_path, helper, translate_tsv=None):
         shutil.rmtree(tmp, ignore_errors=True)
     return out_path
 
-def image_en(disc_root, out_image):
-    """Render the English menu/logo/dialog/room textures onto the disc's IMAGE.DAT
-    (21 screens). Prefers apply_textures_nat.py - the natural, atlas-safe editor
-    (glyph-mask + background inpaint, with a hard assertion that nothing changes
-    outside each element so a shared sprite sheet is never corrupted); falls back
-    to the older apply_textures.py (flat box+overlay) when the new one is absent.
-    Needs Pillow + numpy; OpenCV (cv2) is used when present for cleaner inpaint but
-    is optional. The text face is the bundled Comic Neue Bold (ComicNeue-Bold.ttf,
-    a free SIL-OFL rounded Comic-Sans-alike) unless POPN_TEX_FONT overrides -- so
-    it renders the same on any OS without a proprietary font. Writes out_image."""
+# The texture-bearing files the English image pass rewrites (every file that has a
+# screen in translation/screens/*.py or apply_textures_nat's built-ins). All three
+# are in PLAIN_COPIES, so the stock ones are always staged first.
+IMAGE_FILES = ("IMAGE.DAT", "IMAGE1.DAT", "IMAGE3.DAT")
+# IMAGE1.DAT opens with a certificate area (a PEM cert at +0x10) the game checks;
+# it must stay byte-exact. IMAGE3.DAT has no certificate, only per-block headers +
+# LZSS layout tables before each texture (0x0-0x130, 0x40000-0x40130). Both, and
+# every other byte outside the screens' texture slots, are covered by the
+# outside-slots check in images_en.
+IMAGE1_CERT_LEN = 0x8f0
+
+
+def _screen_slots(apply_py):
+    """{file: [(fo, slot_end), ...]} for every screen apply_textures_nat builds."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("popn_apply_textures_nat", apply_py)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    out = {}
+    for s in mod.build_screens():
+        out.setdefault(s.get("file", "IMAGE.DAT"), []).append((s["fo"], s["slot_end"]))
+    return out
+
+
+def texture_deps():
+    """(ok, missing, have_cv2). The image pass needs Pillow + numpy. OpenCV (cv2)
+    is optional to run but the shipped textures are built WITH it (it drives the
+    inpaint and the glyph-mask top-hat), so without it the result differs from the
+    reference build and inpainted panels come out flatter."""
+    missing = []
+    for mod in ("PIL", "numpy"):
+        try:
+            __import__(mod)
+        except Exception:
+            missing.append({"PIL": "Pillow"}.get(mod, mod))
+    try:
+        import cv2  # noqa: F401
+        have_cv2 = True
+    except Exception:
+        have_cv2 = False
+    return not missing, missing, have_cv2
+
+
+def _apply_textures_script():
+    """translation/apply_textures_nat.py, next to tools/ (the popn repo layout and
+    the toolkit's bundled helper/popn/ both keep it there). It loads its screens
+    from translation/screens/*.py relative to itself."""
     toolsdir = os.path.dirname(os.path.abspath(__file__))
-    apply_py = next((p for p in (os.path.join(toolsdir, "apply_textures_nat.py"),
-                                 os.path.join(toolsdir, "apply_textures.py"))
-                     if os.path.isfile(p)), None)
-    src = os.path.join(disc_root, "IMAGE.DAT")
-    if apply_py is None:
-        raise SystemExit("apply_textures(_nat).py not found in %s (texture translation unavailable)" % toolsdir)
-    if not os.path.isfile(src):
-        raise SystemExit("IMAGE.DAT not found in the disc at %s" % src)
+    p = os.path.normpath(os.path.join(toolsdir, os.pardir, "translation",
+                                      "apply_textures_nat.py"))
+    if not os.path.isfile(p):
+        raise SystemExit("texture translation unavailable: %s not found (the "
+                         "translation/ folder with apply_textures_nat.py and "
+                         "screens/ must sit beside tools/)" % p)
+    return p
+
+
+def images_en(disc_root, out_dir):
+    """Render the English textures onto the disc's IMAGE.DAT, IMAGE1.DAT and IMAGE3.DAT and
+    write the patched copies to out_dir/<name>. Returns the list of names written.
+
+    Runs translation/apply_textures_nat.py in its directory form (disc dir -> out
+    dir), i.e. apply_textures_nat.build() over every screen, so in the same
+    Python environment the bytes are the same as the popn repo's own build of
+    the same disc (across OSes OpenCV's inpaint differs slightly; see
+    textures_build.py). It is the natural,
+    atlas-safe editor: Japanese glyphs are masked and the panel background is
+    inpainted behind them, and pntexnat asserts nothing changes outside each
+    element, so a shared sprite sheet is never disturbed. Every edited texture is
+    recompressed into its own slot, so file sizes do not change.
+
+    Slow (several minutes; one sheet only fits with an exact-cost optimal parse),
+    so the per-screen lines are streamed as they finish and a heartbeat is
+    printed while a long screen is still working. Needs Pillow + numpy (cv2
+    strongly recommended, see texture_deps). The text face is the bundled Comic
+    Neue Bold (tools/ComicNeue-Bold.ttf, SIL OFL) unless POPN_TEX_FONT overrides."""
+    import threading
+    import time
+    toolsdir = os.path.dirname(os.path.abspath(__file__))
+    apply_py = _apply_textures_script()
+    for name in IMAGE_FILES:
+        if not os.path.isfile(os.path.join(disc_root, name)):
+            raise SystemExit("%s not found in the disc at %s" % (name, disc_root))
+    if os.path.exists(out_dir):
+        shutil.rmtree(out_dir)
+    os.makedirs(out_dir)
     env = dict(os.environ)
     env["PYTHONUTF8"] = "1"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["PYTHONPATH"] = toolsdir + os.pathsep + env.get("PYTHONPATH", "")
-    for _name in ("ComicNeue-Bold.ttf", "DejaVuSans-Bold.ttf"):
-        _f = os.path.join(toolsdir, _name)
-        if os.path.isfile(_f):
-            env.setdefault("POPN_TEX_FONT", _f)
-            break
-    subprocess.run([sys.executable, apply_py, src, out_image], check=True, env=env)
-    return out_image
+    font = os.path.join(toolsdir, "ComicNeue-Bold.ttf")
+    if os.path.isfile(font):
+        env.setdefault("POPN_TEX_FONT", font)
+    # textures_build.py pins Pillow's text layout to BASIC (the Linux wheels
+    # default to RAQM, which shifts glyphs and changes every texture).
+    proc = subprocess.Popen([sys.executable, "-u",
+                             os.path.join(toolsdir, "textures_build.py"),
+                             apply_py, disc_root, out_dir],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            text=True, encoding="utf-8", errors="replace", env=env)
+    state = {"last": time.time(), "n": 0}
+
+    def pump():
+        for line in proc.stdout:
+            line = line.rstrip("\n")
+            state["last"] = time.time()
+            if line.rstrip().endswith(" OK"):
+                state["n"] += 1
+                print("   [%3d] %s" % (state["n"], line), flush=True)
+            else:
+                print("         %s" % line, flush=True)
+
+    th = threading.Thread(target=pump, daemon=True)
+    th.start()
+    t0 = time.time()
+    while proc.poll() is None:
+        time.sleep(1)
+        if time.time() - state["last"] >= 30:
+            print("         ... still working (%d screens done, %d s elapsed)"
+                  % (state["n"], time.time() - t0), flush=True)
+            state["last"] = time.time()
+    th.join()
+    if proc.returncode != 0:
+        raise SystemExit("texture build failed (exit %d); see the lines above"
+                         % proc.returncode)
+    written = []
+    slots = _screen_slots(apply_py)
+    for name in IMAGE_FILES:
+        src_p = os.path.join(disc_root, name)
+        out_p = os.path.join(out_dir, name)
+        if not os.path.isfile(out_p):
+            raise SystemExit("texture build did not produce %s" % name)
+        a = open(src_p, "rb").read()
+        b = open(out_p, "rb").read()
+        if len(a) != len(b):
+            raise SystemExit("%s: built size %d != disc size %d; refusing to install it"
+                             % (name, len(b), len(a)))
+        if name == "IMAGE1.DAT" and a[:IMAGE1_CERT_LEN] != b[:IMAGE1_CERT_LEN]:
+            raise SystemExit("IMAGE1.DAT: the certificate area (first %#x bytes) "
+                             "changed; refusing to install it" % IMAGE1_CERT_LEN)
+        # Only the screens' own texture slots may change: headers, layout tables,
+        # the IMAGE1 certificate and every untouched texture stay byte-exact.
+        pos = 0
+        for fo, end in sorted(slots.get(name, [])) + [(len(a), len(a))]:
+            if a[pos:fo] != b[pos:fo]:
+                off = pos + next(i for i in range(fo - pos) if a[pos + i] != b[pos + i])
+                raise SystemExit("%s: byte %#x outside every texture slot changed; "
+                                 "refusing to install it" % (name, off))
+            pos = max(pos, end)
+        written.append(name)
+    print("   %d screens in %d s" % (state["n"], time.time() - t0), flush=True)
+    return written
+
+
+def textures_wanted(a):
+    """English textures are ON whenever the translation is (--translate), unless
+    --no-textures. --translate-images (old flag) forces them on by itself."""
+    return bool((a.translate or a.translate_images) and not a.no_textures)
+
+
+def stage_images(a, dest_dir):
+    """Put the IMAGE*.DAT the install should carry into dest_dir: the English
+    builds when textures are wanted and the deps are there, else the disc's stock
+    copies. Returns (names, english)."""
+    if textures_wanted(a):
+        ok, missing, have_cv2 = texture_deps()
+        if not ok:
+            print("== translation: WARNING: English images SKIPPED -- missing Python "
+                  "package(s): %s (pip install Pillow numpy opencv-python-headless). "
+                  "The menus keep their Japanese images; text is still English."
+                  % ", ".join(missing), flush=True)
+        else:
+            if not have_cv2:
+                print("== translation: note: OpenCV (cv2) not installed; images are "
+                      "built without it (flatter inpaint, not the reference bytes). "
+                      "pip install opencv-python-headless for the shipped result.",
+                      flush=True)
+            print("== translation: building the English IMAGE.DAT + IMAGE1.DAT + IMAGE3.DAT from "
+                  "the disc (takes several minutes)", flush=True)
+            tex = os.path.join(a.work, "_textures")
+            names = images_en(a.disc, tex)
+            for n in names:
+                shutil.copyfile(os.path.join(tex, n), os.path.join(dest_dir, n))
+            shutil.rmtree(tex, ignore_errors=True)
+            print("== translation: English images ready (%s)" % ", ".join(names),
+                  flush=True)
+            return names, True
+    names = []
+    for n in IMAGE_FILES:
+        src = os.path.join(a.disc, n)
+        if os.path.isfile(src):
+            shutil.copyfile(src, os.path.join(dest_dir, n))
+            names.append(n)
+    return names, False
 
 
 def loader_swap(a):
     """Upgrade in place: fill the spoof loader for THIS drive and replace
     pfs:/dnasload.elf in the EXISTING PP.BLJA-00010, WITHOUT reinstalling. For
     iterating on loader / boot-ELF-patch changes on a drive that already has the
-    game -- and, with --translate, also refresh pfs:/IMAGE.DAT with the English
-    textures (so re-running updates an out-of-date translation). The sealed
-    containers, attr and APA passwords are left untouched."""
+    game -- and, with --translate, also refresh pfs:/IMAGE.DAT + IMAGE1.DAT + IMAGE3.DAT with
+    the English textures (so re-running updates an out-of-date translation;
+    without it, or with --no-textures, both are restored to the disc's stock
+    Japanese). The sealed containers, attr and APA passwords are left untouched."""
     if not a.loader:
         raise SystemExit("--loader-swap requires --loader <polbbnexec-popn.kelf>")
     try:
@@ -334,24 +505,15 @@ def loader_swap(a):
              ", English" if a.translate else ""))
     puts = ["dnasload.elf"]
     rms = ["rm dnasload.elf"]
-    # IMAGE.DAT: with --translate-images, render the (experimental) English
-    # textures; otherwise restore the disc's STOCK IMAGE.DAT, so a re-swap always
-    # leaves the images in a known state -- and so a drive that got the old
-    # low-fidelity English textures is put back to clean Japanese. ELF text
-    # (--translate) is independent of this.
-    img = os.path.join(work, "IMAGE.DAT")
-    if a.translate_images:
-        image_en(a.disc, img)
-        print("== translation: EXPERIMENTAL English IMAGE.DAT textures prepared for swap")
-        rms.append("rm IMAGE.DAT")
-        puts.append("IMAGE.DAT")
-    else:
-        src_img = os.path.join(a.disc, "IMAGE.DAT")
-        if os.path.isfile(src_img):
-            shutil.copy(src_img, img)
-            print("== images: restoring the stock (Japanese) IMAGE.DAT")
-            rms.append("rm IMAGE.DAT")
-            puts.append("IMAGE.DAT")
+    # IMAGE.DAT + IMAGE1.DAT + IMAGE3.DAT: English textures with --translate (unless
+    # --no-textures); otherwise the disc's STOCK files, so a re-swap always leaves
+    # the images in a known state that matches the text language.
+    names, english = stage_images(a, work)
+    if not english:
+        print("== images: restoring the stock (Japanese) %s" % " + ".join(names))
+    for n in names:
+        rms.append("rm %s" % n)
+        puts.append(n)
     script = "\n".join(
         ["device %s" % a.device, "mount %s" % PARTITION]
         + rms
@@ -440,18 +602,20 @@ def main():
                     "the drive's HDD ID + the player's own patched boot ELF and DNAS280.IMG carved "
                     "from the disc; no re-signing, so no PS2 keys are needed. Without it the stock "
                     "dnasload is kept and the install will NOT boot disc-less past the DNAS check.")
-    ap.add_argument("--translate", help="apply the English TEXT translation: an elf.en.tsv "
+    ap.add_argument("--translate", help="apply the English translation: an elf.en.tsv "
                     "(popn/translation/elf.en.tsv). The boot ELF is rebuilt with the translated "
-                    "strings before it is embedded in the loader. Requires --loader. (Images are "
-                    "left as the stock Japanese IMAGE.DAT; see --translate-images.)")
+                    "strings and the English-release patches (patch_boot_elf ENGLISH_PATCHES: O/X "
+                    "swap, English keyboard, date/time, gender, birthdate) before it is embedded in "
+                    "the loader (that part requires --loader), AND the menu/dialog textures in "
+                    "IMAGE.DAT + IMAGE1.DAT + IMAGE3.DAT are rebuilt in English from the disc's originals "
+                    "(translation/apply_textures_nat.py; needs Pillow + numpy, OpenCV recommended; "
+                    "several minutes). See --no-textures.")
+    ap.add_argument("--no-textures", dest="no_textures", action="store_true",
+                    help="with --translate: keep the disc's stock Japanese IMAGE.DAT / IMAGE1.DAT / IMAGE3.DAT "
+                    "(English text only; skips the slow image build)")
     ap.add_argument("--translate-images", dest="translate_images", action="store_true",
-                    help="EXPERIMENTAL: also render the English menu/logo/dialog/room textures onto "
-                    "IMAGE.DAT (apply_textures_nat.py; needs Pillow + numpy, cv2 optional). Uses the "
-                    "natural, atlas-safe renderer (per-glyph erase + background inpaint, asserts it "
-                    "never writes outside each element, so shared sprite sheets are not disturbed) -- "
-                    "a rewrite of the old flat-box renderer that corrupted title/character art. Still "
-                    "off by default pending a real-hardware validation pass. Without it, IMAGE.DAT "
-                    "stays/restores to stock Japanese.")
+                    help="build the English images even without --translate (images only; the "
+                    "boot ELF text stays Japanese)")
     ap.add_argument("--four", default=FOUR)
     ap.add_argument("--part-mib", type=int, default=DEFAULT_MIB)
     ap.add_argument("--pfsshell", default="pfsshell")
@@ -472,6 +636,11 @@ def main():
                     "playonline.hddid, so the install/swap can proceed without "
                     "re-running the PlayOnline step. Requires --helper." % PARTITION)
     a = ap.parse_args()
+    # The installer pipes us through tee; line-buffer so progress shows live.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
 
     if a.recover_hddid:
         recover_hddid(a)
@@ -521,18 +690,11 @@ def main():
         print("== loader: NONE given; keeping the disc's stock dnasload.elf "
               "(install will NOT boot disc-less past the DNAS check without --loader)")
 
-    # English textures (EXPERIMENTAL, --translate-images only): rebuild the staged
-    # IMAGE.DAT (copied plaintext by seal_tree) with the translated menu/logo text.
-    # Off by default -- the current renderer is low fidelity and can disturb other
-    # textures; the stock IMAGE.DAT seal_tree copied is used otherwise. ELF text
-    # (--translate) is applied regardless and is the normal English experience.
-    if a.translate_images:
-        staged_image = os.path.join(staged, "IMAGE.DAT")
-        if os.path.isfile(staged_image):
-            image_en(a.disc, staged_image)
-            print("== translation: EXPERIMENTAL English textures applied to IMAGE.DAT")
-        else:
-            print("== translation: IMAGE.DAT not staged; textures skipped")
+    # English textures: with --translate (unless --no-textures) rebuild the staged
+    # IMAGE.DAT + IMAGE1.DAT + IMAGE3.DAT (copied stock by seal_tree) from the disc's originals
+    # with the translated menu/logo/dialog text; the put below writes them.
+    if textures_wanted(a):
+        stage_images(a, staged)
 
     script = pfsshell_script(a.device, staged, a.part_mib)
     lines = script.splitlines()
