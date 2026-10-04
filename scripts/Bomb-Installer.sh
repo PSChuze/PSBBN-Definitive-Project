@@ -134,6 +134,23 @@ BOMB_PY="${SCRIPTS_DIR}/venv/bin/python3"
 [[ -x "${BOMB_PY}" ]] || BOMB_PY="python3"
 bombsudo() { local m="$1"; shift; sudo -E env PYTHONPATH="${HELPER_DIR}" "${BOMB_PY}" -m "$m" "$@"; }
 
+# BOMBBOOT's DNAS step reads the access_flag25 boot record at __net+0x202000
+# and fails (-101, a black screen after the loader) when it is not there. It
+# is the same record Nobunaga needs, keyed to the console i.Link the loader's
+# scefix reports to the DNAS side, so Nobunaga's tool writes it: only that
+# record, after backing up what is there, leaving the shared PlayOnline record
+# at +0x201800 untouched. Run on every pass, so a drive installed before this
+# gets it too. See nobunaga/accessflag.py.
+bomb_accessflag() {
+    local backup="${BOMB_DIR}/backups/$(basename "${DEVICE}")"
+    mkdir -p "${backup}"
+    if bombsudo nobunaga.accessflag "${DEVICE}" --write --save "${backup}"         >> "${LOG_FILE}" 2>&1; then
+        echo "  DNAS boot record in place (__net+0x202000); the PlayOnline record is untouched."
+    else
+        echo "  [!] could not write the DNAS boot record; see logs/bomb-installer.log"
+    fi
+}
+
 on_exit() {
     [[ -n "${SUDO_KEEPALIVE}" ]] && kill "${SUDO_KEEPALIVE}" 2>/dev/null
     return 0
@@ -238,6 +255,8 @@ fi
 if sudo "${HDL_DUMP}" toc "${DEVICE}" 2>>"${LOG_FILE}" | grep -q -- "PP.SLPS-20343.NET.BOMB"; then
     center_text "${UI_TEXT[BOMB_INSTALLED]}"
     echo
+    bomb_accessflag
+    echo
     read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
     echo
     exit 0
@@ -272,6 +291,7 @@ bombsudo bomb.bombinstall "${DEVICE}" \
     "${ICON_ARG[@]}" \
     --write 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[BOMB_ERROR_INSTALL]}"
+bomb_accessflag
 
 echo
 center_text "${UI_TEXT[BOMB_DONE]}"

@@ -273,6 +273,43 @@ def write_passwords(device, lba, helper_dir):
     return rpwd, fpwd
 
 
+
+RETAIL_HOST = b"nobol.koei.co.jp:9070"
+TEST_HOST = b"testconsv1.ax.koei.co.jp:9070"
+
+
+def connect_to_test_host(staged):
+    """Point NBCONNSV.BIN at Koei's test connect host, and CRC32TBL.BIN with it.
+
+    The game skips its DNAS check, whose servers are gone, only when the host
+    it connects to is one of Koei's test hosts; with the disc's retail host it
+    runs the full check, which cannot pass, and exits. The community server's
+    DNS answers both names. CRC32TBL.BIN holds each data file's CRC-32
+    (little-endian) and the game checks NBCONNSV.BIN against it, so its entry
+    changes too. Both edits are refused unless the files are the disc's own.
+    This is the data-only change the hardware-proven install was made with.
+    """
+    import zlib
+    conn = os.path.join(staged, "NBCONNSV.BIN")
+    table = os.path.join(staged, "CRC32TBL.BIN")
+    host = open(conn, "rb").read()
+    crcs = bytearray(open(table, "rb").read())
+    if host == TEST_HOST:
+        return False
+    if host != RETAIL_HOST:
+        raise SystemExit("NBCONNSV.BIN names %r, not the disc's %r" % (host, RETAIL_HOST))
+    old = struct.pack("<I", zlib.crc32(RETAIL_HOST))
+    if crcs.count(old) != 1:
+        raise SystemExit("CRC32TBL.BIN does not list NBCONNSV.BIN's checksum once")
+    at = crcs.index(old)
+    crcs[at:at + 4] = struct.pack("<I", zlib.crc32(TEST_HOST))
+    open(conn, "wb").write(TEST_HOST)
+    open(table, "wb").write(bytes(crcs))
+    print("== NBCONNSV.BIN -> %s (CRC32TBL.BIN entry at %d updated)"
+          % (TEST_HOST.decode("ascii"), at))
+    return True
+
+
 def overlay_translation(staged, pack):
     """Overwrite plaintext data files in the staged tree with a user-supplied
     translation pack (e.g. translated UIMSG.BIN / WDMMSG.BIN / STRDAT tables).
@@ -698,6 +735,10 @@ def main():
     if a.translation:
         n_t = overlay_translation(staged, a.translation)
         print("== translation: overlaid %d data file(s) from %s" % (n_t, a.translation))
+
+    # After the translation, whose pack may carry its own CRC32TBL.BIN.
+    if a.disc:
+        connect_to_test_host(staged)
 
     # Replace the disc's stock dnasload with the spoof loader, if one was given.
     # The stock dnasload cannot pass the (dead) DNAS console binding; the spoof
