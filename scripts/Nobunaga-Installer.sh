@@ -105,6 +105,11 @@ fi
 : "${UI_TEXT[NOBU_TR_REMOVING]:=Restoring the original Japanese text...}"
 : "${UI_TEXT[NOBU_TR_REMOVED]:=Original Japanese text restored.}"
 : "${UI_TEXT[NOBU_TR_ERROR]:=Translation update failed. See logs/nobunaga-installer.log}"
+: "${UI_TEXT[NOBU_EXTRACT_FOUND]:=Found a disc image:}"
+: "${UI_TEXT[NOBU_EXTRACT_ASK]:=Extract it to games/NOBU/disc/ now? (Y/n)}"
+: "${UI_TEXT[NOBU_EXTRACT_RUNNING]:=Extracting the disc image (this writes the full disc tree, a few minutes)...}"
+: "${UI_TEXT[NOBU_EXTRACT_DONE]:=Extracted the disc tree to}"
+: "${UI_TEXT[NOBU_EXTRACT_FAIL]:=Extraction failed. See logs/nobunaga-installer.log}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
@@ -352,6 +357,7 @@ NOBU_KIT="${NOBU_DIR}/kit/nobu-install-kit.sh"
 NOBU_TOOLS="${NOBU_TOOLS_OVERRIDE:-${NOBU_DIR}/tools}"
 [[ -f "${NOBU_TOOLS}/nobuinstall.py" ]] || NOBU_TOOLS="${SCRIPTS_DIR}/../../nobunaga/nobunaga/tools"
 [[ -f "${NOBU_TOOLS}/nobuinstall.py" ]] || NOBU_TOOLS="${SCRIPTS_DIR}/../../Nobunaga Online/nobunaga/tools"
+[[ -f "${NOBU_TOOLS}/nobuinstall.py" ]] || NOBU_TOOLS="${HELPER_DIR}/nobunaga/tools"
 NOBU_INSTALL_PY="${NOBU_TOOLS}/nobuinstall.py"
 # The pre-signed spoof boot loader. nobuinstall fills it per drive from the
 # disc's own boot ELF/IOP image + this drive's HDD ID (no re-signing, no PS2
@@ -362,6 +368,42 @@ NOBU_INSTALL_PY="${NOBU_TOOLS}/nobuinstall.py"
 # override with $NOBU_LOADER_OVERRIDE.
 NOBU_LOADER="${NOBU_LOADER_OVERRIDE:-${SCRIPTS_DIR}/assets/nobunaga/polbbnexec-inputpatch.kelf}"
 NOBU_INSTALLED_NOW=0
+
+# ---- extract the disc tree from an .iso if needed -----------------------
+# The disc path needs the extracted tree at games/NOBU/disc/. If it is not
+# there but an .iso is (in games/NOBU/ or games/NOBU/disc/), extract it here
+# with iso.py; 7-Zip drops part of this disc's tree, so it is not used. Point
+# NOBU_DISC_IMAGE at the image to pick one explicitly.
+if [[ ! -f "${NOBU_DISC}/SYSTEM.CNF" || ! -d "${NOBU_DISC}/AUTH" ]] \
+   && [[ -f "${NOBU_TOOLS}/iso.py" ]]; then
+    NOBU_IMG="${NOBU_DISC_IMAGE:-}"
+    if [[ -z "${NOBU_IMG}" ]]; then
+        for cand in "${NOBU_DIR}"/*.iso "${NOBU_DIR}"/*.ISO "${NOBU_DISC}"/*.iso "${NOBU_DISC}"/*.ISO; do
+            [[ -f "$cand" ]] && { NOBU_IMG="$cand"; break; }
+        done
+    fi
+    if [[ -n "${NOBU_IMG}" && -f "${NOBU_IMG}" ]]; then
+        echo
+        echo "  ${UI_TEXT[NOBU_EXTRACT_FOUND]} $(basename "${NOBU_IMG}")"
+        printf "%s " "${UI_TEXT[NOBU_EXTRACT_ASK]}"
+        read -r answer </dev/tty
+        case "$answer" in
+            [Nn]*) ;;
+            *)
+                echo "${UI_TEXT[NOBU_EXTRACT_RUNNING]}"
+                mkdir -p "${NOBU_DISC}"
+                echo "extracting ${NOBU_IMG} -> ${NOBU_DISC}" >> "${LOG_FILE}"
+                "${NOBU_PY}" "${NOBU_TOOLS}/iso.py" x "${NOBU_IMG}" "${NOBU_DISC}" \
+                    >> "${LOG_FILE}" 2>&1
+                if [[ -f "${NOBU_DISC}/SYSTEM.CNF" && -d "${NOBU_DISC}/AUTH" ]]; then
+                    echo "  ${UI_TEXT[NOBU_EXTRACT_DONE]} ${NOBU_DISC}"
+                else
+                    echo "  ${UI_TEXT[NOBU_EXTRACT_FAIL]}"
+                fi
+                ;;
+        esac
+    fi
+fi
 
 # Prefer the disc path when the extract is present and looks right (has
 # SYSTEM.CNF at its root and the AUTH/ container tree).
@@ -398,6 +440,7 @@ if [[ -f "${NOBU_DISC}/SYSTEM.CNF" ]] && [[ -d "${NOBU_DISC}/AUTH" ]] \
                     --hddid "${POL_HDDID_FILE}" \
                     --helper "${HELPER_DIR}" \
                     --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
+                    --work "${WORK_DIR}/stage" \
                     ${LOADER_FLAG} \
                     --write ${TR_FLAG} \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
@@ -455,11 +498,11 @@ else
     # The PC-side install did not run: say WHY, so a prepared-only drive is not a
     # mystery. It needs both the disc extract and the install tools.
     if [[ ! -f "${NOBU_DISC}/SYSTEM.CNF" || ! -d "${NOBU_DISC}/AUTH" ]]; then
-        center_text "To install now: extract your Hiryuu no Shou disc to ${NOBU_DISC}"
+        center_text "To install now: put your Hiryuu no Shou disc .iso in ${NOBU_DIR} and run this step again"
         echo "  install skipped: no disc extract at ${NOBU_DISC} (need SYSTEM.CNF + AUTH/)" >> "${LOG_FILE}"
     fi
     if [[ ! -f "${NOBU_INSTALL_PY}" ]]; then
-        center_text "Install tools not found - set NOBU_TOOLS_OVERRIDE to your nobunaga/tools dir."
+        center_text "Install tools not found - update the toolkit (scripts/helper/nobunaga/tools)."
         echo "  install skipped: nobuinstall.py not found (looked in ${NOBU_TOOLS})" >> "${LOG_FILE}"
     fi
 fi
