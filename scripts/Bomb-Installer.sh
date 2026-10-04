@@ -31,7 +31,10 @@
 # shows one entry; it boots with no disc.
 #
 # The user supplies, under games/BOMB/:
-#   install/    the drive-neutral game tree (28 DNAS2 containers + data)
+#   the disc    SLPS-20343 as a Redump .bin/.cue or an .iso (here or in disc/);
+#               the installer unpacks and seals it itself (bomb/bombdisc.py).
+#               A prebuilt drive-neutral tree at install/ is used instead if
+#               present.
 #   optional:   bomberman.ico (the browser icon; the game boots without it)
 # boot/ comes with the toolkit. See scripts/helper/bomb for the engine.
 
@@ -86,6 +89,13 @@ else
     sleep 3
     exit 1
 fi
+
+# English fallbacks for the disc-path strings so a lang file without them
+# still shows English rather than a bare key.
+: "${UI_TEXT[BOMB_DISC_HINT]:=Put the SLPS-20343 disc image (.bin/.cue or .iso) in this folder.}"
+: "${UI_TEXT[BOMB_EXTRACT_FOUND]:=Found the disc image:}"
+: "${UI_TEXT[BOMB_EXTRACT_RUNNING]:=Unpacking the game from the disc...}"
+: "${UI_TEXT[BOMB_EXTRACT_FAIL]:=Could not unpack the game from the disc image. See logs/bomb-installer.log.}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
@@ -165,12 +175,36 @@ if ! sudo "${HDL_DUMP}" toc "${DEVICE}" >> "${LOG_FILE}" 2>&1; then
 fi
 
 # ---- the user's files ---------------------------------------------------
-if [[ ! -d "${BOMB_DIR}/install" ]]; then
-    echo "[X] Error: ${BOMB_DIR}/install not found." >> "${LOG_FILE}"
-    error_msg "${UI_TEXT[BOMB_NO_INSTALL]} ${BOMB_DIR}/install"
+# Preferred: the disc itself. bombdisc unpacks DATA/FULL.BIN straight from
+# the image (Redump .bin/.cue or .iso, in games/BOMB/ or games/BOMB/disc/; an
+# extracted disc folder at games/BOMB/disc/ works too) and bombinstall --disc
+# seals its containers offline. BOMB_DISC_IMAGE picks an image explicitly.
+# A prebuilt neutral tree at games/BOMB/install/ is still taken when present.
+BUNDLE_DIR="${BOMB_DIR}/install"
+DISC_ARG=()
+if [[ -z "$(find "${BUNDLE_DIR}" -type f -print -quit 2>/dev/null)" ]]; then
+    BOMB_IMG="${BOMB_DISC_IMAGE:-}"
+    if [[ -z "${BOMB_IMG}" ]]; then
+        for cand in "${BOMB_DIR}"/*.bin "${BOMB_DIR}"/*.BIN "${BOMB_DIR}"/*.iso "${BOMB_DIR}"/*.ISO \
+                    "${BOMB_DIR}"/disc/*.bin "${BOMB_DIR}"/disc/*.BIN "${BOMB_DIR}"/disc/*.iso "${BOMB_DIR}"/disc/*.ISO; do
+            [[ -f "$cand" ]] && { BOMB_IMG="$cand"; break; }
+        done
+    fi
+    [[ -z "${BOMB_IMG}" && -f "${BOMB_DIR}/disc/DATA/FULL.BIN" ]] && BOMB_IMG="${BOMB_DIR}/disc"
+    if [[ -z "${BOMB_IMG}" ]]; then
+        echo "[X] Error: no disc image or install tree in ${BOMB_DIR}." >> "${LOG_FILE}"
+        error_msg "$(printf '%s %s\n%s' "${UI_TEXT[BOMB_NO_INSTALL]}" "${BOMB_DIR}" "${UI_TEXT[BOMB_DISC_HINT]}")"
+    fi
+    echo "  ${UI_TEXT[BOMB_EXTRACT_FOUND]} $(basename "${BOMB_IMG}")"
+    echo "  ${UI_TEXT[BOMB_EXTRACT_RUNNING]}"
+    BUNDLE_DIR="${WORK_DIR}/disctree"
+    PYTHONPATH="${HELPER_DIR}" "${BOMB_PY}" -m bomb.bombdisc "${BOMB_IMG}" "${BUNDLE_DIR}" \
+        --pem "${BOMB_FILES}/BOMBREG.PEM" \
+        --tsv "${BOMB_FILES}/msg_FILES_install.en.tsv" >> "${LOG_FILE}" 2>&1 \
+        || error_msg "${UI_TEXT[BOMB_EXTRACT_FAIL]}"
+    DISC_ARG=(--disc)
+    echo
 fi
-N_FILES=$(find "${BOMB_DIR}/install" -type f | wc -l)
-[[ ${N_FILES} -gt 0 ]] || error_msg "${UI_TEXT[BOMB_NO_INSTALL]} ${BOMB_DIR}/install"
 
 # ---- the served drive ID ------------------------------------------------
 # With the PlayOnline shim the console serves playonline.hddid verbatim, and
@@ -228,7 +262,8 @@ echo
 echo "${UI_TEXT[BOMB_DOING]}"
 echo
 bombsudo bomb.bombinstall "${DEVICE}" \
-    --bundle "${BOMB_DIR}/install" \
+    --bundle "${BUNDLE_DIR}" \
+    "${DISC_ARG[@]}" \
     --boot "${BOMB_FILES}/bootfiles" \
     --hddid "${HDDID_FILE}" \
     --pfsshell "${PFS_SHELL}" \

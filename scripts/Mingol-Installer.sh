@@ -25,8 +25,10 @@
 # patch to SYSTEM.BIN before sealing (mingol/HANDOFF-boot-plan.md, s5 + s2).
 #
 # The user supplies, under games/MGO/:
-#   disc/              the disc tree (SYSTEM.CNF, ZZBIN/, res/, CRS/, MENU/, ...);
-#                      obtain via HDL Dump or by extracting the ISO
+#   the disc           the SCPS-15049 .iso (here or in disc/); the installer
+#                      extracts it to disc/ itself with iso.py. An already
+#                      extracted tree at disc/ (SYSTEM.CNF, ZZBIN/, res/,
+#                      CRS/, MENU/, ...) is used as is.
 #   optional:          mingol.ico  (browser icon; the title works without it)
 #
 # Toolkit ships, under scripts/assets/mingol/:
@@ -100,15 +102,17 @@ fi
 : "${UI_TEXT[MGO_TITLE]:=Minna no Golf Online Installer}"
 : "${UI_TEXT[MGO_ERROR_SUDO]:=This step needs administrator rights and the password was not accepted.}"
 : "${UI_TEXT[MGO_ERROR_NO_DEVICE]:=No PSBBN drive was found. Connect the drive and try again.}"
-: "${UI_TEXT[MGO_NO_DISC]:=The game's disc tree was not found in}"
-: "${UI_TEXT[MGO_DISC_HINT]:=Extract the SCPS-15049 disc (or ISO) into this folder. It must contain SYSTEM.CNF, ZZBIN/, FMOD/ and res/.}"
+: "${UI_TEXT[MGO_NO_DISC]:=The disc tree of the game was not found in}"
+: "${UI_TEXT[MGO_DISC_HINT]:=Put the SCPS-15049 disc image (.iso) in this folder, or the extracted disc tree in disc/ (SYSTEM.CNF, ZZBIN/, FMOD/, res/).}"
+: "${UI_TEXT[MGO_EXTRACT_FOUND]:=Found the disc image:}"
+: "${UI_TEXT[MGO_EXTRACT_RUNNING]:=Extracting it (this takes a few minutes)...}"
 : "${UI_TEXT[MGO_HDDID_FOUND]:=The PlayOnline drive ID was found. Minna no Golf Online will share it:}"
 : "${UI_TEXT[MGO_HDDID_FAIL]:=No PlayOnline drive ID was found. Run the PlayOnline step first: it mints the ID Minna needs.}"
-: "${UI_TEXT[MGO_NO_ICON]:=No browser icon found; the game will boot but the drive shows the disc's own art.}"
+: "${UI_TEXT[MGO_NO_ICON]:=No browser icon found; the game will boot but the drive shows the art from the disc.}"
 : "${UI_TEXT[MGO_INSTALLED]:=Minna no Golf Online is already on this drive.}"
 : "${UI_TEXT[MGO_PLAN]:=This step will create one partition:}"
 : "${UI_TEXT[MGO_PLAN_PART]:=PP.SCPS-15049..APPLICATION - the game (about 1.5 GB)}"
-: "${UI_TEXT[MGO_PLAN_SEAL]:=seal the nine game containers to this drive (they are keyed to the drive's ID)}"
+: "${UI_TEXT[MGO_PLAN_SEAL]:=seal the nine game containers to this drive (they are keyed to the drive ID)}"
 : "${UI_TEXT[MGO_PLAN_BOOT]:=install a disc-less loader so the title boots from HDD, no disc required}"
 : "${UI_TEXT[MGO_DOING]:=Installing Minna no Golf Online (this can take several minutes)...}"
 : "${UI_TEXT[MGO_ERROR_INSTALL]:=The install failed. See logs/mingol-installer.log.}"
@@ -213,6 +217,26 @@ fi
 
 # ---- user files ---------------------------------------------------------
 MGO_DISC="${MGO_DIR}/disc"
+# Extract the disc tree from an .iso if it is not there yet. The image may sit
+# in games/MGO/ or games/MGO/disc/; MGO_DISC_IMAGE picks one explicitly. Uses
+# iso.py, not 7-Zip, which drops parts of some PS2 discs' trees.
+if [[ ! -f "${MGO_DISC}/SYSTEM.CNF" ]] || [[ ! -d "${MGO_DISC}/ZZBIN" ]] || [[ ! -d "${MGO_DISC}/FMOD" ]]; then
+    MGO_IMG="${MGO_DISC_IMAGE:-}"
+    if [[ -z "${MGO_IMG}" ]]; then
+        for cand in "${MGO_DIR}"/*.iso "${MGO_DIR}"/*.ISO "${MGO_DISC}"/*.iso "${MGO_DISC}"/*.ISO; do
+            [[ -f "$cand" ]] && { MGO_IMG="$cand"; break; }
+        done
+    fi
+    if [[ -n "${MGO_IMG}" && -f "${MGO_IMG}" ]]; then
+        echo "  ${UI_TEXT[MGO_EXTRACT_FOUND]} $(basename "${MGO_IMG}")"
+        echo "  ${UI_TEXT[MGO_EXTRACT_RUNNING]}"
+        mkdir -p "${MGO_DISC}"
+        echo "extracting ${MGO_IMG} -> ${MGO_DISC}" >> "${LOG_FILE}"
+        "${MGO_PY}" "${MGO_TOOLS}/iso.py" x "${MGO_IMG}" "${MGO_DISC}" >> "${LOG_FILE}" 2>&1 \
+            || echo "[X] iso.py failed on ${MGO_IMG}" >> "${LOG_FILE}"
+        echo
+    fi
+fi
 if [[ ! -f "${MGO_DISC}/SYSTEM.CNF" ]] || [[ ! -d "${MGO_DISC}/ZZBIN" ]] || [[ ! -d "${MGO_DISC}/FMOD" ]]; then
     echo "[X] Error: ${MGO_DISC} missing SYSTEM.CNF / ZZBIN / FMOD" >> "${LOG_FILE}"
     error_msg "$(printf '%s %s\n%s' "${UI_TEXT[MGO_NO_DISC]}" "${MGO_DISC}" "${UI_TEXT[MGO_DISC_HINT]}")"

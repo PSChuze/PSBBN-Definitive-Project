@@ -6,7 +6,10 @@ partition that carries both the game data and the loader:
 
   1. seal   each DNAS2 container in the neutral install tree to the TARGET
             drive's identity (the served HDD ID + the __net four, 00001301),
-            into a staged game tree.
+            into a staged game tree. With --disc the tree is bombdisc.py's
+            output from the user's own disc and its containers are in disc
+            form; those go through disc_to_drive instead (offline, verified
+            on all 28 against the retail install's decrypt).
   2. merge  the boot files (bombload.kelf/.elf, BOMBBOOT.ELF, DNAS280.IMG,
             DEV9/ATAD/HDD/PFS.IRX) into the same staged tree. No name
             collisions with the game files.
@@ -36,7 +39,7 @@ other ID will not decrypt on that drive.
 Everything is a dry run (prints the plan and the pfsshell script) unless
 --write is passed.
 
-    python3 bombinstall.py <device> --bundle <neutral-tree> --boot <bootfiles>
+    python3 bombinstall.py <device> --bundle <neutral-tree> [--disc] --boot <bootfiles>
         --hddid <file> --icon <file.ico> [--four 00001301]
         [--game-mib 1024]
         [--pfsshell PFSSHELL] [--helper DIR] [--work DIR]
@@ -329,6 +332,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("device")
     ap.add_argument("--bundle", required=True, help="the neutral install tree")
+    ap.add_argument("--disc", action="store_true",
+                    help="--bundle is bombdisc.py output: its containers are "
+                         "in disc form")
     ap.add_argument("--boot", required=True,
                     help="the boot-files folder (merged into the game "
                          "partition alongside the game files)")
@@ -374,8 +380,12 @@ def main():
     os.makedirs(staged)
     print("== seal %s -> %s (keyed to the served ID + four %s)"
           % (a.bundle, staged, a.four))
-    n_c, n_f = bombbundle.map_tree(a.bundle, staged,
-                                   lambda b: bombbundle.dnasbundle.seal(b, ata32, four))
+    if a.disc:
+        import disc_to_drive  # bombbundle put lib/ on the path
+        seal = lambda b: disc_to_drive.build_drive_form(b, ata32, four)  # noqa: E731
+    else:
+        seal = lambda b: bombbundle.dnasbundle.seal(b, ata32, four)  # noqa: E731
+    n_c, n_f = bombbundle.map_tree(a.bundle, staged, seal)
     print("   sealed %d containers, copied %d files" % (n_c, n_f))
 
     # Merge bootfiles into the same staged tree so they land at the partition
