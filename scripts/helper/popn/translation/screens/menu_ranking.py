@@ -114,6 +114,19 @@ def _rm_hl(clip):
     return dict(clip=clip, bg="outlined", wht=130, drk=120, reach=3, dil=1, local=True)
 
 
+def _rm_panel(clip):
+    # Remove the soft white JP from the bubbly list / lobby panels WITHOUT smoothing
+    # the panel (live test: inpaint left pale smears where the labels were). The panel
+    # is rows of a 2-px dither plus dotted lines and large dotted-rim bubbles. Glyph =
+    # cream fill (min channel > 215; ~2 % of the panel is that light, and those
+    # pixels just get their own row's neighbour) grown 3 px over its tan outline; each glyph pixel takes the ORIGINAL palette index of
+    # the nearest clean pixel in the same row an even number of px away (dir (2, 0)),
+    # so the dither phase and the original indices are kept. The highlighted twins do
+    # not help here: their bold glyphs cover ~96 % of the normal glyph pixels and their
+    # plates are not index-identical to the panel.
+    return dict(clip=clip, bg="rows", dir=(2, 0), wht=215, dil=3, drk=-1)
+
+
 def _rm_soft(clip):
     # remove soft white JP from the list / lobby panels (pastel bands + bokeh)
     return dict(clip=clip, bg="inpaint", hat=14, kk=9, dil=1)
@@ -186,9 +199,9 @@ for _k, (_n, _t, (_tex, _r), (_lx, _ly), _cap) in enumerate(PAIRS):
         _text(_r[0], _r[1], _w, _h, _t, _fs, _dy, HL_FILL, HL_OUT))
     OV_LS_TX.append(_text(_lx, _ly, _w, _h, _t, _fs, _dy, LS_FILL, LS_OUT))
 
-LIST_RM = [_rm_soft((12, 17 + round(24.3 * i) - 3, 149, 17 + round(24.3 * i) + 21))
+LIST_RM = [_rm_panel((12, 17 + round(24.3 * i) - 3, 149, 17 + round(24.3 * i) + 21))
            for i in range(12)]
-LOBBY_RM = [_rm_soft((164, 18, 304, 46)), _rm_soft((164, 48, 304, 78))]
+LOBBY_RM = [_rm_panel((164, 18, 304, 46)), _rm_panel((164, 48, 304, 78))]
 
 # Menu Select plate interior x 38..156, rows 87..116: per row the colours of the
 # 2-px dither at x (38, 39), sampled from the disc texture (each is a unique palette
@@ -246,10 +259,11 @@ HUB = [
 ] + HUB_RM + HUB_CP + HUB_TX
 
 # Faint bokeh-circle arcs right of the short "Wins" (the JP 勝ち数 used to cover them)
-# read as a leftover "~" mark; smooth them out (no text).
+# read as a leftover "~" mark; smooth them out (no text). NOT USED since the row
+# copy (_rm_panel): its inpaint itself left a pale smear right of "Wins".
 GHOST = dict(clip=(50, 63, 100, 88), bg="inpaint", hat=6, kk=7, dil=1)
 
-OVERLAY = LIST_RM + LOBBY_RM + [GHOST] + OV_HL_RM + OV_CP + [
+OVERLAY = LIST_RM + LOBBY_RM + OV_HL_RM + OV_CP + [
     _grey((157, 93, 323, 115), "View the rankings!"),
     _grey((325, 93, 449, 115), "Go to the lobby!"),
 ] + OV_LS_TX + OV_HL_TX
