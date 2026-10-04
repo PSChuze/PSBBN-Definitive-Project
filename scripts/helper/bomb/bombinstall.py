@@ -381,7 +381,12 @@ def main():
     print("== seal %s -> %s (keyed to the served ID + four %s)"
           % (a.bundle, staged, a.four))
     if a.disc:
-        import disc_to_drive  # bombbundle put lib/ on the path
+        # pop'n's disc_to_drive, the one verified on this title, ships beside
+        # this file (lib/ in the toolkit). Put it ahead of NOBU_TOOLS, whose
+        # Nobunaga copy builds different bytes.
+        lib = os.path.join(HERE, "lib")
+        sys.path.insert(0, lib if os.path.isdir(lib) else HERE)
+        import disc_to_drive
         seal = lambda b: disc_to_drive.build_drive_form(b, ata32, four)  # noqa: E731
     else:
         seal = lambda b: bombbundle.dnasbundle.seal(b, ata32, four)  # noqa: E731
