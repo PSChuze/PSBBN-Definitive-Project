@@ -2,3 +2,5 @@
 # cannot store CRLF and break the shebang (/usr/bin/env: 'bash\r').
 *.sh  text eol=lf
 *.py  text eol=lf
+# Game data the console reads byte for byte (BOMBREG.PEM must stay CRLF).
+scripts/assets/bomb/BOMBREG.PEM -text
