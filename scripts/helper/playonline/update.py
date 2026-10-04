@@ -563,33 +563,93 @@ def module_name(path):
     return None
 
 
-def served_form(universal, path, stage):
+VIEWER_PARTITIONS = ("PP.SCUS-97269.1000.POLVIEWER", "PP.SLPS-20200.1000.POLVIEWER")
+
+
+def viewer_plaintext(image):
+    """True when the drive's Viewer runs its plain modules (plaintext mode).
+
+    The test pexsync uses: plain `.pex` modules on the Viewer partition. A
+    drive with no Viewer partition, or one that runs the keyed modules, is
+    not plaintext.
+    """
+    from .resync import drive_view
+    with open(image, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        for name in VIEWER_PARTITIONS:
+            try:
+                lba, sectors = apa.find_partition(image, name)
+            except KeyError:
+                continue
+            _part, files, _dirs = drive_view(f, size, lba, sectors)
+            if any(p[-1].endswith(".pex") for p in files):
+                return True
+    return False
+
+
+def opened_through_viewer(path):
+    """True for a title-keyed container the title loads itself and has the
+    Viewer decrypt: FFXI's `../prog/ps2/dancer.enc`, its character-creation
+    module. Not a `.pex.enc`, which the Viewer's own loader opens (in
+    plaintext mode as the plain `.pex` beside it)."""
+    return path.endswith(".enc") and not path.endswith(".pex.enc")
+
+
+def served_form(universal, path, stage, plaintext=False):
     """Stage `path` as the server sent it and its module beside it, as the
     console's updater does for a title-keyed title. Returns the path tuples
-    of the files beside the container (the module), to be put as well."""
+    of the files beside the container (the module), to be put as well.
+
+    With `plaintext` (the drive's Viewer runs its plain modules), a container
+    the title has the Viewer decrypt holds the MODULE instead of the served
+    bytes. FFXI 2016 reads `dancer.enc` into its read buffer and calls the
+    Viewer's decrypt service (import 0x205C); in plaintext mode that service
+    leaves the buffer as read, so the served file fails the loader's header
+    check and the character select and creation screens draw no models,
+    field or race music. The served bytes stay in the container's `.tmp2`.
+    """
     from .lib import ci_universal
     dest = os.path.join(stage, *path.split("/"))
     os.makedirs(os.path.dirname(dest), exist_ok=True)
-    with open(dest, "wb") as f:
-        f.write(universal)
     beside = module_name(path)
+    mod = None
+    if beside is not None:
+        secs = ci_universal.sections(universal)
+        if len(secs) != 1:
+            raise SystemExit("%s: %d sections, a module container has one" % (path, len(secs)))
+        off, size = secs[0]
+        mod, _tag = ci_universal.module(universal[off:off + size])
+    with open(dest, "wb") as f:
+        f.write(mod if plaintext and mod is not None and opened_through_viewer(path)
+                else universal)
     if beside is None:
         return []
-    secs = ci_universal.sections(universal)
-    if len(secs) != 1:
-        raise SystemExit("%s: %d sections, a module container has one" % (path, len(secs)))
-    off, size = secs[0]
-    mod, _tag = ci_universal.module(universal[off:off + size])
     with open(os.path.join(stage, *beside.split("/")), "wb") as f:
         f.write(mod)
     return [tuple(beside.split("/"))]
 
 
-def restore_served(drive, stage, skip=()):
+def container_form(served, path, plaintext):
+    """What a title-keyed container should hold on this drive: the served
+    bytes, or the module out of them (see served_form)."""
+    if not (plaintext and opened_through_viewer(path)):
+        return served
+    from .lib import ci_universal
+    secs = ci_universal.sections(served)
+    if len(secs) != 1:
+        return served
+    off, size = secs[0]
+    return ci_universal.module(served[off:off + size])[0]
+
+
+def restore_served(drive, stage, skip=(), plaintext=False):
     """For a title-keyed title: every container on the partition that is not
-    the served file its `.tmp2` holds (an earlier version of this updater
-    keyed them) is staged again in the served form, with its module. Returns
-    the path tuples to put."""
+    in the form this drive needs (the served file its `.tmp2` holds, or on a
+    plaintext Viewer the module out of it, see served_form) is staged again,
+    with its module. Catches an earlier version of this updater keying them,
+    and a container the console's own updater or Check Files put back in the
+    served form. Returns the path tuples to put."""
     out = []
     for path in sorted(drive.files):
         name = "/".join(path)
@@ -600,14 +660,16 @@ def restore_served(drive, stage, skip=()):
             continue
         served = drive.read("/".join(tmp2))
         beside = module_name(name)
-        if drive.read(name) == served and (beside is None or tuple(beside.split("/")) in drive.files):
+        if (drive.read(name) == container_form(served, name, plaintext)
+                and (beside is None or tuple(beside.split("/")) in drive.files)):
             continue
         out.append(path)
-        out.extend(served_form(served, name, stage))
+        out.extend(served_form(served, name, stage, plaintext))
     return out
 
 
-def convert(plan_, stage, keys, title, log=print, show=False, title_key=False):
+def convert(plan_, stage, keys, title, log=print, show=False, title_key=False,
+            plaintext=False):
     """Put the drive-keyed form of every keyed file beside its `.tmp2`, or for
     a title-keyed title the served form and its module. Returns the path
     tuples written beside the update's own files (the modules)."""
@@ -621,7 +683,7 @@ def convert(plan_, stage, keys, title, log=print, show=False, title_key=False):
         with open(dest + ".tmp2", "rb") as f:
             universal = f.read()
         if title_key:
-            extra.extend(served_form(universal, b.path, stage))
+            extra.extend(served_form(universal, b.path, stage, plaintext))
             continue
         try:
             out = keys.installed(universal)
@@ -804,9 +866,13 @@ def main():
         p = plan(drive, host, port, region)
         stage, meta = os.path.join(args.work, "tree"), os.path.join(args.work, "meta")
         title_key = title_keyed(drive)
+        plaintext = title_key and viewer_plaintext(args.drive)
         if title_key:
             print("  %s opens its containers with its own key (config.sys KEY=); "
                   "they are kept as the server sends them" % title.partition)
+        if plaintext:
+            print("  the Viewer runs its plain modules, so a container the title has "
+                  "it decrypt (dancer.enc) holds its module")
         if p.current:
             print("already at the latest version, %s" % p.latest)
             if not args.derive_elf or not (args.hddid or title_key):
@@ -819,7 +885,7 @@ def main():
             shutil.rmtree(args.work, ignore_errors=True)
             if title_key:
                 load_disc_keys(args)
-                fixed = restore_served(drive, stage)
+                fixed = restore_served(drive, stage, plaintext=plaintext)
                 what = "Putting back %d file(s) the way the console's updater leaves them:"
             else:
                 keys = load_keys(args, drive)
@@ -876,8 +942,9 @@ def main():
             if keyed:
                 print("Keeping %d container(s) as served, with the module from each "
                       "beside it, as the console's updater does" % keyed)
-                fixed = convert(p, stage, None, title, show=True, title_key=True)
-            fixed += restore_served(drive, stage, skip=skip)
+                fixed = convert(p, stage, None, title, show=True, title_key=True,
+                                plaintext=plaintext)
+            fixed += restore_served(drive, stage, skip=skip, plaintext=plaintext)
         elif keys:
             if keyed:
                 print("Keying %d file(s) to this drive, as the console's updater does" % keyed)

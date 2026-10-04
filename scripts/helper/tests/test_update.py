@@ -191,7 +191,7 @@ class Tests(unittest.TestCase):
         D.files = {tuple(k.split("/")): {} for k in D.data}
         calls = []
         saved = update.served_form
-        update.served_form = lambda served, path, stage: (
+        update.served_form = lambda served, path, stage, plaintext=False: (
             calls.append((served, path)) or [tuple(update.module_name(path).split("/"))])
         try:
             out = update.restore_served(D(), "stage")
@@ -200,6 +200,70 @@ class Tests(unittest.TestCase):
         self.assertEqual(calls, [(b"served", p + "ffxi_pol.pex.enc")])
         self.assertEqual(["/".join(x) for x in out],
                          [p + "ffxi_pol.pex.enc", p + "ffxi_pol.pex"])
+
+    def test_only_a_container_the_title_has_the_viewer_decrypt_is_plain(self):
+        self.assertTrue(update.opened_through_viewer("image/ffxi/prog/ps2/dancer.enc"))
+        self.assertFalse(update.opened_through_viewer("image/ffxi/prog/ps2/ffxi_pol.pex.enc"))
+        self.assertFalse(update.opened_through_viewer("image/ffxi/ROM/0/0.DAT"))
+
+    def test_served_form_puts_the_module_in_dancer_enc_on_a_plaintext_viewer(self):
+        # FFXI 2016 has the Viewer decrypt dancer.enc; a plaintext Viewer leaves
+        # it as read, so on such a drive the container must hold the module.
+        from playonline.lib import ci_universal
+        saved = ci_universal.sections, ci_universal.module
+        ci_universal.sections = lambda blob: [(0, len(blob))]
+        ci_universal.module = lambda blob: (b"MODULE of " + blob, "tag")
+        stage = tempfile.mkdtemp()
+        p = "image/ffxi/prog/ps2/"
+        try:
+            for plaintext, dancer in ((True, b"MODULE of served d"), (False, b"served d")):
+                update.served_form(b"served d", p + "dancer.enc", stage, plaintext)
+                update.served_form(b"served f", p + "ffxi_pol.pex.enc", stage, plaintext)
+                read = lambda n: open(os.path.join(stage, *(p + n).split("/")), "rb").read()
+                self.assertEqual(read("dancer.enc"), dancer)
+                self.assertEqual(read("dancer.bin"), b"MODULE of served d")
+                self.assertEqual(read("ffxi_pol.pex.enc"), b"served f")
+                self.assertEqual(read("ffxi_pol.pex"), b"MODULE of served f")
+        finally:
+            ci_universal.sections, ci_universal.module = saved
+
+    def test_restore_served_on_a_plaintext_viewer_wants_the_module_in_dancer_enc(self):
+        p = "image/ffxi/prog/ps2/"
+
+        def drive(dancer):
+            class D(object):
+                data = {
+                    p + "ffxi_pol.pex.enc": b"served",
+                    p + "ffxi_pol.pex.enc.tmp2": b"served",
+                    p + "ffxi_pol.pex": b"module",
+                    p + "dancer.enc": dancer,
+                    p + "dancer.enc.tmp2": b"served d",
+                    p + "dancer.bin": b"module d",
+                }
+
+                def read(self, path):
+                    return self.data.get(path)
+            D.files = {tuple(k.split("/")): {} for k in D.data}
+            return D()
+        saved = update.served_form, update.container_form
+        calls = []
+        update.served_form = lambda served, path, stage, plaintext=False: (
+            calls.append((path, plaintext)) or [tuple(update.module_name(path).split("/"))])
+        update.container_form = lambda served, path, plaintext: (
+            b"module d" if plaintext and update.opened_through_viewer(path) else served)
+        try:
+            # a served dancer.enc (the console updater or Check Files put it back)
+            out = update.restore_served(drive(b"served d"), "stage", plaintext=True)
+            self.assertEqual(calls, [(p + "dancer.enc", True)])
+            self.assertEqual(["/".join(x) for x in out], [p + "dancer.enc", p + "dancer.bin"])
+            # already the module: nothing to do
+            del calls[:]
+            self.assertEqual(update.restore_served(drive(b"module d"), "stage", plaintext=True), [])
+            # a keyed (retail-mode) Viewer keeps the served form
+            self.assertEqual(update.restore_served(drive(b"served d"), "stage"), [])
+            self.assertEqual(calls, [])
+        finally:
+            update.served_form, update.container_form = saved
 
     def test_work_list_matches_the_viewers_shape(self):
         blocks = polp.parse_list("file a {\n20260913_M 1 2 3 v/a.slc 4\n}\n\nend\n")
