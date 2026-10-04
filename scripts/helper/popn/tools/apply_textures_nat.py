@@ -114,11 +114,65 @@ ROOM_VIEW = dict(fo=0x3bbd70, slot_end=0x3d38da, edits=[
     _wl(417, "W"), _wl(482, "L"),     # CHALLENGER panel
 ])
 
+# LOGIN SCREEN AS DRAWN (tex @0x1ccd20). The old 'login' entry (0x2b1100) is a variant
+# sheet ("Press the O button!" + an "ID issued" footer); the live ID/password screen
+# (operator screenshot 2026-10-03) draws its title plate, ID/password buttons and
+# Connect/Cancel/Register buttons from THIS sheet. The DNAS trademark notice
+# (y 448-482) wraps around an embedded DNAS logo and is left as-is for now.
+def _btn(clip, txt, fs):
+    return dict(clip=clip, lines=[txt], ty0=clip[1] + 2, lh=20, fs=fs,
+                fill=250, outline=28, sw=2, hat=22, kk=13, dil=2)
+
+LOGIN_MAIN = dict(fo=0x1ccd20, slot_end=0x1e0a40, edits=[
+    _btn((44, 88, 222, 116), "Enter ID & Password", 16),
+    _btn((116, 159, 198, 180), "pop'n ID", 12),
+    _btn((116, 187, 198, 208), "Password", 12),
+    _btn((158, 246, 238, 267), "Connect", 13),
+    _btn((272, 246, 354, 267), "Cancel", 13),
+    _btn((158, 274, 352, 294), "Create an account", 13),
+    _btn((78, 487, 268, 509), "Create an account", 13),    # pressed state
+    _btn((436, 449, 508, 471), "Saving!", 13),
+    _btn((282, 487, 464, 510), "Accessing play server!", 13),
+])
+
+# HELP-line message sprites + login buttons (tex @0x1e0a40): white text strips on a
+# salmon key colour (index 106) the game hides at draw time, so letters are refilled
+# with that exact index (bg="flat" with the palette known). Left-aligned like the JP;
+# each clip stays inside its own strip (the strips are the sprite rects). The three
+# disc-check dialogs on the left are skipped: the disc check is patched out.
+def _msg(clip, txt, fs=13):
+    return dict(clip=clip, lines=[txt], ty0=clip[1] + 1, lh=20, fs=fs, bg="key",
+                align="l", fill=250, outline=28, sw=2, wht=190, dil=5)
+
+HELP_MSGS = dict(fo=0x1e0a40, slot_end=0x1ffa90, edits=[
+    _msg((345, 30, 508, 50), "Initializing Ethernet!"),
+    _msg((345, 54, 502, 73), "Checking for updates!"),
+    _msg((345, 78, 490, 98), "Verifying pop'n ID!"),
+    _msg((345, 101, 472, 122), "Talking to the server!"),
+    _msg((345, 133, 468, 153), "Checking DNAS!"),
+    _msg((345, 157, 432, 175), "Saved!"),
+    _msg((345, 181, 432, 199), "Save failed!"),
+    dict(_btn((348, 204, 426, 221), "pop'n ID", 12), bg="flat"),
+    dict(_btn((348, 228, 426, 244), "Password", 12), bg="flat"),
+    _msg((343, 249, 487, 268), "Connecting to the server!"),
+    dict(_btn((348, 272, 426, 287), "Connect", 12), bg="flat"),
+    dict(_btn((348, 294, 426, 311), "Cancel", 12), bg="flat"),
+    _msg((341, 315, 454, 336), "Back to the menu!"),
+    _msg((1, 403, 166, 420), "Enter your pop'n ID!"),
+    _msg((1, 421, 312, 439), "First time? Register on the sign-up screen!"),
+    _msg((1, 440, 157, 457), "Enter your password!"),
+    _msg((1, 458, 312, 476), "First time? Register on the sign-up screen!"),
+    _msg((1, 477, 236, 495), "Enter your pop'n ID and password!"),
+    _msg((323, 405, 505, 427), "Logging in to the play server!"),
+    _msg((323, 429, 505, 450), "Accessing the gate server!"),
+    _msg((323, 452, 505, 472), "Logging in to the gate server!"),
+])
+
 NAMES = ['disc-check', 'login', 'comm-error', 'user-select', 'data-update',
          'manual', 'user-data-reg', 'username-reg', 'reg-confirm', 'reg-done',
          'delete-select', 'delete-confirm', 'disconnect', 'handicap',
          'data-update-result', 'autoload', 'bbunit-save', 'install-space',
-         'room-create', 'room-view']
+         'room-create', 'room-view', 'login-main', 'help-msgs']
 
 
 def build_screens():
@@ -130,6 +184,8 @@ def build_screens():
             out.append(convert(s))
     out.append(ROOM)
     out.append(ROOM_VIEW)
+    out.append(LOGIN_MAIN)
+    out.append(HELP_MSGS)
     return out
 
 
@@ -138,7 +194,7 @@ def build_screens():
 LADDER = [(28, 3), (28, 2), (16, 3), (16, 2), (8, 2), (0, 2), (0, 1)]
 
 
-def _tune(edits, mx, dil):
+def _tune(edits, mx, dil, flat=False):
     out = []
     for e in edits:
         e = dict(e)
@@ -148,8 +204,16 @@ def _tune(edits, mx, dil):
             e["clip"] = (max(0, x0 - mx), max(0, y0 - my),
                          min(W, x1 + mx), min(W, y1 + my))
             e["dil"] = dil
+        if flat and e.get("bg", "inpaint") == "inpaint":
+            e["bg"] = "flat"
         out.append(e)
     return out
+
+
+# Inpainting in true colour spreads a gradient over many palette entries, which
+# compresses worse; when a tight slot will not take it, fall back to filling the glyph
+# mask with the panel's own colour (bg="flat"), which compresses like the original.
+VARIANTS = [False, True]
 
 
 def main(src, dst, preview=None):
@@ -159,19 +223,25 @@ def main(src, dst, preview=None):
         pv = (os.path.join(preview, "%02d_%s.png" % (i, NAMES[i]))
               if preview else None)
         last = None
-        for mx, dil in LADDER:
-            try:
-                comp, slot = pntexnat.edit_texture(
-                    cur_src, dst, s["fo"], s["slot_end"],
-                    _tune(s["edits"], mx, dil), preview_png=pv)
-                print("%-20s @%#x  %d/%d  mx=%d dil=%d  OK"
-                      % (NAMES[i], s["fo"], comp, slot, mx, dil))
+        done = False
+        for flat in VARIANTS:
+            for mx, dil in LADDER:
+                try:
+                    comp, slot = pntexnat.edit_texture(
+                        cur_src, dst, s["fo"], s["slot_end"],
+                        _tune(s["edits"], mx, dil, flat), preview_png=pv)
+                    print("%-20s @%#x  %d/%d  mx=%d dil=%d%s  OK"
+                          % (NAMES[i], s["fo"], comp, slot, mx, dil,
+                             " flat" if flat else ""))
+                    done = True
+                    break
+                except SystemExit as ex:
+                    last = ex
+                    if "atlas-safety" in str(ex):
+                        raise
+            if done:
                 break
-            except SystemExit as ex:
-                last = ex
-                if "atlas-safety" in str(ex):
-                    raise
-        else:
+        if not done:
             raise SystemExit("%s: %s" % (NAMES[i], last))
         cur_src = dst   # chain edits onto the growing output
     print("wrote", dst)
