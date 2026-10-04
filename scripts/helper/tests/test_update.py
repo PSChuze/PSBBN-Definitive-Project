@@ -265,6 +265,23 @@ class Tests(unittest.TestCase):
         finally:
             update.served_form, update.container_form = saved
 
+    def test_plain_form_pending_compares_dancer_enc_with_its_module(self):
+        p = "image/ffxi/prog/ps2/"
+
+        def drive(dancer):
+            class D(object):
+                data = {p + "dancer.enc": dancer, p + "dancer.enc.tmp2": b"served d",
+                        p + "dancer.bin": b"module d", p + "ffxi_pol.pex.enc": b"served",
+                        p + "ffxi_pol.pex": b"module"}
+
+                def read(self, path):
+                    return self.data.get(path)
+            D.files = {tuple(k.split("/")): {} for k in D.data}
+            return D()
+        self.assertEqual(update.plain_form_pending(drive(b"served d"), True), [p + "dancer.enc"])
+        self.assertEqual(update.plain_form_pending(drive(b"module d"), True), [])
+        self.assertEqual(update.plain_form_pending(drive(b"served d"), False), [])
+
     def test_work_list_matches_the_viewers_shape(self):
         blocks = polp.parse_list("file a {\n20260913_M 1 2 3 v/a.slc 4\n}\n\nend\n")
         self.assertEqual(polp.work_list(blocks),
