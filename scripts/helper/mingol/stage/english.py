@@ -284,6 +284,44 @@ def translate_overlays(disc_root, pack):
 
 # The containers whose payload hash is in an RSA-signed record: a changed byte
 # makes dnas.bin refuse them (-102), so no pack may name them.
+def load_images_blob(data):
+    """Parse images/recipes.json (see mgoimages.py)."""
+    try:
+        r = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise Refused("the pack's images/recipes.json is not JSON")
+    if not isinstance(r, dict) or not isinstance(r.get("targets"), dict):
+        raise Refused("the pack's images/recipes.json has no targets")
+    return r
+
+
+def load_images(path):
+    """The optional image recipes of the pack at `path`, checked against the
+    manifest's size + sha256; None if the pack has no "images" section."""
+    read, z = _reader(path)
+    try:
+        man = json.loads(read(MANIFEST).decode("utf-8"))
+        sec = man.get("images")
+        if not sec:
+            return None
+        name = sec.get("file") if isinstance(sec, dict) else None
+        want = man.get("files", {}).get(name) if isinstance(name, str) else None
+        if not isinstance(want, dict) or not _NAME.match(name):
+            raise Refused("the pack's images section names a file it does not list")
+        data = read(name)
+        if len(data) != want.get("size") or \
+                hashlib.sha256(data).hexdigest() != str(want.get("sha256", "")).lower():
+            raise Refused("%s in the pack does not match its manifest" % name)
+        return load_images_blob(data)
+    finally:
+        if z is not None:
+            z.close()
+
+
+
+# The pack the last apply() used, for its optional image recipes.
+USED_PACK = None
+
 SIGNED = ("ZZBIN/EDAUTH.BIN", "ZZBIN/INSTALL.BIN", "ZZBIN/MOVIE.BIN", "ZZBIN/SYSTEM.BIN")
 
 
@@ -307,6 +345,8 @@ def apply(root, man, translate=False, pack_path=None, local=None, sealed=False):
     if src is None:
         man.note("--translate: no translation pack (%s); the game stays Japanese" % why)
         return {}
+    global USED_PACK
+    USED_PACK = src
     try:
         pack = load_pack(src)
         # A signed container cannot be resealed with changed text, but the

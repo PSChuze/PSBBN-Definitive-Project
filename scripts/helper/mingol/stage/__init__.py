@@ -481,6 +481,17 @@ def stage(args):
         progress("copying the game's files")
         copied = copy_tree(args.disc, tree)
         copied += copy_fmod(root, tree)
+        if english and englishmod.USED_PACK:
+            # The pack's optional image recipes: English drawn into the
+            # menu bitmaps of the player's own .XB files, each one checked
+            # against its sha1 and left Japanese if it does not match.
+            recipes = englishmod.load_images(englishmod.USED_PACK)
+            if recipes:
+                from . import images
+                progress("drawing the English images")
+                changed = images.apply(tree, recipes, note=m.note)
+                m.note("--translate: English images in %d of the disc's .XB files"
+                       % len(changed or {}))
         sealed = seal(root, tree, hddid, four, english if ENGLISH_SEALS else {})
         if plain:
             n = stage_plain_overlays(root, tree, english)
