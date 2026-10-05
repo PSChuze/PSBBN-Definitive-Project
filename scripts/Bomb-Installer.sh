@@ -61,8 +61,10 @@ WORK_DIR="${SCRIPTS_DIR}/tmp/bomb"
 arch="$(uname -m)"
 if [[ "$arch" = "x86_64" ]]; then
     PFS_SHELL="${HELPER_DIR}/PFS Shell.elf"
+    HDL_DUMP="${HELPER_DIR}/HDL Dump.elf"
 else
     PFS_SHELL="${HELPER_DIR}/aarch64/PFS Shell.elf"
+    HDL_DUMP="${HELPER_DIR}/aarch64/HDL Dump.elf"
 fi
 
 LANG_FILE="$1"
