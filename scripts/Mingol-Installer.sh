@@ -122,6 +122,7 @@ fi
 : "${UI_TEXT[MGO_ERROR_INSTALL]:=The install failed. See logs/mingol-installer.log.}"
 : "${UI_TEXT[MGO_DONE]:=Minna no Golf Online was installed.}"
 : "${UI_TEXT[MGO_DONE_HINT]:=It appears in the browser; it boots with no disc.}"
+: "${UI_TEXT[MGO_ASK_TRANSLATE]:=Install the English translation? It is downloaded from openlobby.fyi. (y/N)}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
@@ -316,6 +317,16 @@ echo
 # 2. mingol.stage.write checks the four again, has pfsshell make the 1536 MiB
 #    partition and put the tree, sets the MM21 APA passwords, clears the APA
 #    journal and writes the attribute area at +0x1000.
+# English: the translation pack comes from openlobby.fyi, or from a pack the
+# player put in games/MGO/translation/ when the download cannot be had.
+TR_ARGS=()
+printf "%s " "${UI_TEXT[MGO_ASK_TRANSLATE]}"
+read -r tr_answer </dev/tty
+case "$tr_answer" in
+    [Yy]*) TR_ARGS=(--translate --translation-dir "${MGO_DIR}/translation") ;;
+esac
+echo
+
 echo "${UI_TEXT[MGO_DOING]}"
 echo
 
@@ -327,6 +338,7 @@ mgosudo -m mingol.stage \
     --kelf "${LOADER_KELF}" \
     --device "${DEVICE}" \
     --aux-disc "${MGO_AUX}" \
+    "${TR_ARGS[@]}" \
     --require-aux 2>&1 | tee -a "${LOG_FILE}" | grep -v '^progress: sealing' | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[MGO_ERROR_INSTALL]}"
 

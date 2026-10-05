@@ -110,11 +110,27 @@ def _apply(name, data, patches, stock, proven):
     return out
 
 
-def boot_elf(data):
-    """SCPS_150.49 with the disc-less boot patches."""
+# The overlay loader (0x1004e0) has two paths, chosen by a flag byte at
+# 0x168ac8. Set, as on the hard drive install: pfs2:/zzenc/zzbin/<name>,
+# decrypted by the DNAS library. Clear: the old disc path, which the patches
+# above already send to pfs2:/<NAME> and which loads the file as it is, with
+# no DNAS step (DNAS.BIN itself loads that way). The English install takes
+# the second path for every overlay, because the DNAS library refuses an
+# overlay whose text was changed (-10202) however it is sealed: 0x10052c
+# beqz v0 -> b, and the overlays are staged as plain files at the root of
+# the partition. The Japanese install keeps the first path.
+PLAIN_OVERLAYS_PATCH = (0x0007ac, "11004010", "11000010")      # 0x10052c
+
+
+def boot_elf(data, plain_overlays=False):
+    """SCPS_150.49 with the disc-less boot patches, and with `plain_overlays`
+    the overlay loader sent down its plain-file path for every overlay."""
     if not data.startswith(b"\x7fELF"):
         raise PatchError("SCPS_150.49 is not an ELF")
-    return _apply("SCPS_150.49", data, BOOT_ELF_PATCHES, BOOT_ELF_STOCK, BOOT_ELF_PROVEN)
+    out = _apply("SCPS_150.49", data, BOOT_ELF_PATCHES, BOOT_ELF_STOCK, BOOT_ELF_PROVEN)
+    if plain_overlays:
+        out = _apply("SCPS_150.49", out, (PLAIN_OVERLAYS_PATCH,), None, None)
+    return out
 
 
 def dnas_overlay(data):

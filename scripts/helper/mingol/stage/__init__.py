@@ -28,9 +28,11 @@
 (english.py, download.py; MINGOL_TRANSLATION_URL=none turns that off), falling
 back on the newest pack in --translation-dir, and checks it against the
 disc's overlays MENU, NHTTP, GAME and HTTP; --translation-pack uses a local
-pack instead. The English overlays would be sealed in place of the disc's,
-but the game refuses a changed overlay, so ENGLISH_SEALS is off and the game
-stays Japanese, browser title included, with a note saying why.
+pack instead. The game's DNAS library refuses a changed overlay however it
+is sealed (-10202), so ENGLISH_SEALS is off: an English install loads every
+overlay as a plain file from the root of the partition instead
+(bootpatch.PLAIN_OVERLAYS_PATCH), English where the pack has it, and the
+browser title is English too. A Japanese install is unchanged.
 
 Ported from HippaulInstaller (playonline/games/mingol), which builds the same
 partition for a PCSX2 image. Nothing comes from a kit: everything is made
@@ -374,8 +376,10 @@ def build_ioprp(root, aux, work, m):
 
 # ---- the loader and the attribute area ------------------------------------
 
-def fill_loader(root, kelf_path, ioprp_img, hddid, out_path):
-    """The signed loader filled for this disc and drive; returns the patched boot ELF."""
+def fill_loader(root, kelf_path, ioprp_img, hddid, out_path, plain_overlays=False):
+    """The signed loader filled for this disc and drive; returns the patched boot ELF.
+    `plain_overlays` sends the overlays down the loader's plain-file path
+    (bootpatch.PLAIN_OVERLAYS_PATCH), for the English install."""
     from . import atadgp, bootpatch, loader
     if not os.path.isfile(kelf_path):
         raise SystemExit("the Minna no Golf Online loader is missing (%s)" % kelf_path)
@@ -383,7 +387,7 @@ def fill_loader(root, kelf_path, ioprp_img, hddid, out_path):
         blob = f.read()
     if not loader.is_empty(blob):
         raise SystemExit("%s is already filled; it must be the unfilled build" % kelf_path)
-    elf = bootpatch.boot_elf(_read(root, BOOT_FILE))
+    elf = bootpatch.boot_elf(_read(root, BOOT_FILE), plain_overlays=plain_overlays)
     drivers = dict((n, _read(root, "FMOD/%s.IRX" % n)) for n in loader.DRIVERS)
     # A console's drive is often not a genuine Sony one, which the disc's
     # atad refuses inside its own probe; the gate-skipped atad serves the ID.
@@ -408,6 +412,19 @@ def build_attr(root, english):
 
 
 # ---- the stage step --------------------------------------------------------
+
+def stage_plain_overlays(root, tree, english):
+    """Every overlay in the disc's ZZBIN/ but DNAS.BIN (already there,
+    patched), as a plain file at the partition root under the upper-case
+    name the loader's plain path asks for: English where the pack has it,
+    the disc's plaintext otherwise. Returns the number written."""
+    names = sorted(n for n in os.listdir(os.path.join(root, "ZZBIN"))
+                   if n.upper().endswith(".BIN") and n.upper() != "DNAS.BIN")
+    for name in names:
+        data = english.get(name.upper()) or _read(root, "ZZBIN/" + name)
+        _write(_path(tree, name.upper()), data)
+    return len(names)
+
 
 def stage(args):
     hddid = common.read_hddid(args.hddid)
@@ -455,25 +472,28 @@ def stage(args):
         english = englishmod.apply(root, m, translate=args.translate,
                                    pack_path=args.translation_pack,
                                    local=args.translation_dir)
-        if english and not ENGLISH_SEALS:
-            m.note("--translate: the English overlays are not installed: the game's "
-                   "DNAS library refuses a changed overlay (-10202), so the game "
-                   "stays Japanese")
-            english = {}
+        # English: the overlays load as plain files (bootpatch
+        # PLAIN_OVERLAYS_PATCH); the sealed ones stay stock beside them.
+        plain = bool(english) and not ENGLISH_SEALS
 
         m.note("browser name: %s" % (TITLE0_EN if english else "Japanese, as on the disc"))
 
         progress("copying the game's files")
         copied = copy_tree(args.disc, tree)
         copied += copy_fmod(root, tree)
-        sealed = seal(root, tree, hddid, four, english)
+        sealed = seal(root, tree, hddid, four, english if ENGLISH_SEALS else {})
+        if plain:
+            n = stage_plain_overlays(root, tree, english)
+            m.note("--translate: %d overlays installed as plain files, %d of them "
+                   "in English" % (n, len(english)))
         _write(_path(tree, "INSTALL.VER"), struct.pack("<I", 4))
         _write(_path(tree, "DNAS.BIN"), bootpatch.dnas_overlay(dnas_plain))
 
         progress("filling the loader")
         ioprp_img, ioprp_what = build_ioprp(root, aux, work, m)
         loader_out = os.path.join(out, LOADER_NAME)
-        elf = fill_loader(root, args.kelf, ioprp_img, hddid, loader_out)
+        elf = fill_loader(root, args.kelf, ioprp_img, hddid, loader_out,
+                          plain_overlays=plain)
         shutil.copyfile(loader_out, os.path.join(tree, LOADER_NAME))
         with open(os.path.join(out, "attr.bin"), "wb") as f:
             f.write(build_attr(root, bool(english)))
@@ -516,8 +536,8 @@ def main(argv=None):
     ap.add_argument("--require-aux", action="store_true",
                     help="refuse to stage without the Nobunaga disc")
     ap.add_argument("--translate", action="store_true",
-                    help="download the English translation pack and check it "
-                    "against the disc (not installed yet: ENGLISH_SEALS)")
+                    help="install the English translation (downloaded from "
+                    "openlobby.fyi); its overlays load as plain files")
     ap.add_argument("--translation-dir", metavar="DIR",
                     help="with --translate, a folder of packs to use when the "
                     "download cannot be had")

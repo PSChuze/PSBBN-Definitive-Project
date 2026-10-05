@@ -287,7 +287,7 @@ def translate_overlays(disc_root, pack):
 SIGNED = ("ZZBIN/EDAUTH.BIN", "ZZBIN/INSTALL.BIN", "ZZBIN/MOVIE.BIN", "ZZBIN/SYSTEM.BIN")
 
 
-def apply(root, man, translate=False, pack_path=None, local=None):
+def apply(root, man, translate=False, pack_path=None, local=None, sealed=False):
     """The stage step's language pass: {overlay file name: English plaintext}
     for the sealer, empty when the game stays Japanese.
 
@@ -309,7 +309,10 @@ def apply(root, man, translate=False, pack_path=None, local=None):
         return {}
     try:
         pack = load_pack(src)
-        bad = sorted(t for t in pack["text"] if t in SIGNED)
+        # A signed container cannot be resealed with changed text, but the
+        # English install loads its overlays as plain files, where no
+        # signature is checked; only a sealed install has to refuse them.
+        bad = sorted(t for t in pack["text"] if t in SIGNED) if sealed else []
         if bad:
             raise Refused("it changes %s, whose signed hash cannot be redone"
                           % ", ".join(bad))
@@ -320,8 +323,7 @@ def apply(root, man, translate=False, pack_path=None, local=None):
         man.note("--translate: the translation pack cannot be used (%s); "
                  "the game stays Japanese" % e)
         return {}
-    man.note("--translate: translation pack %s (%s) fits this disc: %s; "
-             "SYSTEM.BIN's text is not in it (its container is signed)"
+    man.note("--translate: translation pack %s (%s) fits this disc: %s"
              % (pack["version"], pack["date"],
                 ", ".join("%s (%d strings)" % (t.split("/")[-1], n)
                           for t, n in sorted(counts.items()))))
