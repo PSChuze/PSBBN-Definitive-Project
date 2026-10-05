@@ -52,8 +52,17 @@ is safe to edit; SYSTEM.BIN and every other sealed overlay stay stock.
   0x1ea0    AuthInstall      -> jr ra; li v0,0
   0x2a00    GetStatus        -> *a0 = 5 (pass); jr ra; li v0,0
 
-The decrypt side of DNAS.BIN (sceDNAS2InstExtractDataLength and the rest)
-is untouched: it is what reads the sealed overlays.
+  0x7cab8   console binding check (thunk 0x620eb8) -> jr ra; li v0,1
+
+The last one is the DNAS -102 fix. sceDNAS2InstExtractDataLength first
+checks that the console ID (sceCdRI) matches what the install was bound to,
+and fails with -102 when it does not: always under PCSX2, which reports a
+zero ID, and on a console whose ID is not the one the record names (where
+the read is also what hung the console). The check runs before any key is
+derived and the decrypt reads the drive ID on its own path, so skipping it
+loses nothing the decrypt needs. The rest of the decrypt side
+(sceDNAS2InstExtractDataLength onward) is untouched: it is what reads the
+sealed overlays.
 """
 import hashlib
 
@@ -71,6 +80,7 @@ DNAS_PATCHES = (
     (0x001ea0, "d0ffbd276300023c", "0800e00300000224"),
     (0x002a00, "6300023c2d3080002c9f438cf8ff0224",
                "05000224000082ac0800e00300000224"),
+    (0x07cab8, "f0ffbd270000bfff", "0800e00301000224"),
 )
 
 # The disc's files and the proven results, for the one known pressing
@@ -78,7 +88,7 @@ DNAS_PATCHES = (
 BOOT_ELF_STOCK = "189fa1f13969b66b755f711fdb9401701b92c54e"
 BOOT_ELF_PROVEN = "bbf02fd5c1d41cd62832e11fc009fc69dc639beb"
 DNAS_STOCK = "9d7c542c939129283d5c88246741ffa85dddf409"
-DNAS_PROVEN = "05d0c353d94286435d220c0aa86826a0b7726579"
+DNAS_PROVEN = "2e67f5d53840686b6619432d7ffefb42f2eeec25"
 
 
 class PatchError(ValueError):
