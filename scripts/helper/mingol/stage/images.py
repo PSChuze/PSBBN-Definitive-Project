@@ -28,6 +28,10 @@ ops (x0,y0,x1,y1 are pixel rects, top-left origin):
         "from": [x0,y0,x1,y1], "to": [x,y], "remap": {"srcIndex": dstIndex}}
         official art from another bitmap on the same disc.
 
+An entry with "format": "mti" and "size": [w, h] is a 3D-menu texture (.MTI,
+8bpp + PS2 CLUT) instead of a BMP; the ops are the same. Installers without
+MTI support fail that entry's BMP check and skip its container (stays Japanese).
+
 A target is skipped (stays Japanese) unless every sha1 matches and the rebuilt
 container is no larger than the original (the game's load buffers).
 """
@@ -86,6 +90,44 @@ class IndexedBMP:
                     b = self.px[y][x + 1] if x + 1 < self.w else 0
                     out[row + x // 2] = (a << 4) | b
         return bytes(out)
+
+
+def _csm1(i):
+    """PS2 CLUT storage order: index bits 3 and 4 are swapped."""
+    return (i & ~0x18) | ((i & 8) << 1) | ((i & 16) >> 1)
+
+
+MTI_CLEAR = (255, 0, 255)   # what (nearly) transparent CLUT entries look like to the ops
+
+
+class IndexedMTI:
+    """3D-menu texture (.MTI): w*h 8bpp indices + 256-entry RGBA CLUT stored in
+    PS2 CSM1 order. Same interface as IndexedBMP (px rows, palette, to_bytes);
+    the size comes from the model's .MTL (recipe "size"). Transparent entries
+    show as MTI_CLEAR so colour matching never lands on them; fills and patches
+    use indices directly."""
+
+    def __init__(self, data, w, h):
+        if len(data) != w * h + 1024:
+            raise ValueError('MTI size does not match %dx%d' % (w, h))
+        self.raw = bytes(data)
+        self.w, self.h = w, h
+        clut = data[w * h:]
+        self.rgba = [tuple(clut[4 * _csm1(i) + k] for k in range(4)) for i in range(256)]
+        # only opaque entries are colours (0x80 = opaque); edge alphas stay out of matching
+        self.palette = [c[:3] if c[3] >= 0x78 else MTI_CLEAR for c in self.rgba]
+        self.px = [list(data[y * w:(y + 1) * w]) for y in range(h)]
+
+    def to_bytes(self):
+        return bytes(v for r in self.px for v in r) + self.raw[self.w * self.h:]
+
+
+def open_image(data, spec):
+    """The editable image for a recipe entry (BMP unless "format": "mti")."""
+    if spec.get('format') == 'mti':
+        w, h = spec['size']
+        return IndexedMTI(data, w, h)
+    return IndexedBMP(data)
 
 
 KEEP = 255
@@ -357,7 +399,7 @@ def apply(tree, recipes, note=print):
                 data = entries.get(inner)
                 if data is None or _sha1(data) != spec['entry_sha1']:
                     raise ValueError('entry %s does not match' % inner)
-                img = IndexedBMP(data)
+                img = open_image(data, spec)
                 need = {}
                 for op in spec['ops']:
                     if op['op'] == 'copy':
