@@ -13,33 +13,29 @@
 # (at your option) any later version.
 #
 # Installs Minna no Golf Online (SCPS-15049) onto the drive from the Extras
-# menu. Fully PC-side, no console step (the disc contains a DNAS2 container set
-# whose seal we can reproduce; see mingol/HANDOFF-install-and-dnas.md).
+# menu. Fully PC-side, no console step, and everything comes from the player's
+# own discs (ported from HippaulInstaller's playonline/games/mingol).
 #
 # One partition, PP.SCPS-15049..APPLICATION, that boots via the disc-less loader
-# in `BOOT2 = pfs:/dnasload.elf`. The loader is a filled polbbnexec KELF: it
-# reboots the IOP with an augmented IOPRP (base kernel + DEV9/ATAD/HDD/PFS.IRX
-# from the disc's FMOD/), installs `atadpatch.irx` serving the drive's
-# playonline.hddid so the sealed containers decrypt, then ExecPS2s the disc's
-# boot ELF, SCPS_150.49. The 0x191600 DNAS-gate is short-circuited in a baked
-# patch to SYSTEM.BIN before sealing (mingol/HANDOFF-boot-plan.md, s5 + s2).
+# in `BOOT2 = pfs:/dnasload.elf`. scripts/helper/mingol/stage builds it:
+#   - the nine ZZENC containers are decrypted off the disc and sealed to this
+#     drive's HDD ID and the four of its __net record (read, never written:
+#     PlayOnline shares that record);
+#   - the disc's boot ELF and DNAS.BIN get the disc-less edits (guarded, the
+#     result checked against the proven SHA-1s);
+#   - the IOP reboot image is the disc's 2.70 kernel plus SYSMEM, which only
+#     the Nobunaga no Yabou Online Hiryuu no Shou disc (SLPM-65783) carries;
+#   - the attribute area is built from the disc's own icon;
+#   - the signed loader scripts/assets/mingol/polbbnexec-mingol.kelf is filled
+#     with the patched boot ELF, the reboot image, the disc's DEV9/ATAD/HDD/PFS
+#     IRXs and the drive's HDD ID, and goes in as pfs:/dnasload.elf.
 #
-# The user supplies, under games/MGO/:
-#   the disc           the SCPS-15049 .iso (here or in disc/); the installer
-#                      extracts it to disc/ itself with iso.py. An already
-#                      extracted tree at disc/ (SYSTEM.CNF, ZZBIN/, res/,
-#                      CRS/, MENU/, ...) is used as is.
-#   optional:          mingol.ico  (browser icon; the title works without it)
-#
-# Toolkit ships, under scripts/assets/mingol/:
-#   kit/*.kit.json     the nine seal kits (44 KB) that rebuild the drive-form
-#                      containers from the disc's plaintext ZZBIN overlays
-#   patched/SYSTEM.BIN plaintext SYSTEM.BIN with the 0x1915d0 DNAS bypass baked
-#   polbbnexec-mingol.kelf  the signed, unfilled loader (slots for boot ELF,
-#                      IOPRP and hddid; filled per install)
-#   attr-area.bin      the donor attr with SYSTEM.CNF rewritten to HDD boot
-#
-# See scripts/helper/mingol for the Python that implements each step.
+# The user supplies:
+#   games/MGO/         the SCPS-15049 .iso (here or in disc/), or the extracted
+#                      tree at disc/ (SYSTEM.CNF, ZZBIN/, ZZENC/, FMOD/, ...)
+#   games/NOBU/        the SLPM-65783 .iso (here, in disc/, or in games/MGO/),
+#                      or its extracted tree at disc/; Minna boots only with it
+#   games/POL/playonline.hddid  minted by the PlayOnline step
 
 [[ -t 0 && -t 1 ]] || exit 1
 
@@ -80,6 +76,8 @@ DEVICE="${2:-}"
 MGO_DIR="${GAMES_PATH}/MGO"
 [[ -n "${path_arg}" ]] && MGO_DIR="${path_arg}/MGO"
 [[ -n "${MGO_DIR_OVERRIDE}" ]] && MGO_DIR="${MGO_DIR_OVERRIDE}"
+# The Nobunaga disc (SLPM-65783) the IOP reboot image takes SYSMEM from.
+NOBU_DIR="${NOBU_DIR_OVERRIDE:-$(dirname "${MGO_DIR}")/NOBU}"
 # The PlayOnline step's drive ID. Read, never written; the sealed containers and
 # the loader's atadpatch shim key to this exact 512-byte block.
 POL_HDDID_FILE="${POL_HDDID:-$(dirname "${MGO_DIR}")/POL/playonline.hddid}"
@@ -105,7 +103,10 @@ fi
 : "${UI_TEXT[MGO_NO_DISC]:=The disc tree of the game was not found in}"
 : "${UI_TEXT[MGO_DISC_HINT]:=Put the SCPS-15049 disc image (.iso) in this folder, or the extracted disc tree in disc/ (SYSTEM.CNF, ZZBIN/, FMOD/, res/).}"
 : "${UI_TEXT[MGO_EXTRACT_FOUND]:=Found the disc image:}"
-: "${UI_TEXT[MGO_EXTRACT_RUNNING]:=Extracting it (this takes a few minutes)...}"
+: "${UI_TEXT[MGO_AUX_FOUND]:=Found the Nobunaga no Yabou Online Hiryuu no Shou disc (needed for one IOP module):}"
+: "${UI_TEXT[MGO_AUX_MISSING]:=The Nobunaga no Yabou Online Hiryuu no Shou disc (SLPM-65783) was not found. Minna no Golf Online boots only with an IOP module (SYSMEM) taken from that disc.}"
+: "${UI_TEXT[MGO_AUX_HINT]:=Put its .iso (or the extracted tree in disc/) in}"
+: "${UI_TEXT[MGO_ERROR_LOADER]:=The Minna no Golf Online loader is missing from scripts/assets/mingol/. Update the toolkit and try again.}"
 : "${UI_TEXT[MGO_HDDID_FOUND]:=The PlayOnline drive ID was found. Minna no Golf Online will share it:}"
 : "${UI_TEXT[MGO_HDDID_FAIL]:=No PlayOnline drive ID was found. Run the PlayOnline step first: it mints the ID Minna needs.}"
 : "${UI_TEXT[MGO_NO_ICON]:=No browser icon found; the game will boot but the drive shows the art from the disc.}"
@@ -118,7 +119,6 @@ fi
 : "${UI_TEXT[MGO_ERROR_INSTALL]:=The install failed. See logs/mingol-installer.log.}"
 : "${UI_TEXT[MGO_DONE]:=Minna no Golf Online was installed.}"
 : "${UI_TEXT[MGO_DONE_HINT]:=It appears in the browser; it boots with no disc.}"
-: "${UI_TEXT[MGO_ERROR_ASSETS]:=Kit assets are missing under scripts/assets/mingol/. This toolkit build cannot install Minna.}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
@@ -152,27 +152,18 @@ SPLASH() {
 EOF
 }
 
-# The venv's python3 (sudo resets PATH). The mingolinstall imports its two
-# sibling repos through NOBU_TOOLS / POL_PS2, whose sensible defaults live in
-# mingolinstall itself; we set the ones this toolkit knows.
+# The venv's python3 (sudo resets PATH).
 MGO_PY="${SCRIPTS_DIR}/venv/bin/python3"
 [[ -x "${MGO_PY}" ]] || MGO_PY="python3"
 
-# The installer's own package. Ships next to this script under scripts/helper/mingol.
-MGO_TOOLS="${MGO_TOOLS_OVERRIDE:-${HELPER_DIR}/mingol/tools}"
-[[ -f "${MGO_TOOLS}/mingolinstall.py" ]] || MGO_TOOLS="${SCRIPTS_DIR}/../../Minna no Golf Online/mingol/tools"
-
-# mingolinstall's sealkit imports the Nobunaga DNAS2 crypto (dnas2, rc6,
-# dnasbundle, dnasdec) via NOBU_TOOLS, and its partition walker + password /
-# record helpers via POL_PS2. Both live under scripts/helper/ in this toolkit:
-# the four DNAS modules were copied next to mingolinstall.py itself, and
-# playonline's lib package (polnetdump/polhdd/polrecord) is at
-# scripts/helper/playonline/lib.
+# The installer's Python is the package scripts/helper/mingol/stage
+# (`python -m mingol.stage` stages, `python -m mingol.stage.write` writes); it
+# uses playonline's attrarea, discs, loader and lib, also under scripts/helper.
+mgopy() {
+    PYTHONPATH="${HELPER_DIR}" "${MGO_PY}" "$@"
+}
 mgosudo() {
-    sudo -E env PYTHONPATH="${HELPER_DIR}" \
-        NOBU_TOOLS="${NOBU_TOOLS:-${MGO_TOOLS}}" \
-        POL_PS2="${POL_PS2:-${HELPER_DIR}/playonline/lib}" \
-        "${MGO_PY}" "$@"
+    sudo -E env PYTHONPATH="${HELPER_DIR}" "${MGO_PY}" "$@"
 }
 
 on_exit() {
@@ -216,43 +207,49 @@ if ! sudo "${HDL_DUMP}" toc "${DEVICE}" >> "${LOG_FILE}" 2>&1; then
 fi
 
 # ---- user files ---------------------------------------------------------
+# The disc: an extracted tree at games/MGO/disc/ is used as is; otherwise the
+# .iso in games/MGO/ or games/MGO/disc/ (MGO_DISC_IMAGE picks one explicitly)
+# is read directly, no extraction to disk needed.
 MGO_DISC="${MGO_DIR}/disc"
-# Extract the disc tree from an .iso if it is not there yet. The image may sit
-# in games/MGO/ or games/MGO/disc/; MGO_DISC_IMAGE picks one explicitly. Uses
-# iso.py, not 7-Zip, which drops parts of some PS2 discs' trees.
-if [[ ! -f "${MGO_DISC}/SYSTEM.CNF" ]] || [[ ! -d "${MGO_DISC}/ZZBIN" ]] || [[ ! -d "${MGO_DISC}/FMOD" ]]; then
-    MGO_IMG="${MGO_DISC_IMAGE:-}"
-    if [[ -z "${MGO_IMG}" ]]; then
+MGO_SRC=""
+if [[ -f "${MGO_DISC}/SYSTEM.CNF" && -d "${MGO_DISC}/ZZBIN" && -d "${MGO_DISC}/ZZENC" && -d "${MGO_DISC}/FMOD" ]]; then
+    MGO_SRC="${MGO_DISC}"
+else
+    MGO_SRC="${MGO_DISC_IMAGE:-}"
+    if [[ -z "${MGO_SRC}" ]]; then
         for cand in "${MGO_DIR}"/*.iso "${MGO_DIR}"/*.ISO "${MGO_DISC}"/*.iso "${MGO_DISC}"/*.ISO; do
-            [[ -f "$cand" ]] && { MGO_IMG="$cand"; break; }
+            [[ -f "$cand" ]] && { MGO_SRC="$cand"; break; }
         done
     fi
-    if [[ -n "${MGO_IMG}" && -f "${MGO_IMG}" ]]; then
-        echo "  ${UI_TEXT[MGO_EXTRACT_FOUND]} $(basename "${MGO_IMG}")"
-        echo "  ${UI_TEXT[MGO_EXTRACT_RUNNING]}"
-        mkdir -p "${MGO_DISC}"
-        echo "extracting ${MGO_IMG} -> ${MGO_DISC}" >> "${LOG_FILE}"
-        "${MGO_PY}" "${MGO_TOOLS}/iso.py" x "${MGO_IMG}" "${MGO_DISC}" >> "${LOG_FILE}" 2>&1 \
-            || echo "[X] iso.py failed on ${MGO_IMG}" >> "${LOG_FILE}"
-        echo
+    if [[ -z "${MGO_SRC}" || ! -f "${MGO_SRC}" ]]; then
+        echo "[X] Error: no SCPS-15049 image or extracted tree in ${MGO_DIR}" >> "${LOG_FILE}"
+        error_msg "$(printf '%s %s\n%s' "${UI_TEXT[MGO_NO_DISC]}" "${MGO_DIR}" "${UI_TEXT[MGO_DISC_HINT]}")"
     fi
+    echo "  ${UI_TEXT[MGO_EXTRACT_FOUND]} $(basename "${MGO_SRC}")"
 fi
-if [[ ! -f "${MGO_DISC}/SYSTEM.CNF" ]] || [[ ! -d "${MGO_DISC}/ZZBIN" ]] || [[ ! -d "${MGO_DISC}/FMOD" ]]; then
-    echo "[X] Error: ${MGO_DISC} missing SYSTEM.CNF / ZZBIN / FMOD" >> "${LOG_FILE}"
-    error_msg "$(printf '%s %s\n%s' "${UI_TEXT[MGO_NO_DISC]}" "${MGO_DISC}" "${UI_TEXT[MGO_DISC_HINT]}")"
-fi
+echo "Disc: ${MGO_SRC}" >> "${LOG_FILE}"
 
-# ---- kit assets (ship-side) ---------------------------------------------
-KIT_DIR="${MINGOL_ASSETS}/kit"
-PATCHED_DIR="${MINGOL_ASSETS}/patched"
+# The Nobunaga disc, for SYSMEM: games/NOBU/ (image or disc/ tree), then
+# games/MGO/. MGO_AUX_DISC names one explicitly.
+MGO_AUX="${MGO_AUX_DISC:-}"
+if [[ -z "${MGO_AUX}" ]]; then
+    MGO_AUX=$(mgopy -c 'import sys
+from mingol.stage import find_aux_disc
+print(find_aux_disc(sys.argv[1:]) or "")' "${NOBU_DIR}" "${MGO_DIR}" 2>>"${LOG_FILE}")
+fi
+if [[ -z "${MGO_AUX}" || ! -e "${MGO_AUX}" ]]; then
+    echo "[X] Error: no SLPM-65783 disc in ${NOBU_DIR} or ${MGO_DIR}" >> "${LOG_FILE}"
+    error_msg "$(printf '%s\n%s %s' "${UI_TEXT[MGO_AUX_MISSING]}" "${UI_TEXT[MGO_AUX_HINT]}" "${NOBU_DIR}")"
+fi
+echo "  ${UI_TEXT[MGO_AUX_FOUND]} $(basename "${MGO_AUX}")"
+echo "Aux disc: ${MGO_AUX}" >> "${LOG_FILE}"
+
+# ---- the signed loader (ship-side) --------------------------------------
 LOADER_KELF="${MINGOL_ASSETS}/polbbnexec-mingol.kelf"
-ATTR_TEMPLATE="${MINGOL_ASSETS}/attr-area.bin"
-for f in "${KIT_DIR}" "${PATCHED_DIR}/SYSTEM.BIN" "${LOADER_KELF}" "${ATTR_TEMPLATE}"; do
-    if [[ ! -e "$f" ]]; then
-        echo "[X] Missing kit asset: $f" >> "${LOG_FILE}"
-        error_msg "${UI_TEXT[MGO_ERROR_ASSETS]}"
-    fi
-done
+if [[ ! -f "${LOADER_KELF}" ]]; then
+    echo "[X] Missing loader: ${LOADER_KELF}" >> "${LOG_FILE}"
+    error_msg "${UI_TEXT[MGO_ERROR_LOADER]}"
+fi
 
 # ---- served drive ID ----------------------------------------------------
 if [[ ! -f "${POL_HDDID_FILE}" ]]; then
@@ -288,53 +285,33 @@ case "$answer" in
 esac
 echo
 
-# ---- build the per-install boot chain -----------------------------------
-# 1. Augment the disc's IOPRP with DEV9/ATAD/HDD/PFS from the disc's FMOD.
-# 2. Rewrite the donor attr so BOOT2 points at pfs:/dnasload.elf.
-# 3. Fill the signed loader with the disc's boot ELF, the augmented IOPRP,
-#    and the served drive ID.
-# 4. Hand the whole thing to mingolinstall.py, which stages the disc tree,
-#    rebuilds each container from the seal kit + the disc's plaintext (with
-#    the patched SYSTEM overlay), writes the partition and the attr.
+# ---- stage, then write --------------------------------------------------
+# 1. mingol.stage reads the four from this drive's __net record (the record
+#    PlayOnline shares; read, never written), seals the nine containers to it
+#    and the drive's HDD ID, patches the boot ELF and DNAS.BIN, builds the
+#    IOP reboot image with the Nobunaga disc's SYSMEM, builds the attribute
+#    area and fills the signed loader. Under sudo: it reads the drive.
+# 2. mingol.stage.write checks the four again, has pfsshell make the 1536 MiB
+#    partition and put the tree, sets the MM21 APA passwords, clears the APA
+#    journal and writes the attribute area at +0x1000.
 echo "${UI_TEXT[MGO_DOING]}"
 echo
 
-AUG_IOPRP="${WORK_DIR}/IOPRP270-augmented.IMG"
-"${MGO_PY}" "${MGO_TOOLS}/ioprp_augment.py" "${MGO_DISC}/FMOD/IOPRP270.IMG" \
-    --add DEV9="${MGO_DISC}/FMOD/DEV9.IRX" \
-    --add ATAD="${MGO_DISC}/FMOD/ATAD.IRX" \
-    --add HDD="${MGO_DISC}/FMOD/HDD.IRX" \
-    --add PFS="${MGO_DISC}/FMOD/PFS.IRX" \
-    -o "${AUG_IOPRP}" 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+STAGE_DIR="${WORK_DIR}/stage"
+mgosudo -m mingol.stage \
+    --disc "${MGO_SRC}" \
+    --hddid "${POL_HDDID_FILE}" \
+    --out "${STAGE_DIR}" \
+    --kelf "${LOADER_KELF}" \
+    --device "${DEVICE}" \
+    --aux-disc "${MGO_AUX}" \
+    --require-aux 2>&1 | tee -a "${LOG_FILE}" | grep -v '^progress: sealing' | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[MGO_ERROR_INSTALL]}"
 
-ATTR_BOOT="${WORK_DIR}/attr-area-hddboot.bin"
-"${MGO_PY}" "${MGO_TOOLS}/attr_rewrite_boot.py" "${ATTR_TEMPLATE}" "${ATTR_BOOT}" \
-    >> "${LOG_FILE}" 2>&1 || error_msg "${UI_TEXT[MGO_ERROR_INSTALL]}"
-
-DNASLOAD="${WORK_DIR}/dnasload.elf"
-"${MGO_PY}" -m playonline.loader "${LOADER_KELF}" \
-    --elf "${MGO_DISC}/SCPS_150.49" \
-    --ioprp "${AUG_IOPRP}" \
+mgosudo -m mingol.stage.write "${DEVICE}" \
+    --stage "${STAGE_DIR}" \
     --hddid "${POL_HDDID_FILE}" \
-    --argv0 "hdd0:PP.SCPS-15049..APPLICATION:pfs:/SCPS_150.49" \
-    -o "${DNASLOAD}" 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
-[[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[MGO_ERROR_INSTALL]}"
-
-# The icon isn't a mingolinstall input yet; the disc's res/ carries a serviceable
-# jacket image that BBNav shows. A future toolkit can override it.
-
-mgosudo "${MGO_TOOLS}/mingolinstall.py" "${DEVICE}" \
-    --disc "${MGO_DISC}" \
-    --kit "${KIT_DIR}" \
-    --hddid "${POL_HDDID_FILE}" \
-    --four auto \
-    --res "${MGO_DISC}/res" \
-    --attr "${ATTR_BOOT}" \
-    --zzbin-overlay "${PATCHED_DIR}" \
-    --loader "${DNASLOAD}" \
     --pfsshell "${PFS_SHELL}" \
-    --work "${WORK_DIR}/stage" \
     --write 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[MGO_ERROR_INSTALL]}"
 

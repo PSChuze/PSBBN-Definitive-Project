@@ -1,0 +1,117 @@
+#
+# Minna no Golf Online installer for the PSBBN Definitive Project
+# Copyright (C) 2026 PrettyOpenLobby
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+r"""The code patches of the PCSX2-proven disc-less boot, applied to the disc's bytes.
+
+Nothing patched ships: each edit names the bytes it expects to find, and the
+whole set is refused unless every one of them is there (and, for a known
+pressing, the result's SHA-1 is the proven one).
+
+The boot ELF, SCPS_150.49 (file offsets; VA = offset + 0x000ffd80):
+
+  0x1009e8  skip the game's own IOP reboot (rom0:UDNL cdrom0:\FMOD\DNAS270.IMG)
+            surgically: `b 0x100a24` keeps the SIF/fileio re-init after it.
+            The loader has already rebooted the IOP with the same kernel and
+            left the drivers resident.
+  0x10024c  nop the call to the driver-load routine 0x100bb0, which would load
+            DEV9/ATAD/HDD/PFS from cdrom0:\FMOD; the loader's resident copies
+            of the same four modules serve instead.
+  0x100578, 0x10058c, 0x100590, 0x10060c
+            the plaintext overlay branch builds cdrom0:\ZZBIN\<NAME>;1. In an
+            installed boot DNAS.BIN is the only overlay that takes it (every
+            other one is read sealed from pfs2:/ZZENC), so the branch is turned
+            into pfs2:/DNAS.BIN: device string 0x150da8 -> 0x150db8 ("pfs2:/"),
+            the "ZZBIN\\" strcat and its argument nopped, and ";1" -> "".
+  0x1095b8  the DNAS module-version gate in the file-open wrapper 0x109680
+            returns 0 (pass) at once. It wants the resident IOP to report
+            "2700"; with the gate skipped the boot does not depend on which
+            kernel image the loader rebooted with.
+
+DNAS.BIN (the plaintext DNAS 2.70 overlay, staged at the partition root as
+pfs2:/DNAS.BIN for the redirect above). Its online gate needs Sony's DNAS
+servers, which are gone, so the three calls SYSTEM.BIN's state machine
+(0x1915d0) polls report success. DNAS.BIN is not a signed container, so this
+is safe to edit; SYSTEM.BIN and every other sealed overlay stay stock.
+
+  0x1e60    sceDNAS2Init     -> jr ra; li v0,0
+  0x1ea0    AuthInstall      -> jr ra; li v0,0
+  0x2a00    GetStatus        -> *a0 = 5 (pass); jr ra; li v0,0
+
+The decrypt side of DNAS.BIN (sceDNAS2InstExtractDataLength and the rest)
+is untouched: it is what reads the sealed overlays.
+"""
+import hashlib
+
+# (file offset, original bytes, patched bytes), little-endian words as on disc.
+BOOT_ELF_PATCHES = (
+    (0x0004cc, "ec02040c", "00000000"),                    # 0x10024c
+    (0x0007f8, "a80da524", "b80da524"),                    # 0x100578
+    (0x00080c, "62ed040cd80da524", "0000000000000000"),    # 0x10058c, 0x100590
+    (0x00088c, "e00da524", "e20da524"),                    # 0x10060c
+    (0x000c68, "1500043c2236040c", "0e00001000000000"),    # 0x1009e8
+    (0x009838, "b0ffbd271500023c", "0800e00300000224"),    # 0x1095b8
+)
+DNAS_PATCHES = (
+    (0x001e60, "f0ffbd272d582001", "0800e00300000224"),
+    (0x001ea0, "d0ffbd276300023c", "0800e00300000224"),
+    (0x002a00, "6300023c2d3080002c9f438cf8ff0224",
+               "05000224000082ac0800e00300000224"),
+)
+
+# The disc's files and the proven results, for the one known pressing
+# (SCPS-15049, VER 1.01, build 030518).
+BOOT_ELF_STOCK = "189fa1f13969b66b755f711fdb9401701b92c54e"
+BOOT_ELF_PROVEN = "bbf02fd5c1d41cd62832e11fc009fc69dc639beb"
+DNAS_STOCK = "9d7c542c939129283d5c88246741ffa85dddf409"
+DNAS_PROVEN = "05d0c353d94286435d220c0aa86826a0b7726579"
+
+
+class PatchError(ValueError):
+    pass
+
+
+def _apply(name, data, patches, stock, proven):
+    out = bytearray(data)
+    for off, old, new in patches:
+        old, new = bytes.fromhex(old), bytes.fromhex(new)
+        have = bytes(out[off:off + len(old)])
+        if have != old:
+            raise PatchError("%s: expected %s at 0x%x, found %s; not the disc this "
+                             "patch was made for" % (name, old.hex(), off, have.hex()))
+        out[off:off + len(new)] = new
+    out = bytes(out)
+    if hashlib.sha1(data).hexdigest() == stock and hashlib.sha1(out).hexdigest() != proven:
+        raise PatchError("%s: the patched file is not the proven one" % name)
+    return out
+
+
+def boot_elf(data):
+    """SCPS_150.49 with the disc-less boot patches."""
+    if not data.startswith(b"\x7fELF"):
+        raise PatchError("SCPS_150.49 is not an ELF")
+    return _apply("SCPS_150.49", data, BOOT_ELF_PATCHES, BOOT_ELF_STOCK, BOOT_ELF_PROVEN)
+
+
+def dnas_overlay(data):
+    """ZZBIN/DNAS.BIN with the online-gate skip."""
+    return _apply("DNAS.BIN", data, DNAS_PATCHES, DNAS_STOCK, DNAS_PROVEN)
+
+
+def is_known_pressing(boot, dnas):
+    return (hashlib.sha1(boot).hexdigest() == BOOT_ELF_STOCK
+            and hashlib.sha1(dnas).hexdigest() == DNAS_STOCK)
