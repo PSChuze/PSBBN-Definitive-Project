@@ -43,6 +43,13 @@ the __net four):
 make the output reproducible. `outer` is zeros with the disc's inner-encoded
 region at [d10 : d10+v1] and the tag DRIVE_TAIL_TAG in its last 16 bytes,
 which the game checks after decrypting (zeros there make it retry forever).
+
+`build_drive_form_patched` seals a changed module instead of the disc's: the
+inner layer is decrypted with the inner-key record's key, the module at
+[d9 : d9+v2] replaced, and the inner layer encrypted again. The module length
+v2 is in the signed r3 record, so a replacement must be exactly v2 bytes. Only
+modules with no signed hash of their payload can be changed this way (the
+English overlays); EDAUTH, INSTALL, MOVIE and SYSTEM carry one and stay stock.
 """
 import struct
 
@@ -70,8 +77,11 @@ def _disc_section(enc, cursor, disc_size):
     r15 = dnas2.unrecord(enc[cursor:cursor + 128], ks[15][1], ks[15][2])
     if r15 is None:
         raise DriveBuildError("r15 missing at %#x" % cursor)
-    if _first_verifying(enc, cursor + 0x80) is None:
+    slot = _first_verifying(enc, cursor + 0x80)
+    if slot is None:
         raise DriveBuildError("no inner-key record verifies at %#x" % (cursor + 0x80))
+    inner_key = dnas2.unrecord(enc[cursor + 0x80:cursor + 0x100],
+                               ks[slot][1], ks[slot][2])[0][:32]
     r3 = dnas2.unrecord(enc[cursor + 0x100:cursor + 0x180], ks[3][1], ks[3][2])
     r11 = dnas2.unrecord(enc[cursor + 0x180:cursor + 0x200], ks[11][1], ks[11][2])
     if r3 is None or r11 is None:
@@ -80,7 +90,8 @@ def _disc_section(enc, cursor, disc_size):
     if h1[10:26] != b"a5713c8bdbe8d420":
         raise DriveBuildError("H1 tag mismatch at %#x" % cursor)
 
-    v1, _v2 = struct.unpack("<II", r3[0][:8])
+    v1, v2 = struct.unpack("<II", r3[0][:8])
+    d9 = r3[0][9] * 16
     d10 = r3[0][10] * 16
     if v1 & 0xF:
         raise DriveBuildError("v1 %#x is not 16-aligned" % v1)
@@ -91,7 +102,7 @@ def _disc_section(enc, cursor, disc_size):
     v1a = (v1 + 15) & ~0xF
     inner_off = len(d1) - v1a - 0x10
     return dict(
-        v1=v1, d10=d10,
+        v1=v1, v2=v2, d9=d9, d10=d10, inner_key=inner_key,
         inner_raw=enc[cursor + 0x80:cursor + 0x100],
         r3_raw=enc[cursor + 0x100:cursor + 0x180],
         r11_raw=enc[cursor + 0x180:cursor + 0x200],
@@ -101,8 +112,31 @@ def _disc_section(enc, cursor, disc_size):
     )
 
 
+def _repatched(s, index, patcher):
+    """The section's inner-encoded region, with the patcher's module in it."""
+    if patcher is None:
+        return s["inner_encoded"]
+    key, d9, v2 = s["inner_key"], s["d9"], s["v2"]
+    inner = bytearray(rc6.cbc(s["inner_encoded"], key[:16], key[16:32], True))
+    module = bytes(inner[d9:d9 + v2])
+    new = patcher(index, module)
+    if new is None or new == module:
+        return s["inner_encoded"]
+    if len(new) != v2:
+        raise DriveBuildError("the module of section %d is %d bytes, it must stay %d "
+                              "(its length is signed)" % (index, len(new), v2))
+    inner[d9:d9 + v2] = new
+    return rc6.cbc(bytes(inner), key[:16], key[16:32], False)
+
+
 def build_drive_form(enc, ata32, four, blk_plain=BLK_ZERO):
     """The drive-form bytes of disc-form container `enc` for drive (ata32, four)."""
+    return build_drive_form_patched(enc, ata32, four, None, blk_plain)
+
+
+def build_drive_form_patched(enc, ata32, four, patcher, blk_plain=BLK_ZERO):
+    """As build_drive_form, with `patcher(section_index, module)` returning the
+    module to seal (the same bytes, or None, for no change; else exactly as long)."""
     if len(blk_plain) != 128:
         raise DriveBuildError("blk_plain must be exactly 128 bytes")
     ks = dnas2.keys()
@@ -123,12 +157,12 @@ def build_drive_form(enc, ata32, four, blk_plain=BLK_ZERO):
 
     out = bytearray(enc[:sec])
     cursor = sec
-    for size in disc_sizes:
+    for index, size in enumerate(disc_sizes):
         s = _disc_section(enc, cursor, size)
         v1, d10 = s["v1"], s["d10"]
         extent = d10 + v1 + ((0x10 - (v1 & 0xF)) & 0xF) + 0x10
         outer = bytearray(extent)
-        outer[d10:d10 + v1] = s["inner_encoded"]
+        outer[d10:d10 + v1] = _repatched(s, index, patcher)
         outer[extent - 16:extent] = DRIVE_TAIL_TAG
         out += s["inner_raw"]
         out += blk_ct

@@ -21,7 +21,16 @@
     python -m mingol.stage --disc IMAGE_OR_TREE --hddid FILE --out DIR
         --kelf scripts/assets/mingol/polbbnexec-mingol.kelf
         (--four HEX8 | --device DEV) [--aux-disc NOBUNAGA_DISC]
-        [--aux-search DIR ...] [--require-aux] [--translate]
+        [--aux-search DIR ...] [--require-aux]
+        [--translate [--translation-dir DIR] | --translation-pack ZIP]
+
+--translate downloads the latest English translation pack from openlobby.fyi
+(english.py, download.py; MINGOL_TRANSLATION_URL=none turns that off), falling
+back on the newest pack in --translation-dir, and checks it against the
+disc's overlays MENU, NHTTP, GAME and HTTP; --translation-pack uses a local
+pack instead. The English overlays would be sealed in place of the disc's,
+but the game refuses a changed overlay, so ENGLISH_SEALS is off and the game
+stays Japanese, browser title included, with a note saying why.
 
 Ported from HippaulInstaller (playonline/games/mingol), which builds the same
 partition for a PCSX2 image. Nothing comes from a kit: everything is made
@@ -84,6 +93,16 @@ TITLE0_EN = u"Everybody's Golf Online"
 # The nine overlays the game reads sealed (pfs2:/ZZENC/ZZBIN/<name>).
 CONTAINERS = ("EDAUTH.BIN", "GAME.BIN", "HTTP.BIN", "INSTALL.BIN", "MENU.BIN",
               "MOVIE.BIN", "NHTTP.BIN", "PATCH.BIN", "SYSTEM.BIN")
+# Whether the English overlays are sealed in place of the disc's. Off: the game
+# rejects them. Sealed from the English plaintext (disc_to_drive.
+# build_drive_form_patched) each decrypts back to that plaintext on the PC, but
+# under PCSX2 (2026-10-05) sceDNAS2InstExtractData refuses the English
+# MENU.BIN with -10202 and the game stops; the stock overlays load. The DNAS
+# library checks the module by a value we have not found (not r20/r28, H1 or
+# the inner layer), so a changed overlay cannot be sealed yet. Until then
+# --translate checks the pack against the disc and the game stays Japanese.
+ENGLISH_SEALS = False
+
 
 # The disc's files the retail installer does not copy (FMOD/ is the disc
 # boot's IOP set, FMOD2/ a second sound set, FRES/ and FEEGAGUI.ELF the
@@ -232,19 +251,36 @@ def copy_fmod(root, tree):
 
 # ---- the sealed overlays ---------------------------------------------------
 
-def seal(root, tree, hddid, four):
-    """Seal the nine containers to the drive, each checked against ZZBIN/."""
+def seal(root, tree, hddid, four, english=None):
+    """Seal the nine containers to the drive, each checked to decrypt to the
+    plaintext sealed: the disc's ZZBIN/ twin, or for a name in `english`
+    ({file name: English overlay}) that overlay, sealed in its place."""
     from . import disc_to_drive, dnasdec
+    english = english or {}
     ata32 = dnasdec.ata_material(hddid)
     for i, name in enumerate(CONTAINERS):
         progress("sealing %s (%d of %d)" % (name, i + 1, len(CONTAINERS)))
         enc = _read(root, "ZZENC/ZZBIN/" + name)
         plain = _read(root, "ZZBIN/" + name)
-        drive = disc_to_drive.build_drive_form(enc, ata32, four)
+        if name in english:
+            stock, plain = plain, english[name]
+            if len(plain) != len(stock):
+                raise SystemExit("the English %s is not the size of the disc's" % name)
+
+            def patcher(index, module, stock=stock, plain=plain, name=name):
+                if index != 0 or module != stock:
+                    raise SystemExit("ZZENC/ZZBIN/%s does not hold ZZBIN/%s; is the "
+                                     "dump damaged?" % (name, name))
+                return plain
+            drive = disc_to_drive.build_drive_form_patched(enc, ata32, four, patcher)
+        else:
+            drive = disc_to_drive.build_drive_form(enc, ata32, four)
         mods = dnasdec.decrypt(drive, ata32, four)
         if len(mods) != 1 or mods[0] != plain:
-            raise SystemExit("ZZENC/ZZBIN/%s does not decrypt to ZZBIN/%s once sealed; "
-                             "is the dump damaged?" % (name, name))
+            raise SystemExit("ZZENC/ZZBIN/%s does not decrypt to %s once sealed; "
+                             "is the dump damaged?"
+                             % (name, "the English overlay" if name in english
+                                else "ZZBIN/" + name))
         _write(_path(tree, "ZZENC/ZZBIN/" + name), drive)
     return len(CONTAINERS)
 
@@ -356,9 +392,9 @@ def fill_loader(root, kelf_path, ioprp_img, hddid, out_path):
     return elf
 
 
-def build_attr(root, translate):
-    """The attribute area for partition + 0x1000."""
-    if translate:
+def build_attr(root, english):
+    """The attribute area for partition + 0x1000 (English title with English text)."""
+    if english:
         title0, title1, enc = TITLE0_EN, u"", "ascii"
         uninstall = ()
     else:
@@ -415,10 +451,22 @@ def stage(args):
         common.provide_dnas_consts([dnas_plain], work)
         from . import bootpatch                    # after the tables are known
 
+        from . import english as englishmod
+        english = englishmod.apply(root, m, translate=args.translate,
+                                   pack_path=args.translation_pack,
+                                   local=args.translation_dir)
+        if english and not ENGLISH_SEALS:
+            m.note("--translate: the English overlays are not installed: the game's "
+                   "DNAS library refuses a changed overlay (-10202), so the game "
+                   "stays Japanese")
+            english = {}
+
+        m.note("browser name: %s" % (TITLE0_EN if english else "Japanese, as on the disc"))
+
         progress("copying the game's files")
         copied = copy_tree(args.disc, tree)
         copied += copy_fmod(root, tree)
-        sealed = seal(root, tree, hddid, four)
+        sealed = seal(root, tree, hddid, four, english)
         _write(_path(tree, "INSTALL.VER"), struct.pack("<I", 4))
         _write(_path(tree, "DNAS.BIN"), bootpatch.dnas_overlay(dnas_plain))
 
@@ -428,7 +476,7 @@ def stage(args):
         elf = fill_loader(root, args.kelf, ioprp_img, hddid, loader_out)
         shutil.copyfile(loader_out, os.path.join(tree, LOADER_NAME))
         with open(os.path.join(out, "attr.bin"), "wb") as f:
-            f.write(build_attr(root, args.translate))
+            f.write(build_attr(root, bool(english)))
         if not bootpatch.is_known_pressing(_read(root, BOOT_FILE), dnas_plain):
             m.note("this pressing's SCPS_150.49 or DNAS.BIN is not the one the boot "
                    "was proven with; the patches applied, but it is untested")
@@ -468,5 +516,11 @@ def main(argv=None):
     ap.add_argument("--require-aux", action="store_true",
                     help="refuse to stage without the Nobunaga disc")
     ap.add_argument("--translate", action="store_true",
-                    help="English browser title (the game itself has no translation)")
+                    help="download the English translation pack and check it "
+                    "against the disc (not installed yet: ENGLISH_SEALS)")
+    ap.add_argument("--translation-dir", metavar="DIR",
+                    help="with --translate, a folder of packs to use when the "
+                    "download cannot be had")
+    ap.add_argument("--translation-pack", metavar="ZIP",
+                    help="a local English translation pack (zip or folder); no download")
     return stage(ap.parse_args(argv))
