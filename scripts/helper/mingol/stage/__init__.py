@@ -28,18 +28,22 @@ partition for a PCSX2 image. Nothing comes from a kit: everything is made
 from the player's disc.
 
   tree/      what the retail installer leaves in PP.SCPS-15049..APPLICATION:
-             the disc's files minus FMOD/, FMOD2/, FRES/, ZZBIN/, FEEGAGUI.ELF
+             the disc's files minus FMOD/, FMOD2/ (but see below), FRES/, ZZBIN/, FEEGAGUI.ELF
              and SCPS_150.49; the nine ZZENC/ZZBIN/*.BIN containers sealed to
              the drive's HDD ID and the four of its __net record
              (disc_to_drive), each checked to decrypt to its plaintext twin in
              ZZBIN/; the install marker INSTALL.VER; DNAS.BIN at the root, the
              disc's plaintext DNAS overlay with its online gate skipped
              (bootpatch), which the patched boot ELF loads as pfs2:/DNAS.BIN;
-             and dnasload.elf, the loader the browser launches.
+             FMOD/ and FMOD2/ holding the disc's IOP modules (*.IRX, *.ICO,
+             *.SYS; the loader's shim sends the game's cdrom0 FMOD loads
+             there, so it needs no disc); and dnasload.elf, the loader the
+             browser launches.
   dnasload.elf
              the signed loader KELF the toolkit ships (DRIVERS=3, driver
              slots) filled for this disc and drive: the patched SCPS_150.49,
              the 2.70 IOP kernel (ioprp), the disc's DEV9/ATAD/HDD/PFS IRXs
+             (ATAD with its genuine-drive check skipped, atadgp)
              and the drive's HDD ID; argv[0] cdrom0:\\SCPS_150.49;1. Also
              copied into tree/.
   attr.bin   the browser's attribute area: BOOT2 = pfs:/dnasload.elf and the
@@ -86,9 +90,14 @@ CONTAINERS = ("EDAUTH.BIN", "GAME.BIN", "HTTP.BIN", "INSTALL.BIN", "MENU.BIN",
 # e-money client, ZZBIN/ the plaintext overlays, ZZENC/ sealed here), and the
 # ones this step reads.
 TREE_SKIP = ("FMOD/", "FMOD2/", "FRES/", "ZZBIN/", "ZZENC/", "FEEGAGUI.ELF", BOOT_FILE)
-WORK_FILES = ("SYSTEM.CNF", BOOT_FILE, "ZZBIN/", "ZZENC/ZZBIN/", "FMOD/DEV9.IRX",
-              "FMOD/ATAD.IRX", "FMOD/HDD.IRX", "FMOD/PFS.IRX", "FMOD/DNAS270.IMG",
+WORK_FILES = ("SYSTEM.CNF", BOOT_FILE, "ZZBIN/", "ZZENC/ZZBIN/", "FMOD/", "FMOD2/",
               "CNF/SYS_NET.ICO")
+
+# The IOP modules the game loads from cdrom0:\FMOD\ and cdrom0:\FMOD2\ once
+# it runs (network, pad, USB, sound). With no disc the loader's shim sends
+# those loads to pfs2:/FMOD/ and pfs2:/FMOD2/, so they are copied there:
+# (folder, file extensions). FMOD/'s two kernel images stay behind.
+FMOD_DIRS = (("FMOD", (".IRX", ".ICO", ".SYS")), ("FMOD2", (".IRX",)))
 
 # The browser boot block: launch the loader from the partition (the disc's
 # SYSTEM.CNF says cdrom0:\SCPS_150.49;1, which makes the browser ask for the
@@ -206,6 +215,21 @@ def copy_tree(disc, tree):
     return n
 
 
+def copy_fmod(root, tree):
+    """The disc's FMOD/ and FMOD2/ modules, for the disc-less redirect. Returns the count."""
+    n = 0
+    for folder, exts in FMOD_DIRS:
+        src = _path(root, folder)
+        names = sorted(os.listdir(src)) if os.path.isdir(src) else []
+        names = [x for x in names if x.upper().endswith(exts)]
+        if not names:
+            raise SystemExit("the disc has no %s/ modules; is it a complete dump?" % folder)
+        for name in names:
+            _write(_path(tree, "%s/%s" % (folder, name.upper())), _read(root, "%s/%s" % (folder, name)))
+            n += 1
+    return n
+
+
 # ---- the sealed overlays ---------------------------------------------------
 
 def seal(root, tree, hddid, four):
@@ -316,7 +340,7 @@ def build_ioprp(root, aux, work, m):
 
 def fill_loader(root, kelf_path, ioprp_img, hddid, out_path):
     """The signed loader filled for this disc and drive; returns the patched boot ELF."""
-    from . import bootpatch, loader
+    from . import atadgp, bootpatch, loader
     if not os.path.isfile(kelf_path):
         raise SystemExit("the Minna no Golf Online loader is missing (%s)" % kelf_path)
     with open(kelf_path, "rb") as f:
@@ -325,6 +349,9 @@ def fill_loader(root, kelf_path, ioprp_img, hddid, out_path):
         raise SystemExit("%s is already filled; it must be the unfilled build" % kelf_path)
     elf = bootpatch.boot_elf(_read(root, BOOT_FILE))
     drivers = dict((n, _read(root, "FMOD/%s.IRX" % n)) for n in loader.DRIVERS)
+    # A console's drive is often not a genuine Sony one, which the disc's
+    # atad refuses inside its own probe; the gate-skipped atad serves the ID.
+    drivers["ATAD"] = atadgp.patch(drivers["ATAD"], hddid)
     _write(out_path, loader.fill(blob, elf, ioprp_img, hddid, drivers))
     return elf
 
@@ -390,6 +417,7 @@ def stage(args):
 
         progress("copying the game's files")
         copied = copy_tree(args.disc, tree)
+        copied += copy_fmod(root, tree)
         sealed = seal(root, tree, hddid, four)
         _write(_path(tree, "INSTALL.VER"), struct.pack("<I", 4))
         _write(_path(tree, "DNAS.BIN"), bootpatch.dnas_overlay(dnas_plain))

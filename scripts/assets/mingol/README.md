@@ -9,7 +9,7 @@ discs at install time by `../../helper/mingol/stage` (see
 
 | path | what | how it was made |
 |---|---|---|
-| `polbbnexec-mingol.kelf` | the signed, unfilled disc-less loader. Our polbbnexec built with DRIVERS=3: it reboots the IOP from its IOPRP slot, loads the shim that serves the drive's HDD ID, leaves the four IOP drivers from its driver slots resident, then enters the boot ELF. Slots: boot ELF 1 MiB, IOPRP 512 KiB, HDD ID, argv0, and four driver slots (`POLDRIVERSLOTS1`). Only the first 32 content bytes are signed; every slot lies after them, so the installer fills it per drive without keys. | HippaulInstaller `playonline/games/mingol/loader-src/build.sh` (ps2dev/ps2dev, DRIVERS=3, SPOOF_ILINK=1 with the default console ID, stock atad), output `assets/games/mingol-loader.elf` (sha1 f76744bb), then signed with `playonline.lib.polkelf --encrypt` using a Nobunaga `dnasload.elf` as header template (region mask 0x1, Japan). |
+| `polbbnexec-mingol.kelf` | the signed, unfilled disc-less loader. Our polbbnexec built with DRIVERS=3: it reboots the IOP from its IOPRP slot, loads the shim that serves the drive's HDD ID and sends the game's `cdrom0:\FMOD\` / `cdrom0:\FMOD2\` module loads to `pfs2:/FMOD/` / `pfs2:/FMOD2/` (so it runs with no disc), leaves the four IOP drivers from its driver slots resident, then enters the boot ELF. Slots: boot ELF 1 MiB, IOPRP 512 KiB, HDD ID, argv0, and four driver slots (`POLDRIVERSLOTS1`). Only the first 32 content bytes are signed; every slot lies after them, so the installer fills it per drive without keys. | HippaulInstaller `playonline/games/mingol/loader-src/build.sh` (ps2dev/ps2dev, DRIVERS=3, SPOOF_ILINK=1 with the default console ID, FMOD redirect), output `assets/games/mingol-loader.elf` (sha1 d54be84e), then signed with `playonline.lib.polkelf --encrypt` using a Nobunaga `dnasload.elf` as header template (region mask 0x1, Japan). |
 
 ## How the installer fills it
 
@@ -20,11 +20,15 @@ discs at install time by `../../helper/mingol/stage` (see
 - IOPRP: the disc's `FMOD/DNAS270.IMG` with SYSMEM inserted from the Nobunaga
   no Yabou Online Hiryuu no Shou disc (SLPM-65783; `ioprp.py`, proven sha1
   356c7c48)
-- driver slots: the disc's `FMOD/DEV9.IRX`, `ATAD.IRX`, `HDD.IRX`, `PFS.IRX`
+- driver slots: the disc's `FMOD/DEV9.IRX`, `ATAD.IRX`, `HDD.IRX`, `PFS.IRX`;
+  ATAD with its genuine-drive check skipped and the drive's HDD ID in its
+  identity block (`helper/mingol/stage/atadgp.py`, guarded), so a non-Sony drive works
 - HDD ID: the drive's `games/POL/playonline.hddid`
 - argv0: `cdrom0:\SCPS_150.49;1`
 
-The filled file goes into the partition as `pfs:/dnasload.elf`.
+The filled file goes into the partition as `pfs:/dnasload.elf`. The disc's
+`FMOD/*.IRX|ICO|SYS` and `FMOD2/*.IRX` go into the partition's `FMOD/` and
+`FMOD2/` for the loader's redirect.
 
 ## Not shipped here (the player supplies)
 

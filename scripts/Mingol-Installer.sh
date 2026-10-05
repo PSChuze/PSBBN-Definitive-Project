@@ -25,10 +25,13 @@
 #     result checked against the proven SHA-1s);
 #   - the IOP reboot image is the disc's 2.70 kernel plus SYSMEM, which only
 #     the Nobunaga no Yabou Online Hiryuu no Shou disc (SLPM-65783) carries;
+#   - the disc's FMOD/ and FMOD2/ IOP modules go into the partition, where the
+#     loader's shim sends the game's cdrom0 module loads (no disc needed);
 #   - the attribute area is built from the disc's own icon;
 #   - the signed loader scripts/assets/mingol/polbbnexec-mingol.kelf is filled
 #     with the patched boot ELF, the reboot image, the disc's DEV9/ATAD/HDD/PFS
-#     IRXs and the drive's HDD ID, and goes in as pfs:/dnasload.elf.
+#     IRXs (ATAD with its genuine-drive check skipped) and the drive's HDD ID,
+#     and goes in as pfs:/dnasload.elf.
 #
 # The user supplies:
 #   games/MGO/         the SCPS-15049 .iso (here or in disc/), or the extracted
@@ -166,6 +169,23 @@ mgosudo() {
     sudo -E env PYTHONPATH="${HELPER_DIR}" "${MGO_PY}" "$@"
 }
 
+# The DNAS overlay reads the access_flag25 record at __net+0x202000 before it
+# decrypts a container and fails with -101 when it is not there (proven under
+# PCSX2, 2026-10-05). Which console the record names does not matter (the
+# patched DNAS.BIN skips the console check), so Nobunaga's tool writes the
+# same record Nobunaga and Bomberman use: only that record, after backing up
+# what is there, leaving the shared PlayOnline record at +0x201800 untouched.
+# Run on every pass, so a drive installed before this gets it too.
+mgo_accessflag() {
+    local backup="${MGO_DIR}/backups/$(basename "${DEVICE}")"
+    mkdir -p "${backup}"
+    if mgosudo -m nobunaga.accessflag "${DEVICE}" --write --save "${backup}" >> "${LOG_FILE}" 2>&1; then
+        echo "  DNAS boot record in place (__net+0x202000); the PlayOnline record is untouched."
+    else
+        echo "  [!] could not write the DNAS boot record; see logs/mingol-installer.log"
+    fi
+}
+
 on_exit() {
     [[ -n "${SUDO_KEEPALIVE}" ]] && kill "${SUDO_KEEPALIVE}" 2>/dev/null
     return 0
@@ -264,6 +284,8 @@ echo
 if sudo "${HDL_DUMP}" toc "${DEVICE}" 2>>"${LOG_FILE}" | grep -q -- "PP.SCPS-15049..APPLICATION"; then
     center_text "${UI_TEXT[MGO_INSTALLED]}"
     echo
+    mgo_accessflag
+    echo
     read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
     echo
     exit 0
@@ -314,6 +336,7 @@ mgosudo -m mingol.stage.write "${DEVICE}" \
     --pfsshell "${PFS_SHELL}" \
     --write 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[MGO_ERROR_INSTALL]}"
+mgo_accessflag
 
 echo
 center_text "${UI_TEXT[MGO_DONE]}"
