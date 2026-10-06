@@ -9,7 +9,7 @@ discs at install time by `../../helper/mingol/stage` (see
 
 | path | what | how it was made |
 |---|---|---|
-| `polbbnexec-mingol.kelf` | the signed, unfilled disc-less loader. Our polbbnexec built with DRIVERS=3: it reboots the IOP from its IOPRP slot, loads the shim that serves the drive's HDD ID and sends the game's `cdrom0:\FMOD\` / `cdrom0:\FMOD2\` module loads to `pfs2:/FMOD/` / `pfs2:/FMOD2/` (so it runs with no disc), leaves the four IOP drivers from its driver slots resident, then enters the boot ELF. Slots: boot ELF 1 MiB, IOPRP 512 KiB, HDD ID, argv0, and four driver slots (`POLDRIVERSLOTS1`). Only the first 32 content bytes are signed; every slot lies after them, so the installer fills it per drive without keys. | HippaulInstaller `playonline/games/mingol/loader-src/build.sh` (ps2dev/ps2dev, DRIVERS=3, SPOOF_ILINK=1 with the default console ID, FMOD redirect), output `assets/games/mingol-loader.elf` (sha1 d54be84e), then signed with `playonline.lib.polkelf --encrypt` using a Nobunaga `dnasload.elf` as header template (region mask 0x1, Japan). |
+| `polbbnexec-mingol.kelf` | the signed, unfilled disc-less loader. Our polbbnexec built with DRIVERS=3: it reboots the IOP from its IOPRP slot, loads the shim that serves the drive's HDD ID and sends the game's `cdrom0:\FMOD\` / `cdrom0:\FMOD2\` module loads to `pfs2:/FMOD/` / `pfs2:/FMOD2/` (so it runs with no disc), adds the console's own SYSMEM, read from its BIOS ROM, to the IOP reboot image before the reboot, leaves the four IOP drivers from its driver slots resident, then enters the boot ELF. Slots: boot ELF 1 MiB, IOPRP 512 KiB, HDD ID, argv0, and four driver slots (`POLDRIVERSLOTS1`). Only the first 32 content bytes are signed; every slot lies after them, so the installer fills it per drive without keys. | HippaulInstaller `playonline/games/mingol/loader-src/build.sh` (ps2dev/ps2dev, DRIVERS=3, SPOOF_ILINK=1 with the default console ID, FMOD redirect), output `assets/games/mingol-loader.elf` (sha1 b7597776), then signed with `playonline.lib.polkelf --encrypt` using a Nobunaga `dnasload.elf` as header template (region mask 0x1, Japan). |
 
 ## How the installer fills it
 
@@ -17,9 +17,10 @@ discs at install time by `../../helper/mingol/stage` (see
 
 - boot ELF: the disc's `SCPS_150.49` with the disc-less edits (`bootpatch.py`;
   guarded, checked against the proven SHA-1 bbf02fd5)
-- IOPRP: the disc's `FMOD/DNAS270.IMG` with SYSMEM inserted from the Nobunaga
-  no Yabou Online Hiryuu no Shou disc (SLPM-65783; `ioprp.py`, proven sha1
-  356c7c48)
+- IOPRP: the disc's `FMOD/DNAS270.IMG` as it is (`ioprp.py`). It has no
+  SYSMEM; the loader copies the console's own out of its BIOS ROM
+  (0xBFC00000) and inserts it as the first module at boot, so no second
+  disc is needed
 - driver slots: the disc's `FMOD/DEV9.IRX`, `ATAD.IRX`, `HDD.IRX`, `PFS.IRX`;
   ATAD with its genuine-drive check skipped and the drive's HDD ID in its
   identity block (`helper/mingol/stage/atadgp.py`, guarded), so a non-Sony drive works
@@ -33,8 +34,6 @@ The filled file goes into the partition as `pfs:/dnasload.elf`. The disc's
 ## Not shipped here (the player supplies)
 
 - The SCPS-15049 disc image (or its extracted tree) under `games/MGO/`.
-- The SLPM-65783 disc image (or its extracted tree) under `games/NOBU/`, for
-  SYSMEM. Minna boots only with it.
 - The drive ID at `games/POL/playonline.hddid`, minted by the PlayOnline step.
 
 ## Provenance

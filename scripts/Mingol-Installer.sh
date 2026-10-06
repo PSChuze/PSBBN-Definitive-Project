@@ -23,8 +23,8 @@
 #     PlayOnline shares that record);
 #   - the disc's boot ELF and DNAS.BIN get the disc-less edits (guarded, the
 #     result checked against the proven SHA-1s);
-#   - the IOP reboot image is the disc's 2.70 kernel plus SYSMEM, which only
-#     the Nobunaga no Yabou Online Hiryuu no Shou disc (SLPM-65783) carries;
+#   - the IOP reboot image is the disc's 2.70 kernel (FMOD/DNAS270.IMG); the
+#     loader adds the console's own SYSMEM, out of its BIOS ROM, at boot;
 #   - the disc's FMOD/ and FMOD2/ IOP modules go into the partition, where the
 #     loader's shim sends the game's cdrom0 module loads (no disc needed);
 #   - the attribute area is built from the disc's own icon;
@@ -36,8 +36,6 @@
 # The user supplies:
 #   games/MGO/         the SCPS-15049 .iso (here or in disc/), or the extracted
 #                      tree at disc/ (SYSTEM.CNF, ZZBIN/, ZZENC/, FMOD/, ...)
-#   games/NOBU/        the SLPM-65783 .iso (here, in disc/, or in games/MGO/),
-#                      or its extracted tree at disc/; Minna boots only with it
 #   games/POL/playonline.hddid  minted by the PlayOnline step
 
 [[ -t 0 && -t 1 ]] || exit 1
@@ -79,8 +77,6 @@ DEVICE="${2:-}"
 MGO_DIR="${GAMES_PATH}/MGO"
 [[ -n "${path_arg}" ]] && MGO_DIR="${path_arg}/MGO"
 [[ -n "${MGO_DIR_OVERRIDE}" ]] && MGO_DIR="${MGO_DIR_OVERRIDE}"
-# The Nobunaga disc (SLPM-65783) the IOP reboot image takes SYSMEM from.
-NOBU_DIR="${NOBU_DIR_OVERRIDE:-$(dirname "${MGO_DIR}")/NOBU}"
 # The PlayOnline step's drive ID. Read, never written; the sealed containers and
 # the loader's atadpatch shim key to this exact 512-byte block.
 POL_HDDID_FILE="${POL_HDDID:-$(dirname "${MGO_DIR}")/POL/playonline.hddid}"
@@ -106,9 +102,6 @@ fi
 : "${UI_TEXT[MGO_NO_DISC]:=The disc tree of the game was not found in}"
 : "${UI_TEXT[MGO_DISC_HINT]:=Put the SCPS-15049 disc image (.iso) in this folder, or the extracted disc tree in disc/ (SYSTEM.CNF, ZZBIN/, FMOD/, res/).}"
 : "${UI_TEXT[MGO_EXTRACT_FOUND]:=Found the disc image:}"
-: "${UI_TEXT[MGO_AUX_FOUND]:=Found the Nobunaga no Yabou Online Hiryuu no Shou disc (needed for one IOP module):}"
-: "${UI_TEXT[MGO_AUX_MISSING]:=The Nobunaga no Yabou Online Hiryuu no Shou disc (SLPM-65783) was not found. Minna no Golf Online boots only with an IOP module (SYSMEM) taken from that disc.}"
-: "${UI_TEXT[MGO_AUX_HINT]:=Put its .iso (or the extracted tree in disc/) in}"
 : "${UI_TEXT[MGO_ERROR_LOADER]:=The Minna no Golf Online loader is missing from scripts/assets/mingol/. Update the toolkit and try again.}"
 : "${UI_TEXT[MGO_HDDID_FOUND]:=The PlayOnline drive ID was found. Minna no Golf Online will share it:}"
 : "${UI_TEXT[MGO_HDDID_FAIL]:=No PlayOnline drive ID was found. Run the PlayOnline step first: it mints the ID Minna needs.}"
@@ -250,21 +243,6 @@ else
 fi
 echo "Disc: ${MGO_SRC}" >> "${LOG_FILE}"
 
-# The Nobunaga disc, for SYSMEM: games/NOBU/ (image or disc/ tree), then
-# games/MGO/. MGO_AUX_DISC names one explicitly.
-MGO_AUX="${MGO_AUX_DISC:-}"
-if [[ -z "${MGO_AUX}" ]]; then
-    MGO_AUX=$(mgopy -c 'import sys
-from mingol.stage import find_aux_disc
-print(find_aux_disc(sys.argv[1:]) or "")' "${NOBU_DIR}" "${MGO_DIR}" 2>>"${LOG_FILE}")
-fi
-if [[ -z "${MGO_AUX}" || ! -e "${MGO_AUX}" ]]; then
-    echo "[X] Error: no SLPM-65783 disc in ${NOBU_DIR} or ${MGO_DIR}" >> "${LOG_FILE}"
-    error_msg "$(printf '%s\n%s %s' "${UI_TEXT[MGO_AUX_MISSING]}" "${UI_TEXT[MGO_AUX_HINT]}" "${NOBU_DIR}")"
-fi
-echo "  ${UI_TEXT[MGO_AUX_FOUND]} $(basename "${MGO_AUX}")"
-echo "Aux disc: ${MGO_AUX}" >> "${LOG_FILE}"
-
 # ---- the signed loader (ship-side) --------------------------------------
 LOADER_KELF="${MINGOL_ASSETS}/polbbnexec-mingol.kelf"
 if [[ ! -f "${LOADER_KELF}" ]]; then
@@ -311,9 +289,9 @@ echo
 # ---- stage, then write --------------------------------------------------
 # 1. mingol.stage reads the four from this drive's __net record (the record
 #    PlayOnline shares; read, never written), seals the nine containers to it
-#    and the drive's HDD ID, patches the boot ELF and DNAS.BIN, builds the
-#    IOP reboot image with the Nobunaga disc's SYSMEM, builds the attribute
-#    area and fills the signed loader. Under sudo: it reads the drive.
+#    and the drive's HDD ID, patches the boot ELF and DNAS.BIN, takes the
+#    disc's IOP reboot image, builds the attribute area and fills the signed
+#    loader. Under sudo: it reads the drive.
 # 2. mingol.stage.write checks the four again, has pfsshell make the 1536 MiB
 #    partition and put the tree, sets the MM21 APA passwords, clears the APA
 #    journal and writes the attribute area at +0x1000.
@@ -337,9 +315,8 @@ mgosudo -m mingol.stage \
     --out "${STAGE_DIR}" \
     --kelf "${LOADER_KELF}" \
     --device "${DEVICE}" \
-    --aux-disc "${MGO_AUX}" \
     "${TR_ARGS[@]}" \
-    --require-aux 2>&1 | tee -a "${LOG_FILE}" | grep -v '^progress: sealing' | sed 's/^/  /'
+    2>&1 | tee -a "${LOG_FILE}" | grep -v '^progress: sealing' | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[MGO_ERROR_INSTALL]}"
 
 mgosudo -m mingol.stage.write "${DEVICE}" \

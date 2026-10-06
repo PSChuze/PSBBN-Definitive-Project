@@ -26,18 +26,17 @@ and its DNAS library check the IOP's loadfile version ("2700") and refuse
 or retry on any other.
 
 DNAS270.IMG holds the 2.70 kernel modules but no SYSMEM; on a disc boot the
-ROM's UDNL supplies that. A buffer reboot needs the image to carry one. The
-proven image (work/IOPRP-dnas270-sysmem.IMG, sha1 356c7c48) is DNAS270.IMG
-with SYSMEM, data and EXTINFO, inserted as the first module; that SYSMEM
-came from the IOP reboot image inside Nobunaga's AUTH/BIN/SLPM_651.97
-(section 1). Minna's own disc carries no SYSMEM anywhere, so:
-
-  with the Nobunaga disc (--aux-disc), its SYSMEM is inserted and the image
-  is the proven one, byte for byte;
-
-  without it, DNAS270.IMG is used as it is. That relies on the reboot taking
-  SYSMEM from the ROM, which has not been tried; the stage step says so in
-  the manifest's notes.
+ROM's UDNL supplies that. The loader fills that gap itself: at boot it reads
+the console's BIOS ROM (kseg1 0xBFC00000), finds SYSMEM in the ROM's ROMDIR
+and inserts it, data and EXTINFO, as the image's first module before the
+reboot (romsysmem.h, in HippaulInstaller's playonline/games/mingol/
+loader-src, the source of polbbnexec-mingol.kelf). SYSMEM is not
+version-checked, so the console's own works; the same layout with
+Nobunaga's SYSMEM (sha1 356c7c48, work/IOPRP-dnas270-sysmem.IMG) was the
+first proven image, and with PCSX2's SCPH-50000 BIOS SYSMEM the game
+reaches its title screen too (2026-10-06). The installer therefore fills
+the slot with the disc's DNAS270.IMG as it is, and no second disc is
+needed.
 
 ROMDIR format (ps2sdk romdir.h): 16-byte entries {name[10], u16 extinfo
 size, u32 size}, RESET/ROMDIR/EXTINFO first, a zero entry last; then the
@@ -49,8 +48,8 @@ import struct
 
 HEAD = ("RESET", "ROMDIR", "EXTINFO")
 
-# The proven reboot image (DNAS270.IMG + Nobunaga's SYSMEM), for the check.
-PROVEN_SHA1 = "356c7c48dfb29452dca8dd1bf634eac9fb28aa81"
+# The disc's FMOD/DNAS270.IMG the boot was proven with (251,729 bytes).
+DNAS270_SHA1 = "962fef33c09e4458a8357634898841a4e0434857"
 
 
 class RomdirError(ValueError):
@@ -118,6 +117,10 @@ def module(blob, name):
         if e["name"] == name:
             return e["data"], e["extinfo"]
     raise RomdirError("the image has no %s module" % name)
+
+
+def has_module(blob, name):
+    return any(e["name"] == name for e in parse(blob))
 
 
 def with_sysmem(image, donor):

@@ -20,8 +20,7 @@
 
     python -m mingol.stage --disc IMAGE_OR_TREE --hddid FILE --out DIR
         --kelf scripts/assets/mingol/polbbnexec-mingol.kelf
-        (--four HEX8 | --device DEV) [--aux-disc NOBUNAGA_DISC]
-        [--aux-search DIR ...] [--require-aux]
+        (--four HEX8 | --device DEV)
         [--translate [--translation-dir DIR] | --translation-pack ZIP]
 
 --translate downloads the latest English translation pack from openlobby.fyi
@@ -53,7 +52,9 @@ from the player's disc.
   dnasload.elf
              the signed loader KELF the toolkit ships (DRIVERS=3, driver
              slots) filled for this disc and drive: the patched SCPS_150.49,
-             the 2.70 IOP kernel (ioprp), the disc's DEV9/ATAD/HDD/PFS IRXs
+             the 2.70 IOP kernel (the disc's DNAS270.IMG, see ioprp; the
+             loader adds the console's own SYSMEM from its BIOS ROM at boot),
+             the disc's DEV9/ATAD/HDD/PFS IRXs
              (ATAD with its genuine-drive check skipped, atadgp)
              and the drive's HDD ID; argv[0] cdrom0:\\SCPS_150.49;1. Also
              copied into tree/.
@@ -67,8 +68,9 @@ written here: `--device` decodes it and the containers are sealed with its
 four (`--four` passes one explicitly, for an offline stage).
 
 The one module the disc lacks (SYSMEM, for the IOP kernel image) comes from
-the Nobunaga no Yabou Online Hiryuu no Shou disc (SLPM-65783), found with
---aux-disc, in the --aux-search folders, or beside the Minna disc.
+the console's own BIOS ROM, which the loader reads at boot (ioprp), so only
+the Minna disc is needed. --aux-disc, --aux-search and --require-aux are
+still accepted, for older scripts, and ignored.
 """
 import argparse
 import hashlib
@@ -78,7 +80,7 @@ import shutil
 import struct
 import tempfile
 
-from playonline import attrarea, discs as discmod
+from playonline import attrarea
 from playonline.lib import polhdd
 
 from . import common
@@ -153,10 +155,6 @@ ICON_LOOK = (u"bgcola = 64\r\n"
 ICON_OFFSET = 0x800
 
 # The Nobunaga disc that can supply SYSMEM.
-AUX_PRODUCT = "SLPM-65783"
-AUX_BOOT = "SLPM_657.83"
-AUX_CONTAINER = "AUTH/BIN/SLPM_651.97"
-SYSMEM_SHA1 = "7fafca0f275bbb53d20e1e388313d2e46a427feb"
 
 
 def progress(text):
@@ -289,89 +287,18 @@ def seal(root, tree, hddid, four, english=None):
 
 # ---- the IOP reboot image --------------------------------------------------
 
-def _is_aux(path):
-    """True if `path` (an image or an extracted tree) is the Hiryuu no Shou disc."""
-    if os.path.isdir(path):
-        try:
-            boot2 = _boot2(_read(path, "SYSTEM.CNF"))
-        except (IOError, OSError):
-            return False
-        return AUX_BOOT in boot2.upper() and os.path.isfile(_path(path, AUX_CONTAINER))
-    try:
-        code, _boot = discmod.product_code(discmod.Image(path))
-    except (discmod.NotADisc, IOError, OSError, ValueError):
-        return False
-    return code == AUX_PRODUCT
-
-
-def find_aux_disc(folders):
-    """The Nobunaga disc in one of `folders` (an image, or a disc/ tree), or None."""
-    for folder in folders:
-        if not folder or not os.path.isdir(folder):
-            continue
-        if _is_aux(folder):
-            return folder
-        tree = os.path.join(folder, "disc")
-        if os.path.isdir(tree) and _is_aux(tree):
-            return tree
-        for sub in (folder, tree):
-            if not os.path.isdir(sub):
-                continue
-            try:
-                found = discmod.images_in(sub)
-            except OSError:
-                continue
-            for path in found:
-                if _is_aux(path):
-                    return path
-    return None
-
-
-def ioprp_from_aux(aux, work):
-    """The IOP reboot image inside the Nobunaga disc's SLPM_651.97 (it has SYSMEM)."""
-    from . import disc_dec
-    if os.path.isdir(aux):
-        root = aux
-    else:
-        root = os.path.join(work, "aux")
-        common.extract(aux, root, only=("SYSTEM.CNF", AUX_CONTAINER))
-    try:
-        boot2 = _boot2(_read(root, "SYSTEM.CNF"))
-        enc = _read(root, AUX_CONTAINER)
-    except (IOError, OSError):
-        raise SystemExit("%s is not the Nobunaga no Yabou Online Hiryuu no Shou disc "
-                         "(no %s)" % (aux, AUX_CONTAINER))
-    if AUX_BOOT not in boot2.upper():
-        raise SystemExit("%s is not the Hiryuu no Shou disc (BOOT2 %r)" % (aux, boot2))
-    for _i, cur, size, _v1, _v2, _d9 in disc_dec.sections(enc):
-        mod = disc_dec._decrypt_section(enc, cur, size)
-        if mod.startswith(b"RESET\0"):
-            return mod
-    raise SystemExit("%s holds no IOP reboot image" % AUX_CONTAINER)
-
-
-def build_ioprp(root, aux, work, m):
-    """DNAS270.IMG, with SYSMEM from the Nobunaga disc when there is one."""
+def build_ioprp(root, m):
+    """The disc's DNAS270.IMG, as it is: the loader adds SYSMEM at boot."""
     from . import ioprp
     image = _read(root, "FMOD/DNAS270.IMG")
     ioprp.check_roundtrip(image)
-    if not aux:
-        m.note("no Nobunaga disc (SLPM-65783) was found, so the loader reboots the "
-               "IOP with the disc's DNAS270.IMG, which has no SYSMEM; the proven "
-               "boot used DNAS270.IMG + SYSMEM, and a reboot image without SYSMEM "
-               "hung the IOP when it was tried. Minna boots only with that disc.")
-        return image, "DNAS270.IMG without SYSMEM"
-    progress("reading SYSMEM off the Nobunaga disc")
-    donor = ioprp_from_aux(aux, work)
-    data, _ext = ioprp.module(donor, "SYSMEM")
-    if ioprp.sha1(data) != SYSMEM_SHA1:
-        m.note("the Nobunaga disc's SYSMEM is not the one the proven boot used "
-               "(sha1 %s)" % ioprp.sha1(data))
-    out = ioprp.with_sysmem(image, donor)
-    if ioprp.sha1(out) != ioprp.PROVEN_SHA1:
-        m.note("the IOP reboot image (sha1 %s) differs from the proven one"
-               % ioprp.sha1(out))
-    return out, "DNAS270.IMG + SYSMEM from the Nobunaga disc"
+    if ioprp.has_module(image, "SYSMEM"):
+        raise SystemExit("this disc's FMOD/DNAS270.IMG already has a SYSMEM module; "
+                         "it is not the pressing the loader was made for")
+    if ioprp.sha1(image) != ioprp.DNAS270_SHA1:
+        m.note("this pressing's FMOD/DNAS270.IMG (sha1 %s) is not the one the boot "
+               "was proven with" % ioprp.sha1(image))
+    return image, "DNAS270.IMG + the console's BIOS SYSMEM (added by the loader)"
 
 
 # ---- the loader and the attribute area ------------------------------------
@@ -440,18 +367,6 @@ def stage(args):
     else:
         raise SystemExit("give --four or --device (to read the drive's __net record)")
 
-    aux = args.aux_disc
-    if aux and not _is_aux(aux):
-        raise SystemExit("%s is not the Nobunaga no Yabou Online Hiryuu no Shou disc (%s)"
-                         % (aux, AUX_PRODUCT))
-    if not aux:
-        aux = find_aux_disc(list(args.aux_search or ())
-                            + [os.path.dirname(os.path.abspath(args.disc))])
-    if not aux and args.require_aux:
-        raise SystemExit("no Nobunaga no Yabou Online Hiryuu no Shou disc (%s) was found; "
-                         "Minna no Golf Online boots only with the IOP module it "
-                         "supplies" % AUX_PRODUCT)
-
     out = os.path.abspath(args.out)
     if os.path.isdir(out):
         shutil.rmtree(out)
@@ -501,7 +416,7 @@ def stage(args):
         _write(_path(tree, "DNAS.BIN"), bootpatch.dnas_overlay(dnas_plain))
 
         progress("filling the loader")
-        ioprp_img, ioprp_what = build_ioprp(root, aux, work, m)
+        ioprp_img, ioprp_what = build_ioprp(root, m)
         loader_out = os.path.join(out, LOADER_NAME)
         elf = fill_loader(root, args.kelf, ioprp_img, hddid, loader_out,
                           plain_overlays=plain)
@@ -518,12 +433,12 @@ def stage(args):
     if len(pwd) != 8:
         raise SystemExit("the APA password came out %d bytes, not 8" % len(pwd))
     m.note("IOP reboot image: %s (sha1 %s)" % (ioprp_what, hashlib.sha1(ioprp_img).hexdigest()))
-    if aux:
-        m.note("second disc: %s" % aux)
+    if args.aux_disc:
+        m.note("--aux-disc %s: not needed any more, ignored" % args.aux_disc)
     with open(os.path.join(out, "game.json"), "w") as f:
         json.dump({"key": KEY, "partition": PARTITION, "need_mib": PART_MIB,
                    "rpwd": pwd.hex(), "fpwd": pwd.hex(), "four": four.hex(),
-                   "has_sysmem": bool(aux), "notes": m.lines}, f, indent=1, sort_keys=True)
+                   "sysmem": "the console BIOS ROM, by the loader", "notes": m.lines}, f, indent=1, sort_keys=True)
     print("staged %s: %d containers sealed, %d files copied, boot ELF %s, %s"
           % (PARTITION, sealed, copied, hashlib.sha1(elf).hexdigest()[:8], ioprp_what))
     return 0
@@ -538,14 +453,11 @@ def main(argv=None):
                     "(scripts/assets/mingol/polbbnexec-mingol.kelf)")
     ap.add_argument("--four", help="the __net four to seal with, 8 hex digits")
     ap.add_argument("--device", help="read the four from this drive's __net record")
-    ap.add_argument("--aux-disc", help="the Nobunaga no Yabou Online Hiryuu no Shou "
-                    "disc (SLPM-65783, an image or an extracted tree), for the SYSMEM "
-                    "module the IOP reboot image needs")
-    ap.add_argument("--aux-search", action="append", metavar="DIR",
-                    help="a folder to look for that disc in (repeatable); the "
-                    "Minna disc's own folder is always searched")
-    ap.add_argument("--require-aux", action="store_true",
-                    help="refuse to stage without the Nobunaga disc")
+    # The Nobunaga disc used to supply SYSMEM; the loader takes the console's
+    # own now. Accepted, for older scripts, and ignored.
+    ap.add_argument("--aux-disc", help=argparse.SUPPRESS)
+    ap.add_argument("--aux-search", action="append", help=argparse.SUPPRESS)
+    ap.add_argument("--require-aux", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--translate", action="store_true",
                     help="install the English translation (downloaded from "
                     "openlobby.fyi); its overlays load as plain files")
