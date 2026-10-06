@@ -260,31 +260,83 @@ echo "HDD ID: ${POL_HDDID_FILE}" >> "${LOG_FILE}"
 echo
 
 # ---- installed check ----------------------------------------------------
+# Already on the drive: offer an in-place update. The game is staged again
+# exactly as a new install stages it (this toolkit's fixes, loader and
+# translation) and mingol.stage.write --update rewrites only the files that
+# changed or are new; every file the game made for itself (saves, settings)
+# stays, as do the partition and its passwords.
+: "${UI_TEXT[MGO_UPDATE_ASK]:=Update it to the version this toolkit installs? Your saves and settings are kept.}"
+: "${UI_TEXT[MGO_UPDATE_OPT1]:=Update (keep saves)}"
+: "${UI_TEXT[MGO_UPDATE_OPT2]:=Exit}"
+: "${UI_TEXT[MGO_UPDATE_LANG]:=Language of the game after the update:}"
+: "${UI_TEXT[MGO_UPDATE_KEEP]:=Keep it as installed}"
+: "${UI_TEXT[MGO_UPDATE_EN]:=English (the translation is downloaded from openlobby.fyi)}"
+: "${UI_TEXT[MGO_UPDATE_JA]:=Japanese (as on the disc)}"
+: "${UI_TEXT[MGO_UPDATE_CHOICE]:=Choose:}"
+: "${UI_TEXT[MGO_UPDATE_OLD]:=This copy was installed by the older kit-based installer and cannot be updated in place. Uninstall it, then install it again.}"
+: "${UI_TEXT[MGO_UPDATE_DOING]:=Updating Minna no Golf Online (this can take several minutes)...}"
+: "${UI_TEXT[MGO_UPDATE_DONE]:=Minna no Golf Online was updated. Your saves were kept.}"
+MGO_UPDATE=""
 if sudo "${HDL_DUMP}" toc "${DEVICE}" 2>>"${LOG_FILE}" | grep -q -- "PP.SCPS-15049..APPLICATION"; then
     center_text "${UI_TEXT[MGO_INSTALLED]}"
     echo
     mgo_accessflag
     echo
-    read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
+    mgo_state=$(mgosudo -m mingol.stage.write "${DEVICE}" --probe 2>>"${LOG_FILE}")
+    echo "Installed: ${mgo_state:-unreadable}" >> "${LOG_FILE}"
+    if [[ "${mgo_state}" == "old" ]]; then
+        center_text "${UI_TEXT[MGO_UPDATE_OLD]}"
+        echo
+        read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
+        echo
+        exit 0
+    fi
+    if [[ "${mgo_state}" != "english" && "${mgo_state}" != "japanese" ]]; then
+        error_msg "${UI_TEXT[MGO_ERROR_INSTALL]}"
+    fi
+    center_text "${UI_TEXT[MGO_UPDATE_ASK]}"
     echo
-    exit 0
+    echo "  1) ${UI_TEXT[MGO_UPDATE_OPT1]}"
+    echo "  2) ${UI_TEXT[MGO_UPDATE_OPT2]}"
+    echo
+    printf "%s " "${UI_TEXT[MGO_UPDATE_CHOICE]}"
+    read -r answer </dev/tty
+    [[ "$answer" == "1" ]] || exit 0
+    echo
+    echo "${UI_TEXT[MGO_UPDATE_LANG]}"
+    echo "  1) ${UI_TEXT[MGO_UPDATE_KEEP]} (${mgo_state})"
+    echo "  2) ${UI_TEXT[MGO_UPDATE_EN]}"
+    echo "  3) ${UI_TEXT[MGO_UPDATE_JA]}"
+    echo
+    printf "%s " "${UI_TEXT[MGO_UPDATE_CHOICE]}"
+    read -r answer </dev/tty
+    case "$answer" in
+        1|"") mgo_lang="${mgo_state}" ;;
+        2) mgo_lang="english" ;;
+        3) mgo_lang="japanese" ;;
+        *) exit 0 ;;
+    esac
+    MGO_UPDATE=1
+    echo
 fi
 
 # ---- the plan -----------------------------------------------------------
-center_text "${UI_TEXT[MGO_PLAN]}"
-echo "  - ${UI_TEXT[MGO_PLAN_PART]}"
-echo "  - ${UI_TEXT[MGO_PLAN_SEAL]}"
-echo "  - ${UI_TEXT[MGO_PLAN_BOOT]}"
-echo
-center_text "${UI_TEXT[NOBU_PLAN_UNTOUCHED]}"
-echo
-printf "%s " "${UI_TEXT[NOBU_CONFIRM]}"
-read -r answer </dev/tty
-case "$answer" in
-    [Yy]*) ;;
-    *) echo; echo "${UI_TEXT[NOBU_ABORTED]}"; sleep 2; exit 0 ;;
-esac
-echo
+if [[ -z "${MGO_UPDATE}" ]]; then
+    center_text "${UI_TEXT[MGO_PLAN]}"
+    echo "  - ${UI_TEXT[MGO_PLAN_PART]}"
+    echo "  - ${UI_TEXT[MGO_PLAN_SEAL]}"
+    echo "  - ${UI_TEXT[MGO_PLAN_BOOT]}"
+    echo
+    center_text "${UI_TEXT[NOBU_PLAN_UNTOUCHED]}"
+    echo
+    printf "%s " "${UI_TEXT[NOBU_CONFIRM]}"
+    read -r answer </dev/tty
+    case "$answer" in
+        [Yy]*) ;;
+        *) echo; echo "${UI_TEXT[NOBU_ABORTED]}"; sleep 2; exit 0 ;;
+    esac
+    echo
+fi
 
 # ---- stage, then write --------------------------------------------------
 # 1. mingol.stage reads the four from this drive's __net record (the record
@@ -298,14 +350,22 @@ echo
 # English: the translation pack comes from openlobby.fyi, or from a pack the
 # player put in games/MGO/translation/ when the download cannot be had.
 TR_ARGS=()
-printf "%s " "${UI_TEXT[MGO_ASK_TRANSLATE]}"
-read -r tr_answer </dev/tty
-case "$tr_answer" in
-    [Yy]*) TR_ARGS=(--translate --translation-dir "${MGO_DIR}/translation") ;;
-esac
-echo
+WRITE_ARGS=()
+if [[ -n "${MGO_UPDATE}" ]]; then
+    # Update: the language picked above; write --update rewrites only what changed.
+    [[ "${mgo_lang}" == "english" ]] && TR_ARGS=(--translate --translation-dir "${MGO_DIR}/translation")
+    WRITE_ARGS=(--update)
+    echo "${UI_TEXT[MGO_UPDATE_DOING]}"
+else
+    printf "%s " "${UI_TEXT[MGO_ASK_TRANSLATE]}"
+    read -r tr_answer </dev/tty
+    case "$tr_answer" in
+        [Yy]*) TR_ARGS=(--translate --translation-dir "${MGO_DIR}/translation") ;;
+    esac
+    echo
 
-echo "${UI_TEXT[MGO_DOING]}"
+    echo "${UI_TEXT[MGO_DOING]}"
+fi
 echo
 
 STAGE_DIR="${WORK_DIR}/stage"
@@ -323,12 +383,17 @@ mgosudo -m mingol.stage.write "${DEVICE}" \
     --stage "${STAGE_DIR}" \
     --hddid "${POL_HDDID_FILE}" \
     --pfsshell "${PFS_SHELL}" \
-    --write 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+    "${WRITE_ARGS[@]}" \
+    --write 2>&1 | tee -a "${LOG_FILE}" | grep -v '^   kept ' | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[MGO_ERROR_INSTALL]}"
 mgo_accessflag
 
 echo
-center_text "${UI_TEXT[MGO_DONE]}"
+if [[ -n "${MGO_UPDATE}" ]]; then
+    center_text "${UI_TEXT[MGO_UPDATE_DONE]}"
+else
+    center_text "${UI_TEXT[MGO_DONE]}"
+fi
 echo
 center_text "${UI_TEXT[MGO_DONE_HINT]}"
 echo

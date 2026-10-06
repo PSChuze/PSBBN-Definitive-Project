@@ -38,6 +38,26 @@ mingolinstall.py did them:
                PSBBN game add never deletes it, when --keeplist is given.
 
 Dry run unless --write.
+
+    python -m mingol.stage.write DEVICE --stage DIR --hddid FILE --update [--write]
+
+--update brings a partition this installer made up to a new stage, in place:
+the partition, its passwords and its size stay. The stage is compared file by
+file with what the partition holds (read with playonline's PFS reader), and
+pfsshell rewrites only the files that changed (rm, then put) and puts the new
+ones (mkdir as needed); it never runs mkpart or rmpart. Every file only the
+partition has, the game's saves and settings, is left as it is, except the
+plain overlays an English install puts at the root, which a Japanese stage
+drops (they are this installer's, not the game's). Afterwards the MM21
+passwords are set again, the APA journal cleared, the attribute area rewritten
+if it changed, and the partition read back: every staged file must match and
+every kept file must be byte for byte what it was. A partition from the old
+kit-based installer (no FMOD/) is refused with exit status 3: reinstall it.
+
+    python -m mingol.stage.write DEVICE --probe
+
+prints what the drive has: absent, old (the kit-based install), english or
+japanese (from the browser title).
 """
 import argparse
 import json
@@ -173,16 +193,126 @@ def protect(keeplist):
     return True
 
 
+# ---- the in-place update ---------------------------------------------------
+
+OLD_KIT = 3            # exit status: the partition is the old kit-based install
+
+
+def plain_overlay_names(tree, inst):
+    """The root-level plain overlays an English install puts in (one per
+    overlay in the disc's ZZBIN/ but DNAS.BIN): this installer's files, not
+    the game's, so a Japanese update removes them. Taken as every *.BIN at
+    the root of the stage or the drive whose name is also a sealed container
+    under ZZENC/ZZBIN/, or any *.BIN at the root of an English stage."""
+    sealed = {p.split("/")[-1].upper() for p in inst.files
+              if p.upper().startswith("ZZENC/ZZBIN/") and p.count("/") == 2}
+    zz = os.path.join(tree, "ZZENC", "ZZBIN")
+    if os.path.isdir(zz):
+        sealed |= {n.upper() for n in os.listdir(zz)}
+    names = {n for n in sealed if n.endswith(".BIN")}
+    names |= {n.upper() for n in os.listdir(tree)
+              if n.upper().endswith(".BIN") and os.path.isfile(os.path.join(tree, n))}
+    names.discard("DNAS.BIN")
+    return names
+
+
+def read_attr(device, lba, n):
+    with open(device, "rb") as f:
+        f.seek(lba * SECTOR + ATTR_OFF)
+        return f.read(n)
+
+
+def probe(device):
+    """absent, old (the kit-based install, no FMOD/), english or japanese."""
+    from playonline import attrarea
+    from playonline.lib import pfsupdate
+    if not find_partition(device, PARTITION):
+        return "absent"
+    with pfsupdate.Installed(device, PARTITION) as inst:
+        if not any(p.startswith("FMOD/") for p in inst.files):
+            return "old"
+        lba = inst.lba
+    area = attrarea.read_area(device, lba)
+    title = ((attrarea.title0_of(area) if area else None) or "").strip()
+    try:
+        title.encode("ascii")
+    except UnicodeEncodeError:
+        return "japanese"
+    return "english" if title else "japanese"
+
+
+def update(a, stage, tree, attr):
+    from playonline.lib import pfsupdate
+    with pfsupdate.Installed(a.device, PARTITION) as inst:
+        if not any(p.startswith("FMOD/") for p in inst.files):
+            print("%s on %s is the old kit-based install (no FMOD/): it cannot be "
+                  "updated in place; remove it and install again" % (PARTITION, a.device))
+            return OLD_KIT
+        lba = inst.lba
+        ours = plain_overlay_names(tree, inst)
+        plan = pfsupdate.plan(inst, tree, lambda rel: "/" not in rel and rel.upper() in ours)
+    with open(attr, "rb") as f:
+        want_attr = f.read()
+    attr_stale = read_attr(a.device, lba, len(want_attr)) != want_attr
+    print("== update %s at LBA %d: %s%s" % (PARTITION, lba, plan.summary(),
+                                            ", browser entry changed" if attr_stale else ""))
+    for line in plan.lines():
+        print(line)
+    if plan.empty and not attr_stale:
+        print("== the partition is current: nothing to write")
+        return 0
+    script = pfsupdate.script(a.device, PARTITION, tree, plan)
+    with open(stage.rstrip("/\\") + ".update.pfsshell.txt", "w", newline="\n") as f:
+        f.write(script)
+    if not a.write:
+        print(script[:800] + ("..." if len(script) > 800 else ""))
+        print("== dry run: nothing written (pass --write)")
+        return 0
+
+    if not plan.empty:
+        pfsupdate.run(a.pfsshell, script)
+    part = find_partition(a.device, PARTITION)
+    if not part or part[0] != lba:
+        raise SystemExit("%s moved or vanished during the update" % PARTITION)
+    pw = set_password(a.device, lba)
+    print("== password kept on LBA %d (%s)" % (lba, pw.hex()))
+    jb = stage.rstrip("/\\") + ".journal-backup.bin"
+    clear_journal(a.device, jb)
+    print("== APA journal cleared (sectors 0-15 backed up to %s)" % jb)
+    if attr_stale:
+        write_attr(a.device, lba, attr)
+        print("== attr rewritten at LBA %d + 0x1000" % lba)
+    bad = pfsupdate.verify(a.device, PARTITION, tree, plan)
+    if read_attr(a.device, lba, len(want_attr)) != want_attr:
+        bad.append("attribute area")
+    if bad:
+        raise SystemExit("the update did not read back as written:\n  " + "\n  ".join(bad))
+    print("== read back: every staged file matches, %d kept file(s) unchanged"
+          % len(plan.kept))
+    if a.keeplist:
+        print("== keep-list: %s" % ("added" if protect(a.keeplist) else "already listed"))
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("device")
-    ap.add_argument("--stage", required=True, help="the folder `python -m mingol.stage` wrote")
-    ap.add_argument("--hddid", required=True, help="the drive's 512-byte identity")
+    ap.add_argument("--probe", action="store_true",
+                    help="print absent, old, english or japanese and stop")
+    ap.add_argument("--stage", help="the folder `python -m mingol.stage` wrote")
+    ap.add_argument("--hddid", help="the drive's 512-byte identity")
+    ap.add_argument("--update", action="store_true",
+                    help="update the partition already on the drive in place")
     ap.add_argument("--pfsshell", default="pfsshell",
                     help="pfsshell command line (a path with spaces is quoted as one word)")
     ap.add_argument("--keeplist", help="<OPL>/protect-parts.list on the exFAT partition")
     ap.add_argument("--write", action="store_true")
     a = ap.parse_args(argv)
+    if a.probe:
+        print(probe(a.device))
+        return 0
+    if not (a.stage and a.hddid):
+        ap.error("--stage and --hddid are required")
 
     stage = os.path.abspath(a.stage)
     with open(os.path.join(stage, "game.json")) as f:
@@ -199,14 +329,19 @@ def main(argv=None):
         hddid = f.read()
     if len(hddid) != 512 or hddid[:32] != b"Sony Computer Entertainment Inc.":
         raise SystemExit("%s does not look like a PS2 HDD ID" % a.hddid)
-    if find_partition(a.device, PARTITION):
-        raise SystemExit("%s already exists on %s: remove it first (reinstall is not "
-                         "in-place)" % (PARTITION, a.device))
+    there = find_partition(a.device, PARTITION)
+    if there and not a.update:
+        raise SystemExit("%s already exists on %s: update it with --update, or remove "
+                         "it first" % (PARTITION, a.device))
+    if a.update and not there:
+        raise SystemExit("%s is not on %s: nothing to update" % (PARTITION, a.device))
     four = net_four(a.device, hddid)
     if four.hex() != game.get("four"):
         raise SystemExit("the stage was sealed with four %s but %s's __net record holds %s"
                          % (game.get("four"), a.device, four.hex()))
     print("== target %s, four %s" % (a.device, four.hex()))
+    if a.update:
+        return update(a, stage, tree, attr)
 
     script = pfsshell_script(a.device, tree)
     with open(stage.rstrip("/\\") + ".pfsshell.txt", "w", newline="\n") as f:
