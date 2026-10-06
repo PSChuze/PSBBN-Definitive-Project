@@ -31,6 +31,8 @@ ops (x0,y0,x1,y1 are pixel rects, top-left origin):
 An entry with "format": "mti" and "size": [w, h] is a 3D-menu texture (.MTI,
 8bpp + PS2 CLUT) instead of a BMP; the ops are the same. Installers without
 MTI support fail that entry's BMP check and skip its container (stays Japanese).
+An entry with "format": "lines" is a CRLF text file (shop/avatar names and
+descriptions); its single op is {"op": "lines", "set": [[line, field, text]]}.
 
 A target is skipped (stays Japanese) unless every sha1 matches and the rebuilt
 container is no larger than the original (the game's load buffers).
@@ -122,8 +124,38 @@ class IndexedMTI:
         return bytes(v for r in self.px for v in r) + self.raw[self.w * self.h:]
 
 
+class TextLines:
+    """CRLF text data file inside a container (shop/avatar .dat). Op
+    {"op": "lines", "set": [[line, field, text], ...]}: field -1 replaces the
+    line after its 2-byte colour code (\\x07Z), field >= 0 replaces that CSV
+    field. Our English is ASCII; everything else stays the disc's bytes."""
+
+    def __init__(self, data):
+        self.lines = bytes(data).split(b'\r\n')
+
+    def apply_ops(self, ops):
+        for op in ops:
+            if op.get('op') != 'lines':
+                raise ValueError('unknown text op %r' % op.get('op'))
+            for line, field, text in op['set']:
+                t = text.encode('ascii')
+                cur = self.lines[line]
+                if field < 0:
+                    head = cur[:2] if cur[:1] == b'\x07' else b''
+                    self.lines[line] = head + t
+                else:
+                    f = cur.split(b',')
+                    f[field] = t
+                    self.lines[line] = b','.join(f)
+
+    def to_bytes(self):
+        return b'\r\n'.join(self.lines)
+
+
 def open_image(data, spec):
-    """The editable image for a recipe entry (BMP unless "format": "mti")."""
+    """The editable item for a recipe entry (BMP unless "format": "mti"/"lines")."""
+    if spec.get('format') == 'lines':
+        return TextLines(data)
     if spec.get('format') == 'mti':
         w, h = spec['size']
         return IndexedMTI(data, w, h)
@@ -400,6 +432,10 @@ def apply(tree, recipes, note=print):
                 if data is None or _sha1(data) != spec['entry_sha1']:
                     raise ValueError('entry %s does not match' % inner)
                 img = open_image(data, spec)
+                if isinstance(img, TextLines):
+                    img.apply_ops(spec['ops'])
+                    repl[inner.encode('latin1')] = img.to_bytes()
+                    continue
                 need = {}
                 for op in spec['ops']:
                     if op['op'] == 'copy':
