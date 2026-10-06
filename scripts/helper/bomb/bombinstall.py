@@ -43,7 +43,15 @@ Everything is a dry run (prints the plan and the pfsshell script) unless
         --hddid <file> --icon <file.ico> [--four 00001301]
         [--game-mib 1024]
         [--pfsshell PFSSHELL] [--helper DIR] [--work DIR]
-        [--reinstall] [--write]
+        [--reinstall | --update] [--write]
+
+--update brings the partition already on the drive up to this stage in
+place (playonline.lib.pfsupdate): only the files that changed or are new are
+rewritten with pfsshell (rm + put), every file only the drive has (the
+game's saves and settings) is kept, no mkpart/rmpart. The attribute area is
+rewritten if it changed, fpwd and the header checksums are set again, and
+the partition is read back against the stage. The old two-partition layout
+is refused: reinstall it.
 """
 import argparse
 import os
@@ -286,7 +294,7 @@ def fix_apa_checksums(device, ident):
     return fixed
 
 
-def precheck(device, helper_dir, game_mib, reinstall):
+def precheck(device, helper_dir, game_mib, reinstall, update=False):
     """APA-Jail-aware safety gate: reuse nobunaga.check's free-space math.
 
     Returns (info, existing_to_remove). `existing_to_remove` is any of our
@@ -314,6 +322,14 @@ def precheck(device, helper_dir, game_mib, reinstall):
         raise SystemExit("not a PS2/PSBBN drive (missing __system/__sysconf/__common)")
     names = {p.ident for p in apa.partitions(device) if not p.is_sub}
     existing = [n for n in (GAME_PART, LEGACY_BOOT_PART) if n in names]
+    if update:
+        if GAME_PART not in names:
+            raise SystemExit("%s is not on this drive: nothing to update" % GAME_PART)
+        if LEGACY_BOOT_PART in names:
+            raise SystemExit("this drive has the old two-partition layout (%s): it "
+                             "cannot be updated in place; reinstall it" % LEGACY_BOOT_PART)
+        print("   %s present: updating it in place" % GAME_PART)
+        return info, []
     if existing:
         if not reinstall:
             raise SystemExit("Bomberman partitions already on this drive (%s); "
@@ -326,6 +342,44 @@ def precheck(device, helper_dir, game_mib, reinstall):
                          "(need %d MiB, largest free slot %d MiB)"
                          % (game_mib, info["largest_mib"]))
     return info, existing
+
+
+def update_partition(a, staged, attr_path):
+    """--update: rewrite only what changed in GAME_PART (see the docstring)."""
+    from playonline.lib import pfsupdate
+    with pfsupdate.Installed(a.device, GAME_PART) as inst:
+        lba = inst.lba
+        plan = pfsupdate.plan(inst, staged)
+    want_attr = open(attr_path, "rb").read() if attr_path else b""
+    with open(a.device, "rb") as f:
+        f.seek(lba * SECTOR + ATTR_OFF)
+        attr_stale = bool(want_attr) and f.read(len(want_attr)) != want_attr
+    print("== update %s at LBA %d: %s%s" % (GAME_PART, lba, plan.summary(),
+                                            ", browser entry changed" if attr_stale else ""))
+    for line in plan.lines():
+        print(line)
+    if plan.empty and not attr_stale:
+        print("== the partition is current: nothing to write")
+        return
+    script = pfsupdate.script(a.device, GAME_PART, staged, plan)
+    if not a.write:
+        print(script[:800] + ("..." if len(script) > 800 else ""))
+        print("== dry run: nothing written (pass --write)")
+        return
+    if not plan.empty:
+        pfsupdate.run(a.pfsshell, script)
+    if attr_stale:
+        write_attr(a.device, lba, attr_path)
+        print("== attr: browser entry rewritten at LBA %d + 0x1000" % lba)
+    set_partition_password(a.device, GAME_PART, APA_FPWD)
+    n = fix_apa_checksums(a.device, GAME_PART)
+    print("== apa: fpwd kept, %d header checksum(s) recomputed" % n)
+    bad = pfsupdate.verify(a.device, GAME_PART, staged, plan)
+    if bad:
+        raise SystemExit("the update did not read back as written:\n  " + "\n  ".join(bad))
+    print("== read back: every staged file matches, %d kept file(s) unchanged"
+          % len(plan.kept))
+    print("== done: %s on %s updated" % (GAME_PART, a.device))
 
 
 def main():
@@ -351,6 +405,9 @@ def main():
                     help="drop the existing Bomberman partitions (both the "
                          "one-partition layout and the earlier two-partition "
                          "layout) before mkpart")
+    ap.add_argument("--update", action="store_true",
+                    help="update the partition already on the drive in place, "
+                         "keeping the game's own files")
     ap.add_argument("--check-only", action="store_true")
     ap.add_argument("--write", action="store_true")
     a = ap.parse_args()
@@ -359,9 +416,11 @@ def main():
         raise SystemExit("--work must be a space-free path (pfsshell put "
                          "does not accept quoted or escaped paths)")
 
+    if a.update and a.reinstall:
+        raise SystemExit("--update and --reinstall exclude each other")
     if a.helper:
         info, existing_to_remove = precheck(
-            a.device, a.helper, a.game_mib, a.reinstall)
+            a.device, a.helper, a.game_mib, a.reinstall, a.update)
     else:
         print("== precheck skipped (no --helper)")
         existing_to_remove = []
@@ -422,6 +481,14 @@ def main():
         p = os.path.join(staged, extra)
         if extra != LOADER and os.path.isfile(p):
             patch_loader_hddid(p, hddid_blk)
+
+    if a.update:
+        attr_path = None
+        if a.icon:
+            attr_path = os.path.join(a.work, "attr.bin")
+            open(attr_path, "wb").write(build_attr(a.icon, BOOT_BLOCK))
+        update_partition(a, staged, attr_path)
+        return
 
     jobs = pfsshell_jobs(a.device, staged, a.game_mib, existing_to_remove)
     total_cmds = sum(s.count("\n") for _cwd, s in jobs)

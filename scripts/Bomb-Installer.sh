@@ -254,11 +254,48 @@ else
 fi
 
 # ---- installed check ----------------------------------------------------
+# Already on the drive: offer an in-place update. bombinstall --update stages
+# the game exactly as an install does, then rewrites only the files that
+# changed or are new; the game's own files (saves, settings), the partition
+# and its password stay.
+: "${UI_TEXT[BOMB_UPDATE_ASK]:=Update it to the version this toolkit installs? Your saves and settings are kept.}"
+: "${UI_TEXT[BOMB_UPDATE_OPT1]:=Update (keep saves)}"
+: "${UI_TEXT[BOMB_UPDATE_OPT2]:=Exit}"
+: "${UI_TEXT[BOMB_UPDATE_CHOICE]:=Choose:}"
+: "${UI_TEXT[BOMB_UPDATE_DOING]:=Updating Net de Bomberman...}"
+: "${UI_TEXT[BOMB_UPDATE_DONE]:=Net de Bomberman was updated. Your saves were kept.}"
+: "${UI_TEXT[BOMB_UPDATE_ERROR]:=The update failed. See logs/bomb-installer.log.}"
 if sudo "${HDL_DUMP}" toc "${DEVICE}" 2>>"${LOG_FILE}" | grep -q -- "PP.SLPS-20343.NET.BOMB"; then
     center_text "${UI_TEXT[BOMB_INSTALLED]}"
     echo
     bomb_accessflag
     echo
+    center_text "${UI_TEXT[BOMB_UPDATE_ASK]}"
+    echo
+    echo "  1) ${UI_TEXT[BOMB_UPDATE_OPT1]}"
+    echo "  2) ${UI_TEXT[BOMB_UPDATE_OPT2]}"
+    echo
+    printf "%s " "${UI_TEXT[BOMB_UPDATE_CHOICE]}"
+    read -r answer </dev/tty
+    if [[ "$answer" == "1" ]]; then
+        echo
+        echo "${UI_TEXT[BOMB_UPDATE_DOING]}"
+        echo
+        bombsudo bomb.bombinstall "${DEVICE}" \
+            --bundle "${BUNDLE_DIR}" \
+            "${DISC_ARG[@]}" \
+            --boot "${BOMB_FILES}/bootfiles" \
+            --hddid "${HDDID_FILE}" \
+            --pfsshell "${PFS_SHELL}" \
+            --helper "${HELPER_DIR}" \
+            --work "${WORK_DIR}/stage" \
+            "${ICON_ARG[@]}" \
+            --update --write 2>&1 | tee -a "${LOG_FILE}" | grep -v '^   kept ' | sed 's/^/  /'
+        [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[BOMB_UPDATE_ERROR]}"
+        echo
+        center_text "${UI_TEXT[BOMB_UPDATE_DONE]}"
+        echo
+    fi
     read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
     echo
     exit 0
