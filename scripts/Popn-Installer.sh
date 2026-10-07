@@ -329,6 +329,13 @@ if [[ -n "${INFO[installed]}" ]]; then
                     --loader-swap --write \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
+                    # The swap rebuilds the boot ELF in English only with
+                    # --translate, so the browser name follows the same flag.
+                    if [[ -n "${POPN_TR_FLAG}" ]]; then
+                        popn_retitle english
+                    else
+                        popn_retitle japanese
+                    fi
                     center_text "${UI_TEXT[POPN_RESWAP_DONE]}"
                 else
                     error_msg "${UI_TEXT[POPN_RESWAP_ERROR]}"
@@ -427,7 +434,12 @@ if [[ -f "${POPN_DISC}/SYSTEM.CNF" ]] && [[ -f "${POPN_DISC}/MAIN.BIN" ]] \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[POPN_KIT_ERROR]}"
                 POPN_INSTALLED_NOW=1
-                popn_retitle english
+                # English name only with the translation; otherwise the disc's.
+                if [[ -n "${POPN_TR_FLAG}" ]]; then
+                    popn_retitle english
+                else
+                    popn_retitle japanese
+                fi
                 ;;
         esac
     fi
