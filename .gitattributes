@@ -4,3 +4,4 @@
 *.py  text eol=lf
 # Game data the console reads byte for byte (BOMBREG.PEM must stay CRLF).
 scripts/assets/bomb/BOMBREG.PEM -text
+scripts/assets/mingol/ROOT_ED.PEM -text

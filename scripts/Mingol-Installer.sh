@@ -31,7 +31,12 @@
 #   - the signed loader scripts/assets/mingol/polbbnexec-mingol.kelf is filled
 #     with the patched boot ELF, the reboot image, the disc's DEV9/ATAD/HDD/PFS
 #     IRXs (ATAD with its genuine-drive check skipped) and the drive's HDD ID,
-#     and goes in as pfs:/dnasload.elf.
+#     and goes in as pfs:/dnasload.elf;
+#   - the game is pointed at the revival's servers: ADDRESS.XB rebuilt
+#     from the disc's, and the revival's Feega CA staged as ROOT_ED.PEM,
+#     which the loader's shim serves for cdrom0:\FRES\ROOT_ED.PEM;1.
+#     MINGOL_SERVERS=stock keeps the disc's own (servers run under the
+#     original names).
 #
 # The user supplies:
 #   games/MGO/         the SCPS-15049 .iso (here or in disc/), or the extracted
@@ -368,6 +373,12 @@ else
 fi
 echo
 
+# Servers: by default the stage points the game at the revival's servers
+# (ADDRESS.XB, and the Feega CA as ROOT_ED.PEM); MINGOL_SERVERS=stock in
+# the environment keeps the disc's server table and Sony's root.
+SERVER_ARGS=()
+[[ "${MINGOL_SERVERS:-}" == "stock" ]] && SERVER_ARGS=(--stock-servers)
+
 STAGE_DIR="${WORK_DIR}/stage"
 mgosudo -m mingol.stage \
     --disc "${MGO_SRC}" \
@@ -376,6 +387,7 @@ mgosudo -m mingol.stage \
     --kelf "${LOADER_KELF}" \
     --device "${DEVICE}" \
     "${TR_ARGS[@]}" \
+    "${SERVER_ARGS[@]}" \
     2>&1 | tee -a "${LOG_FILE}" | grep -v '^progress: sealing' | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[MGO_ERROR_INSTALL]}"
 

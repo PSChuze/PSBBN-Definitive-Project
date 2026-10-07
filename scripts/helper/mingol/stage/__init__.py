@@ -22,6 +22,7 @@
         --kelf scripts/assets/mingol/polbbnexec-mingol.kelf
         (--four HEX8 | --device DEV)
         [--translate [--translation-dir DIR] | --translation-pack ZIP]
+        [--stock-servers]
 
 --translate downloads the latest English translation pack from openlobby.fyi
 (english.py, download.py; MINGOL_TRANSLATION_URL=none turns that off), falling
@@ -32,6 +33,13 @@ is sealed (-10202), so ENGLISH_SEALS is off: an English install loads every
 overlay as a plain file from the root of the partition instead
 (bootpatch.PLAIN_OVERLAYS_PATCH), English where the pack has it, and the
 browser title is English too. A Japanese install is unchanged.
+
+Both point the game at the revival's servers (servers.py): ADDRESS.XB
+rebuilt from the disc's with the revival's server table, and the Feega
+login's root certificate, ROOT_ED.PEM at the partition root, the revival's
+CA (scripts/assets/mingol/ROOT_ED.PEM). --stock-servers (or
+MINGOL_SERVERS=stock) keeps the disc's ADDRESS.XB and stages the disc's own
+FRES/ROOT_ED.PEM there instead.
 
 Ported from HippaulInstaller (playonline/games/mingol), which builds the same
 partition for a PCSX2 image. Nothing comes from a kit: everything is made
@@ -47,8 +55,10 @@ from the player's disc.
              (bootpatch), which the patched boot ELF loads as pfs2:/DNAS.BIN;
              FMOD/ and FMOD2/ holding the disc's IOP modules (*.IRX, *.ICO,
              *.SYS; the loader's shim sends the game's cdrom0 FMOD loads
-             there, so it needs no disc); and dnasload.elf, the loader the
-             browser launches.
+             there, so it needs no disc); ROOT_ED.PEM at the root, the Feega
+             CA the game asks for as cdrom0:\\FRES\\ROOT_ED.PEM;1, which the
+             shim opens here instead (servers.py); and dnasload.elf, the
+             loader the browser launches.
   dnasload.elf
              the signed loader KELF the toolkit ships (DRIVERS=3, driver
              slots) filled for this disc and drive: the patched SCPS_150.49,
@@ -114,7 +124,7 @@ ENGLISH_SEALS = False
 # ones this step reads.
 TREE_SKIP = ("FMOD/", "FMOD2/", "FRES/", "ZZBIN/", "ZZENC/", "FEEGAGUI.ELF", BOOT_FILE)
 WORK_FILES = ("SYSTEM.CNF", BOOT_FILE, "ZZBIN/", "ZZENC/ZZBIN/", "FMOD/", "FMOD2/",
-              "CNF/SYS_NET.ICO")
+              "CNF/SYS_NET.ICO", "FRES/ROOT_ED.PEM")
 
 # The IOP modules the game loads from cdrom0:\FMOD\ and cdrom0:\FMOD2\ once
 # it runs (network, pad, USB, sound). With no disc the loader's shim sends
@@ -413,6 +423,8 @@ def stage(args):
             m.note("--translate: %d overlays installed as plain files, %d of them "
                    "in English" % (n, len(english)))
         _write(_path(tree, "INSTALL.VER"), struct.pack("<I", 4))
+        from . import servers
+        servers.apply(root, tree, m, stock=servers.stock_wanted(args.stock_servers))
         _write(_path(tree, "DNAS.BIN"), bootpatch.dnas_overlay(dnas_plain))
 
         progress("filling the loader")
@@ -466,4 +478,7 @@ def main(argv=None):
                     "download cannot be had")
     ap.add_argument("--translation-pack", metavar="ZIP",
                     help="a local English translation pack (zip or folder); no download")
+    ap.add_argument("--stock-servers", action="store_true",
+                    help="keep the disc's server table and Feega root certificate "
+                         "(also MINGOL_SERVERS=stock); default: the revival's")
     return stage(ap.parse_args(argv))
