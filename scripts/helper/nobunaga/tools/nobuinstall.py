@@ -91,10 +91,12 @@ INSTALLED_BOOT    = "SLPM-65197"
 PATCHED_MODULES = {"NBONLINE.EBN"}
 
 
-def precheck(device, helper_dir):
+def precheck(device, helper_dir, update=False):
     """APA-Jail-aware safety gate: reuse nobunaga.check so the install can
     never carve past the PS2 region into the exFAT games. Returns check.inspect
-    info, or raises SystemExit if the drive isn't a valid, roomy PSBBN target."""
+    info, or raises SystemExit if the drive isn't a valid, roomy PSBBN target.
+    With `update` the partition must already be there instead (nothing is
+    carved, so room is not checked)."""
     if helper_dir and helper_dir not in sys.path:
         sys.path.insert(0, helper_dir)
     try:
@@ -110,6 +112,10 @@ def precheck(device, helper_dir):
         print("   other title partitions present (left untouched): %s" % ", ".join(info["others"]))
     if not info["system"]:
         raise SystemExit("not a PS2/PSBBN drive (missing __system/__sysconf/__common)")
+    if update:
+        if not info["installed"]:
+            raise SystemExit("Nobunaga is not installed on this drive: nothing to update")
+        return info
     if info["installed"]:
         raise SystemExit("Nobunaga is already installed on this drive (%s); refusing"
                          % ", ".join(info["installed"]))
@@ -272,6 +278,47 @@ def write_passwords(device, lba, helper_dir):
         f.write(bytes(hdr))
     return rpwd, fpwd
 
+
+
+def update_in_place(a, staged, attr_path):
+    """The installed partition brought up to `staged` (playonline.lib.pfsupdate,
+    as the Minna and Bomberman updates do): changed files rewritten, new ones
+    put, files only the partition has kept. Never mkpart or rmpart. pfsshell
+    can disturb the header, so the NOBUON passwords are set again; the
+    attribute area is rewritten if it differs; everything is read back."""
+    from playonline.lib import pfsupdate
+    with pfsupdate.Installed(a.device, PARTITION) as inst:
+        lba = inst.lba
+        plan = pfsupdate.plan(inst, staged)
+    area = open(attr_path, "rb").read()
+    with open(a.device, "rb") as f:
+        f.seek(lba * SECTOR + ATTR_OFF)
+        attr_stale = f.read(len(area)) != area
+    print("== update %s at LBA %d: %s%s" % (PARTITION, lba, plan.summary(),
+                                            ", browser entry changed" if attr_stale else ""))
+    for line in plan.lines():
+        print(line)
+    if plan.empty and not attr_stale:
+        print("== the partition is current: nothing to write")
+        return
+    script = pfsupdate.script(a.device, PARTITION, staged, plan)
+    if not a.write:
+        print("== dry run: nothing written (pass --write)")
+        return
+    if not plan.empty:
+        pfsupdate.run(a.pfsshell, script)
+    if part_lba(a.helper, a.device) != lba:
+        raise SystemExit("%s moved or vanished during the update" % PARTITION)
+    write_passwords(a.device, lba, a.helper)
+    print("== passwords: NOBUONR/NOBUONF set again on %s" % PARTITION)
+    if attr_stale:
+        write_attr(a.device, lba, attr_path)
+        print("== attr rewritten at LBA %d + 0x1000" % lba)
+    bad = pfsupdate.verify(a.device, PARTITION, staged, plan)
+    if bad:
+        raise SystemExit("the update did not read back as written:\n  " + "\n  ".join(bad))
+    print("== read back: every staged file matches, %d kept file(s) unchanged"
+          % len(plan.kept))
 
 
 RETAIL_HOST = b"nobol.koei.co.jp:9070"
@@ -665,6 +712,9 @@ def main():
                     "With --disc, if this is omitted, the installer auto-creates a "
                     "'translation/' folder next to the disc extract for the user to drop "
                     "the zip's contents into; anything found there is applied.")
+    ap.add_argument("--no-translation", action="store_true",
+                    help="install the game's own Japanese text even when the "
+                    "translation/ folder has a pack in it")
     ap.add_argument("--loader", help="the pre-signed spoof loader KELF (polbbnexec-inputpatch.kelf) "
                     "to install as pfs:/dnasload.elf in place of the disc's stock dnasload (which "
                     "cannot pass the dead DNAS console binding). With --disc it is FILLED here for "
@@ -690,6 +740,11 @@ def main():
     ap.add_argument("--check-only", action="store_true",
                     help="run only the fit/jail safety gate (and, with --disc, the disc "
                     "version check) and exit; no seal, no write")
+    ap.add_argument("--update", action="store_true",
+                    help="bring the partition already on the drive up to this stage in "
+                    "place: only changed files are rewritten, files only the partition "
+                    "has (saves, settings) are kept. With or without --translation, so "
+                    "it also applies or removes the English text.")
     ap.add_argument("--write", action="store_true")
     a = ap.parse_args()
 
@@ -698,7 +753,7 @@ def main():
         verify_disc(a.disc)
 
     # Safety: refuse before touching the drive if it won't fit the PS2 region.
-    precheck(a.device, a.helper)
+    precheck(a.device, a.helper, update=a.update)
     if a.check_only:
         print("== check-only: drive is a valid, roomy target (nothing written)")
         return
@@ -722,7 +777,9 @@ def main():
         print("   sealed %d containers, copied %d files, verdict-patched %d NBONLINE"
               % (n_c, n_f, n_p))
         # Translation handling: --translation wins; else auto-folder pattern.
-        if not a.translation:
+        if a.no_translation:
+            a.translation = None
+        elif not a.translation:
             tdir, has = ensure_translation_dir(a.disc)
             a.translation = tdir if has else None
     else:
@@ -770,6 +827,9 @@ def main():
         attr_path = build_attr_from_disc(a.disc,
                                          os.path.join(a.work, "attr-area.bin"),
                                          title0=a.title0)
+
+    if a.update:
+        return update_in_place(a, staged, attr_path)
 
     script = pfsshell_script(a.device, staged, a.part_mib)
     print("== pfsshell script (%d commands):" % (script.count("\n")))

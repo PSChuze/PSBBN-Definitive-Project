@@ -158,6 +158,17 @@ def info_with(f, size, lba, sectors, fields, write):
         ", ".join(changed), len(old), len(new))
 
 
+def state(image):
+    """english or japanese, by the browser entry's title0 (the installer keeps
+    it in step with the text), or absent without a Nobunaga partition."""
+    found = apa.find_partition(image, PARTITION)
+    if found is None:
+        return "absent"
+    area = attrarea.read_area(image, found[0])
+    title = ((attrarea.title0_of(area) if area else None) or "").strip()
+    return "english" if title == NAMES["english"]["icon"]["title0"] else "japanese"
+
+
 def retitle(image, language, write=False):
     """[lines] describing the change, or None without a Nobunaga partition."""
     found = apa.find_partition(image, PARTITION)
@@ -196,9 +207,13 @@ def main():
             stream.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("drive")
-    ap.add_argument("language", choices=sorted(NAMES))
+    ap.add_argument("language", choices=sorted(NAMES) + ["state"],
+                    help="`state` prints english, japanese or absent and stops")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
+    if args.language == "state":
+        print(state(args.drive))
+        return 0
     lines = retitle(args.drive, args.language, args.write)
     if lines is None:
         print("no %s partition on this drive" % PARTITION)

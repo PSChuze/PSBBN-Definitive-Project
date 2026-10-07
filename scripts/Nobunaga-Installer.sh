@@ -110,6 +110,18 @@ fi
 : "${UI_TEXT[NOBU_EXTRACT_RUNNING]:=Extracting the disc image (this writes the full disc tree, a few minutes)...}"
 : "${UI_TEXT[NOBU_EXTRACT_DONE]:=Extracted the disc tree to}"
 : "${UI_TEXT[NOBU_EXTRACT_FAIL]:=Extraction failed. See logs/nobunaga-installer.log}"
+: "${UI_TEXT[NOBU_UPDATE_ASK]:=Update the install in place? It is rebuilt from your disc; the saves and settings on the drive are kept. (y/N)}"
+: "${UI_TEXT[NOBU_UPDATE_LANG]:=Language of the game after the update:}"
+: "${UI_TEXT[NOBU_UPDATE_KEEP]:=Keep it as installed}"
+: "${UI_TEXT[NOBU_UPDATE_EN]:=English (the translation pack in games/NOBU/translation/)}"
+: "${UI_TEXT[NOBU_UPDATE_JA]:=Japanese (as on the disc)}"
+: "${UI_TEXT[NOBU_UPDATE_CHOICE]:=Choose:}"
+: "${UI_TEXT[NOBU_UPDATE_NO_PACK]:=English needs the translation pack: extract it into games/NOBU/translation/ and run this step again.}"
+: "${UI_TEXT[NOBU_UPDATE_NEED]:=To update in place, this machine also needs:}"
+: "${UI_TEXT[NOBU_NEED_DISC]:=the game disc (an .iso in games/NOBU/, or the extracted tree in games/NOBU/disc/)}"
+: "${UI_TEXT[NOBU_NEED_HDDID]:=the drive ID (playonline.hddid), which is read from the drive when PlayOnline is on it}"
+: "${UI_TEXT[NOBU_UPDATE_DOING]:=Updating Nobunaga's Ambition Online (this can take several minutes)...}"
+: "${UI_TEXT[NOBU_UPDATE_DONE]:=Nobunaga's Ambition Online was updated. Your saves were kept.}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
@@ -178,6 +190,13 @@ nobu_accessflag() {
 nobu_has_translation() {
     [[ -n "$(find "${NOBU_DIR}/kit/translation" -type f ! -name 'PUT-*' 2>/dev/null | head -n 1)" ]]
 }
+
+# A translation pack dropped into games/NOBU/translation/ (the README that
+# nobuinstall leaves there does not count).
+nobu_has_pack() {
+    [[ -n "$(find "${NOBU_DIR}/translation" -type f ! -name 'README*' 2>/dev/null | head -n 1)" ]]
+}
+NOBU_UPDATE=""
 
 on_exit() {
     [[ -n "${SUDO_KEEPALIVE}" ]] && kill "${SUDO_KEEPALIVE}" 2>/dev/null
@@ -276,40 +295,46 @@ if [[ -n "${INFO[installed]}" ]]; then
         esac
     fi
 
-    # ---- optional: add/remove the English translation (tester kit) -------
-    # Plain data-file swap in the existing partition; no reinstall. Dormant
-    # unless the kit and a translation pack are present.
-    NOBU_TR="${NOBU_DIR}/kit/nobu-translate.sh"
-    if [[ -f "${NOBU_TR}" ]] && nobu_has_translation; then
+    # ---- update in place (also how the translation goes on or comes off) --
+    # The game is staged again from the disc in the chosen language and
+    # nobuinstall --update rewrites only the files that differ; the files only
+    # the partition has (saves, settings) are kept.
+    echo
+    printf "%s " "${UI_TEXT[NOBU_UPDATE_ASK]}"
+    read -r answer </dev/tty
+    case "$answer" in
+        [Yy]*) ;;
+        *) exit 0 ;;
+    esac
+    nobu_state=$(nobusudo nobunaga.retitle "${DEVICE}" state 2>>"${LOG_FILE}")
+    echo "Installed language: ${nobu_state:-unreadable}" >> "${LOG_FILE}"
+    echo
+    echo "${UI_TEXT[NOBU_UPDATE_LANG]}"
+    echo "  1) ${UI_TEXT[NOBU_UPDATE_KEEP]} (${nobu_state})"
+    echo "  2) ${UI_TEXT[NOBU_UPDATE_EN]}"
+    echo "  3) ${UI_TEXT[NOBU_UPDATE_JA]}"
+    echo
+    printf "%s " "${UI_TEXT[NOBU_UPDATE_CHOICE]}"
+    read -r answer </dev/tty
+    case "$answer" in
+        1|"") nobu_lang="${nobu_state}" ;;
+        2) nobu_lang="english" ;;
+        3) nobu_lang="japanese" ;;
+        *) exit 0 ;;
+    esac
+    if [[ "${nobu_lang}" == "english" ]] && ! nobu_has_pack; then
+        center_text "${UI_TEXT[NOBU_UPDATE_NO_PACK]}"
         echo
-        printf "%s " "${UI_TEXT[NOBU_TR_ASK]}"
-        read -r tr_answer </dev/tty
-        case "$tr_answer" in
-            [Aa]*)
-                echo "${UI_TEXT[NOBU_TR_APPLYING]}"
-                bash "${NOBU_TR}" --device "${DEVICE}" --helper "${HELPER_DIR}" \
-                    --log "${LOG_FILE}" --action apply 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
-                [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_TR_ERROR]}"
-                nobu_retitle english
-                center_text "${UI_TEXT[NOBU_TR_APPLIED]}"
-                ;;
-            [Rr]*)
-                echo "${UI_TEXT[NOBU_TR_REMOVING]}"
-                bash "${NOBU_TR}" --device "${DEVICE}" --helper "${HELPER_DIR}" \
-                    --log "${LOG_FILE}" --action remove 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
-                [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_TR_ERROR]}"
-                nobu_retitle japanese
-                center_text "${UI_TEXT[NOBU_TR_REMOVED]}"
-                ;;
-        esac
+        read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
+        echo
+        exit 0
     fi
+    NOBU_UPDATE=1
     echo
-    read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
-    echo
-    exit 0
 fi
 
 # ---- not installed: prepare ---------------------------------------------
+if [[ -z "${NOBU_UPDATE}" ]]; then
 [[ "${INFO[fits]}" == "1" ]] || error_msg "${UI_TEXT[NOBU_NO_ROOM]}"
 
 echo "${UI_TEXT[NOBU_PLAN]}"
@@ -343,6 +368,7 @@ if [[ "${INFO[net]}" != "ok" ]]; then
     nobusudo playonline.netpart "${DEVICE}" --write \
         --backup "${WORK_DIR}/apa-before-net-$(date +%Y%m%d-%H%M%S).json" \
         >> "${LOG_FILE}" 2>&1 || error_msg "${UI_TEXT[NOBU_ERROR_NET]}"
+fi
 fi
 
 # ---- optional PC-side install (from the player's own disc) --------------
@@ -410,22 +436,44 @@ fi
 
 # Prefer the disc path when the extract is present and looks right (has
 # SYSTEM.CNF at its root and the AUTH/ container tree).
-if [[ -f "${NOBU_DISC}/SYSTEM.CNF" ]] && [[ -d "${NOBU_DISC}/AUTH" ]] \
-   && [[ -f "${NOBU_INSTALL_PY}" ]]; then
+NOBU_DISC_OK=""
+[[ -f "${NOBU_DISC}/SYSTEM.CNF" ]] && [[ -d "${NOBU_DISC}/AUTH" ]] \
+    && [[ -f "${NOBU_INSTALL_PY}" ]] && NOBU_DISC_OK=1
+if [[ -n "${NOBU_UPDATE}" ]] && [[ -z "${NOBU_DISC_OK}" || ! -f "${POL_HDDID_FILE}" ]]; then
+    center_text "${UI_TEXT[NOBU_UPDATE_NEED]}"
+    [[ -n "${NOBU_DISC_OK}" ]]       || echo "    - ${UI_TEXT[NOBU_NEED_DISC]}"
+    [[ -f "${POL_HDDID_FILE}" ]]     || echo "    - ${UI_TEXT[NOBU_NEED_HDDID]}"
+    echo
+    read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
+    echo
+    exit 0
+fi
+if [[ -n "${NOBU_DISC_OK}" ]]; then
     echo
     if [[ ! -f "${POL_HDDID_FILE}" ]]; then
         center_text "${UI_TEXT[NOBU_KIT_NEEDS_HDDID]}"
     else
-        printf "%s " "${UI_TEXT[NOBU_KIT_ASK]}"
-        read -r answer </dev/tty
+        if [[ -n "${NOBU_UPDATE}" ]]; then
+            answer=y
+        else
+            printf "%s " "${UI_TEXT[NOBU_KIT_ASK]}"
+            read -r answer </dev/tty
+        fi
         case "$answer" in
             [Yy]*)
                 # Translation folder is auto-created next to the disc extract by
                 # nobuinstall.py on first run. Users drop the translation zip's
                 # contents into ${NOBU_DIR}/translation/ -- anything found there
-                # (except README*) is overlaid onto the staged tree.
-                TR_FLAG=""
-                if [[ -d "${NOBU_DIR}/translation" ]] && [[ -n "$(find "${NOBU_DIR}/translation" -type f ! -name 'README*' 2>/dev/null | head -n 1)" ]]; then
+                # (except README*) is overlaid onto the staged tree. The choice
+                # is always passed explicitly: nobuinstall applies a pack it
+                # finds there unless told --no-translation.
+                TR_FLAG="--no-translation"
+                UPDATE_FLAG=""
+                if [[ -n "${NOBU_UPDATE}" ]]; then
+                    UPDATE_FLAG="--update"
+                    [[ "${nobu_lang}" == "english" ]] && TR_FLAG="--translation ${NOBU_DIR}/translation"
+                    echo "${UI_TEXT[NOBU_UPDATE_DOING]}"
+                elif nobu_has_pack; then
                     printf "%s " "${UI_TEXT[NOBU_KIT_ASK_TRANSLATE]}"
                     read -r tr_answer </dev/tty
                     case "$tr_answer" in [Yy]*) TR_FLAG="--translation ${NOBU_DIR}/translation";; esac
@@ -436,7 +484,7 @@ if [[ -f "${NOBU_DISC}/SYSTEM.CNF" ]] && [[ -d "${NOBU_DISC}/AUTH" ]] \
                 else
                     echo "[!] spoof loader not found at ${NOBU_LOADER}; installing with the disc's stock dnasload (will NOT boot past the DNAS check)." >> "${LOG_FILE}"
                 fi
-                echo "${UI_TEXT[NOBU_KIT_INSTALLING]}"
+                [[ -z "${NOBU_UPDATE}" ]] && echo "${UI_TEXT[NOBU_KIT_INSTALLING]}"
                 sudo -E env PYTHONPATH="${HELPER_DIR}" "${NOBU_PY}" \
                     "${NOBU_INSTALL_PY}" "${DEVICE}" \
                     --disc "${NOBU_DISC}" \
@@ -444,13 +492,13 @@ if [[ -f "${NOBU_DISC}/SYSTEM.CNF" ]] && [[ -d "${NOBU_DISC}/AUTH" ]] \
                     --helper "${HELPER_DIR}" \
                     --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
                     --work "${WORK_DIR}/stage" \
-                    ${LOADER_FLAG} \
+                    ${LOADER_FLAG} ${UPDATE_FLAG} \
                     --write ${TR_FLAG} \
-                    2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                    2>&1 | tee -a "${LOG_FILE}" | grep -v '^   kept ' | sed 's/^/  /'
                 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_KIT_ERROR]}"
                 NOBU_INSTALLED_NOW=1
                 nobu_accessflag
-                if [[ -n "${TR_FLAG}" ]]; then
+                if [[ "${TR_FLAG}" == --translation* ]]; then
                     nobu_retitle english
                 else
                     nobu_retitle japanese
@@ -493,7 +541,9 @@ elif [[ -f "${NOBU_KIT}" ]]; then
 fi
 
 echo
-if [[ ${NOBU_INSTALLED_NOW} -eq 1 ]]; then
+if [[ ${NOBU_INSTALLED_NOW} -eq 1 && -n "${NOBU_UPDATE}" ]]; then
+    center_text "${UI_TEXT[NOBU_UPDATE_DONE]}"
+elif [[ ${NOBU_INSTALLED_NOW} -eq 1 ]]; then
     center_text "${UI_TEXT[NOBU_KIT_DONE]}"
 else
     center_text "${UI_TEXT[NOBU_READY]}"
