@@ -31,6 +31,8 @@ ops (x0,y0,x1,y1 are pixel rects, top-left origin):
 An entry with "format": "mti" and "size": [w, h] is a 3D-menu texture (.MTI,
 8bpp + PS2 CLUT) instead of a BMP; the ops are the same. Installers without
 MTI support fail that entry's BMP check and skip its container (stays Japanese).
+An MTI entry may carry "offset" (byte offset of one texture inside a
+multi-texture .MTI); its key is then "<inner path>@<offset>".
 An entry with "format": "lines" is a CRLF text file (shop/avatar names and
 descriptions); its single op is {"op": "lines", "set": [[line, field, text]]}.
 
@@ -153,13 +155,24 @@ class TextLines:
 
 
 def open_image(data, spec):
-    """The editable item for a recipe entry (BMP unless "format": "mti"/"lines")."""
+    """The editable item for a recipe entry (BMP unless "format": "mti"/"lines").
+    An MTI spec with "offset" edits one texture inside a multi-texture .MTI
+    (pixels + CLUT at that byte offset); splice() puts it back."""
     if spec.get('format') == 'lines':
         return TextLines(data)
     if spec.get('format') == 'mti':
         w, h = spec['size']
-        return IndexedMTI(data, w, h)
+        off = spec.get('offset', 0)
+        return IndexedMTI(data[off:off + w * h + 1024], w, h)
     return IndexedBMP(data)
+
+
+def splice(data, spec, new):
+    """The whole entry with an edited texture slice `new` put back."""
+    if spec.get('format') == 'mti' and spec.get('offset'):
+        off = spec['offset']
+        return bytes(data[:off]) + new + bytes(data[off + len(new):])
+    return new
 
 
 KEEP = 255
@@ -427,11 +440,13 @@ def apply(tree, recipes, note=print):
         try:
             entries = {path.decode('latin1'): data for path, data in xbcodec.decode_all(orig)}
             repl = {}
-            for inner, spec in tgt['entries'].items():
+            for key, spec in sorted(tgt['entries'].items()):
+                inner = key.split('@')[0]          # "path@offset": one texture inside the entry
                 data = entries.get(inner)
                 if data is None or _sha1(data) != spec['entry_sha1']:
                     raise ValueError('entry %s does not match' % inner)
-                img = open_image(data, spec)
+                cur = repl.get(inner.encode('latin1'), data)   # earlier slices already applied
+                img = open_image(cur, spec)
                 if isinstance(img, TextLines):
                     img.apply_ops(spec['ops'])
                     repl[inner.encode('latin1')] = img.to_bytes()
@@ -444,7 +459,7 @@ def apply(tree, recipes, note=print):
                             raise ValueError('copy source %s:%s missing' % key)
                         need[key] = IndexedBMP(sources[key][1])
                 _apply_ops(img, spec['ops'], need)
-                repl[inner.encode('latin1')] = img.to_bytes()
+                repl[inner.encode('latin1')] = splice(cur, spec, img.to_bytes())
             new = xbcodec.build_all(orig, repl)
             if len(new) > len(orig):
                 raise ValueError('rebuilt %d bytes > original %d' % (len(new), len(orig)))
