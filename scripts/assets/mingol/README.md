@@ -17,7 +17,8 @@ discs at install time by `../../helper/mingol/stage` (see
 `mingol.stage` (`helper/mingol/stage/loader.py`, via `playonline.loader.fill`):
 
 - boot ELF: the disc's `SCPS_150.49` with the disc-less edits (`bootpatch.py`;
-  guarded, checked against the proven SHA-1 bbf02fd5)
+  guarded, checked against the proven SHA-1 1d2f2908), including the answer
+  to the online DNAS step's disc read, so going online needs no disc either
 - IOPRP: the disc's `FMOD/DNAS270.IMG` as it is (`ioprp.py`). It has no
   SYSMEM; the loader copies the console's own out of its BIOS ROM
   (0xBFC00000) and inserts it as the first module at boot, so no second

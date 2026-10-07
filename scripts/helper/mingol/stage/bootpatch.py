@@ -41,6 +41,21 @@ The boot ELF, SCPS_150.49 (file offsets; VA = offset + 0x000ffd80):
             returns 0 (pass) at once. It wants the resident IOP to report
             "2700"; with the gate skipped the boot does not depend on which
             kernel image the loader rebooted with.
+  0x12e368, 0x12eca8, 0x12dc40 (+ stubs at 0x100bb0)
+            the disc read of the online DNAS step, answered without a disc.
+            Before it calls sceDNAS2Init, SYSTEM.BIN's DNAS state machine
+            (0x1915d0) reads 0x20 sectors of the disc (state 0) and then
+            waits for sceCdSync, sceCdGetError == 0 and sceCdDiskReady == 2.
+            With no disc sceCdRead never starts and the game sits at
+            "DNAS install authentication" for good. The sector data only
+            feeds sceDNAS2Init, which DNAS.BIN below already answers without
+            reading it. SYSTEM.BIN is sealed, so the answer is given in the
+            boot ELF's libcdvd instead, and only to those three call sites:
+            sceCdRead, sceCdGetError and sceCdDiskReady each jump to a stub
+            that returns 1, 0 and 2 when the return address is the state
+            machine's (0x1916c0, 0x1916f8, 0x191824) and otherwise runs the
+            function as before. The stubs sit in the driver-load routine
+            0x100bb0, dead since its one call (0x10024c) is gone.
 
 DNAS.BIN (the plaintext DNAS 2.70 overlay, staged at the partition root as
 pfs2:/DNAS.BIN for the redirect above). Its online gate needs Sony's DNAS
@@ -74,6 +89,24 @@ BOOT_ELF_PATCHES = (
     (0x00088c, "e00da524", "e20da524"),                    # 0x10060c
     (0x000c68, "1500043c2236040c", "0e00001000000000"),    # 0x1009e8
     (0x009838, "b0ffbd271500023c", "0800e00300000224"),    # 0x1095b8
+    # 0x100bb0 stubs: lui t0,<ra hi>; ori t0,<ra lo>; bne ra,t0,+3; li v0,<r>;
+    # jr ra; <undo>; j <fn+8>; <displaced 1st/2nd insn>
+    (0x000e30,
+     "f0ffbd271500043c0000bfffe80e8424"
+     "2d2800002d300000a402040cffff0724"
+     "1500043c2d280000f80e84242d300000"
+     "a402040c100007241500043c1500063c"
+     "080f84240b000524c00ec624a402040c"
+     "100007241500043c1500063c180f8424",
+     "1900083cc01608350300e81701000224"
+     "0800e00300000000dcb8040880ffbd27"
+     "1900083cf81608350300e81700000224"
+     "0800e003000000002cbb0408d0ffbd27"
+     "1900083c241808350300e81702000224"
+     "0800e003a000bd2712b704087000b6ff"),
+    (0x02e5e8, "80ffbd27", "ec020408"),                    # 0x12e368 sceCdRead
+    (0x02ef28, "d0ffbd27", "f4020408"),                    # 0x12eca8 sceCdGetError
+    (0x02dec0, "60ffbd277000b6ff", "fc02040860ffbd27"),    # 0x12dc40 sceCdDiskReady
 )
 DNAS_PATCHES = (
     (0x001e60, "f0ffbd272d582001", "0800e00300000224"),
@@ -86,7 +119,7 @@ DNAS_PATCHES = (
 # The disc's files and the proven results, for the one known pressing
 # (SCPS-15049, VER 1.01, build 030518).
 BOOT_ELF_STOCK = "189fa1f13969b66b755f711fdb9401701b92c54e"
-BOOT_ELF_PROVEN = "bbf02fd5c1d41cd62832e11fc009fc69dc639beb"
+BOOT_ELF_PROVEN = "1d2f290852d47c7d930cfc143c1dc5bbbed71b97"
 DNAS_STOCK = "9d7c542c939129283d5c88246741ffa85dddf409"
 DNAS_PROVEN = "2e67f5d53840686b6619432d7ffefb42f2eeec25"
 
