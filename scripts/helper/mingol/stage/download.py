@@ -29,7 +29,7 @@ the pack:
 `file` is taken relative to the document's address and must stay on the same
 host; the download is checked against `size` and `sha256` before it is kept.
 Packs are kept in the cache folder (MINGOL_TRANSLATION_CACHE; the installer
-script points it at games/MGO/translation), so with the server out of reach
+script points it at games/GOLF/translation), so with the server out of reach
 the newest pack kept there, or one the user dropped in, is used.
 
 MINGOL_TRANSLATION_URL names a different document; MINGOL_TRANSLATION_URL=none

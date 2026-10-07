@@ -42,6 +42,14 @@ needs it, so an install always ships it.
     python3 -m playonline.hddid BLOCK.hddid          # parse and show
     python3 -m playonline.hddid BLOCK.hddid --key    # the 24 key bytes
     python3 -m playonline.hddid --mint OUT.hddid [--seed TEXT]
+    python3 -m playonline.hddid --recover OUT.hddid --device /dev/sdX
+
+`--recover` is for a drive set up on another machine. The `.hddid` file
+stays on the PC that minted it, but every filled loader on the drive carries
+the block for its shim to serve, so it can be read back out of
+`pfs:/dnasload.elf` (the Viewer's, or any title installed through the same
+loader). The Viewer's copy wins when the loaders disagree, since the file
+being rebuilt is PlayOnline's.
 """
 import argparse
 import hashlib
@@ -146,6 +154,57 @@ def served_by_shim(blk):
     return blk
 
 
+LOADER_PATH = "/dnasload.elf"
+
+
+def served_on_drive(drive):
+    """[(partition, block)] for every PP.* partition whose root loader serves
+    an HDD ID. Read-only; a partition that does not mount, has no loader, or
+    has a loader with no filled header (Square Enix's own, a stock dnasload)
+    is skipped."""
+    from . import loader
+    from .lib import polfill, polnetdump, polpfspatch, polpfsread
+    found = []
+    with open(drive, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        for start, length, _ptype, name in list(polnetdump.partitions(f, size)):
+            if not name.startswith("PP."):
+                continue
+            try:
+                part, root = polpfsread.mount(f, start, length)
+                if part is None:
+                    continue
+                _zone, ino = polpfspatch.find(part, root, LOADER_PATH)
+                info = loader.read(polfill.read_content(part, ino))
+            except (SystemExit, KeyError, ValueError, IOError, OSError,
+                    struct.error):
+                continue
+            if info["has_hddid"]:
+                found.append((name, info["hddid"]))
+    return found
+
+
+def recover(drive):
+    """(block, source, notes): the drive's served HDD ID, or block None."""
+    from .titles import TITLES
+    viewers = {t.partition for t in TITLES.values()
+               if t.boot == "pfs:/dnasload.elf"}
+    found = served_on_drive(drive)
+    if not found:
+        return None, None, ["no filled loader on this drive serves an HDD ID"]
+    distinct = {blk for _name, blk in found}
+    pick = next(((n, b) for n, b in found if n in viewers), found[0])
+    notes = ["%s serves %s" % (n, key_material(b).hex()) for n, b in found]
+    if len(distinct) > 1:
+        if pick[0] not in viewers:
+            return None, None, notes + [
+                "the loaders on this drive serve %d different IDs and none is "
+                "the Viewer's; refusing to guess" % len(distinct)]
+        notes.append("the loaders disagree; using the Viewer's (%s)" % pick[0])
+    return pick[1], pick[0], notes
+
+
 def describe(blk):
     lines = []
     for off, ln, name, kind in FIELDS:
@@ -172,8 +231,30 @@ def main():
                     help="write a new HDD ID block here instead of reading one")
     ap.add_argument("--seed", help="derive the key material from this, so the "
                                    "same drive identity can be rebuilt")
+    ap.add_argument("--recover", metavar="OUT",
+                    help="read the HDD ID the drive's installed loaders serve "
+                         "and write it here (needs --device)")
+    ap.add_argument("--device", help="the PS2 drive for --recover")
     args = ap.parse_args()
 
+    if args.recover:
+        if not args.device:
+            sys.exit("--recover needs --device")
+        if os.path.exists(args.recover):
+            sys.exit("%s already exists; not overwriting it" % args.recover)
+        blk, source, notes = recover(args.device)
+        for n in notes:
+            print("  " + n)
+        if blk is None:
+            sys.exit("could not recover an HDD ID from %s" % args.device)
+        d = os.path.dirname(os.path.abspath(args.recover))
+        if not os.path.isdir(d):
+            os.makedirs(d)
+        with open(args.recover, "wb") as f:
+            f.write(blk)
+        print("recovered the HDD ID from %s -> %s" % (source, args.recover))
+        print(describe(blk))
+        return
     if args.mint:
         blk = mint(seed=args.seed)
         with open(args.mint, "wb") as f:

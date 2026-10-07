@@ -121,11 +121,11 @@ SPLASH() {
     clear
     cat << "EOF"
 
-     ____  ___   ____  __  __ ___    ____  __  __  ___  ____
-    | __ ) / _ \ | __ )|  \/  |_ _|  | __ )|  \/  |/ _ \|  _ \
-    |  _ \| | | ||  _ \| |\/| || |   |  _ \| |\/| | | | | |_) |
-    | |_) | |_| || |_) | |  | || |   | |_) | |  | | |_| |  _ <
-    |____/ \___/ |____/|_|  |_|___|  |____/|_|  |_|\___/|_| \_\
+    _   __     __         __        ____                  __
+   / | / /__  / /_   ____/ /__     / __ )____  ____ ___  / /_  ___  _________ ___  ____ _____
+  /  |/ / _ \/ __/  / __  / _ \   / __  / __ \/ __ `__ \/ __ \/ _ \/ ___/ __ `__ \/ __ `/ __ \
+ / /|  /  __/ /_   / /_/ /  __/  / /_/ / /_/ / / / / / / /_/ /  __/ /  / / / / / / /_/ / / / /
+/_/ |_/\___/\__/   \__,_/\___/  /_____/\____/_/ /_/ /_/_.___/\___/_/  /_/ /_/ /_/\__,_/_/ /_/
 
 EOF
 }
@@ -229,7 +229,11 @@ fi
 # With the PlayOnline shim the console serves playonline.hddid verbatim, and
 # that file is everything the seal needs. Without it there is no automatic
 # read (hdl_dump's hdd_id output is not the raw block): the user saves the
-# drive's 512-byte ATA IDENTIFY page as bomberman.hddid themselves.
+# drive's 512-byte ATA IDENTIFY page as bomberman.hddid themselves. On a
+# machine that never ran the PlayOnline step, playonline.hddid is first read
+# back from a loader already on the drive.
+source "${HELPER_DIR}/recover-hddid.sh"
+recover_drive_hddid "${POL_HDDID_FILE}" "${DEVICE}" "${BOMB_PY}" "${LOG_FILE}"
 if [[ -f "${POL_HDDID_FILE}" ]]; then
     HDDID_FILE="${POL_HDDID_FILE}"
     echo "  ${UI_TEXT[BOMB_HDDID_FOUND]} ${HDDID_FILE}"

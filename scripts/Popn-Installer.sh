@@ -104,10 +104,6 @@ fi
 : "${UI_TEXT[POPN_RESWAP_DONE]:=Loader swapped. Boot HDD-OSD to launch it.}"
 : "${UI_TEXT[POPN_RESWAP_ERROR]:=Loader swap failed. See logs/popn-installer.log}"
 : "${UI_TEXT[POPN_TR_ASK]:=Apply the English translation (text and menu images)? Building the images takes several minutes. (y/N)}"
-: "${UI_TEXT[POPN_RECOVER_ASK]:=The game is installed on this drive, but this machine has no saved drive ID (playonline.hddid). Recover it from the installed loader on the drive? (Y/n)}"
-: "${UI_TEXT[POPN_RECOVER_RUNNING]:=Recovering the drive ID from the installed loader...}"
-: "${UI_TEXT[POPN_RECOVER_DONE]:=Recovered the drive ID:}"
-: "${UI_TEXT[POPN_RECOVER_FAIL]:=Could not recover the drive ID. See logs/popn-installer.log}"
 : "${UI_TEXT[POPN_RESWAP_UNAVAIL]:=This drive is already set up. To refresh the boot loader or apply the English translation in place, this machine also needs:}"
 : "${UI_TEXT[POPN_NEED_DISC]:=the game disc (a Redump .bin in games/POPN/, or an extracted tree in games/POPN/disc/)}"
 : "${UI_TEXT[POPN_NEED_HDDID]:=the drive ID (playonline.hddid) - re-run this step to recover it from the drive}"
@@ -141,11 +137,17 @@ SPLASH() {
     clear
     cat << "EOF"
 
-                       __     ______              __     ___
-     ____  ____  ____  / /___/_ __/ _____ ___ ___/ /__  / _ \___ ___ _  ___ _
-    / _ \/ _ \/ _ \/ /'_ /  / /   / __(_-</ // /_-</ // / _  / _ `/  ' \/ _ `/
-   / .__/\___/ .__/_/\_,_/ /_/    \__/___/\_,_/___/\___/____/\_,_/_/_/_/\_,_/
-  /_/       /_/
+    ____             _           ____                  __               __
+   / __ \____  ____ ( )____     / __ \__  __________  / /__        ____/ /___ _____ ___  ____ _
+  / /_/ / __ \/ __ \|// __ \   / /_/ / / / /_  /_  / / / _ \______/ __  / __ `/ __ `__ \/ __ `/
+ / ____/ /_/ / /_/ / / / / /  / ____/ /_/ / / /_/ /_/ /  __/_____/ /_/ / /_/ / / / / / / /_/ /
+/_/    \____/ .___/ /_/ /_/  /_/    \__,_/ /___/___/_/\___/      \__,_/\__,_/_/ /_/ /_/\__,_/
+           /_/
+   ____        ___
+  / __ \____  / (_)___  ___
+ / / / / __ \/ / / __ \/ _ \
+/ /_/ / / / / / / / / /  __/
+\____/_/ /_/_/_/_/ /_/\___/
 
 EOF
 }
@@ -232,6 +234,10 @@ echo
 
 # The pop'n install keys to the same served HDD ID as the PlayOnline titles
 # on this drive (the toolkit's polbbnexec loader serves one ID per drive).
+# On a machine that never ran the PlayOnline step, it is read back from a
+# loader already on the drive (the Viewer's, or pop'n's own).
+source "${HELPER_DIR}/recover-hddid.sh"
+recover_drive_hddid "${POL_HDDID_FILE}" "${DEVICE}" "${POPN_PY}" "${LOG_FILE}"
 if [[ -f "${POL_HDDID_FILE}" ]]; then
     echo "  ${UI_TEXT[POPN_HDDID_FOUND]} ${POL_HDDID_FILE}"
 else
@@ -239,43 +245,6 @@ else
 fi
 echo "HDD ID: ${POL_HDDID_FILE} $([[ -f "${POL_HDDID_FILE}" ]] && echo found || echo absent)" >> "${LOG_FILE}"
 echo
-
-# ---- recover the drive ID from the drive itself -------------------------
-# New machine: the PlayOnline step never ran here, so playonline.hddid is
-# absent. But if pop'n is already installed, the spoof loader on the drive
-# carries the exact 512-byte HDD ID the sealed install was keyed to. Lift it
-# back out of pfs:/dnasload.elf so a fresh machine does not have to re-run the
-# PlayOnline step or reproduce a mint seed. (Nothing to recover if the game is
-# not installed -- there is no loader on the drive yet.)
-if [[ ! -f "${POL_HDDID_FILE}" && -n "${INFO[installed]}" ]]; then
-    POPN_TOOLS="${POPN_TOOLS_OVERRIDE:-${POPN_DIR}/tools}"
-    [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${SCRIPTS_DIR}/../../popn/popn/tools"
-    [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${SCRIPTS_DIR}/../../Pop'N Puzzle Dama Online/popn/tools"
-    [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${HELPER_DIR}/popn/tools"
-    if [[ -f "${POPN_TOOLS}/popninstall.py" ]]; then
-        printf "%s " "${UI_TEXT[POPN_RECOVER_ASK]}"
-        read -r answer </dev/tty
-        case "$answer" in
-            [Nn]*) ;;
-            *)
-                mkdir -p "$(dirname "${POL_HDDID_FILE}")"
-                echo "${UI_TEXT[POPN_RECOVER_RUNNING]}"
-                sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" \
-                    "${POPN_TOOLS}/popninstall.py" "${DEVICE}" \
-                    --recover-hddid "${POL_HDDID_FILE}" \
-                    --helper "${HELPER_DIR}" \
-                    --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
-                    2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
-                if [[ ${PIPESTATUS[0]} -eq 0 && -f "${POL_HDDID_FILE}" ]]; then
-                    echo "  ${UI_TEXT[POPN_RECOVER_DONE]} ${POL_HDDID_FILE}"
-                else
-                    echo "  ${UI_TEXT[POPN_RECOVER_FAIL]}"
-                fi
-                echo
-                ;;
-        esac
-    fi
-fi
 
 # ---- extract the disc tree from a .bin / .iso if needed -----------------
 # Both the fresh install and the in-place re-swap/translation need the

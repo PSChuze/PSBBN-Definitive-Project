@@ -799,7 +799,13 @@ echo
 
 # ---- do it --------------------------------------------------------------
 # The HDD ID is minted here and not while the plan is drawn, so that
-# answering no to the confirmation leaves nothing behind.
+# answering no to the confirmation leaves nothing behind. A drive routed on
+# another machine already has one, served by the Viewer's loader: read it back
+# rather than mint a new ID that the titles on the drive were not keyed to.
+if [[ $ROUTE_READY -eq 1 && ! -f "${HDDID_FILE}" ]]; then
+    source "${HELPER_DIR}/recover-hddid.sh"
+    recover_drive_hddid "${HDDID_FILE}" "${DEVICE}" "${POL_PY}" "${LOG_FILE}"
+fi
 if [[ $ROUTE_READY -eq 1 && ! -f "${HDDID_FILE}" ]]; then
     echo "${UI_TEXT[POL_DOING_HDDID]}"
     seed_args=()

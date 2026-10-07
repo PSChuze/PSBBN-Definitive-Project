@@ -34,7 +34,7 @@ The filled file goes into the partition as `pfs:/dnasload.elf`. The disc's
 
 ## Not shipped here (the player supplies)
 
-- The SCPS-15049 disc image (or its extracted tree) under `games/MGO/`.
+- The SCPS-15049 disc image (or its extracted tree) under `games/GOLF/`.
 - The drive ID at `games/POL/playonline.hddid`, minted by the PlayOnline step.
 
 ## Provenance

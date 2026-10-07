@@ -242,7 +242,10 @@ echo
 
 # The console-side step will serve the drive the same ID the PlayOnline
 # titles are keyed to, because a console is served one ID per drive. It is
-# only reported here; minting it is the PlayOnline step's.
+# only reported here; minting it is the PlayOnline step's. On a machine that
+# never ran that step, it is read back from a loader already on the drive.
+source "${HELPER_DIR}/recover-hddid.sh"
+recover_drive_hddid "${POL_HDDID_FILE}" "${DEVICE}" "${NOBU_PY}" "${LOG_FILE}"
 if [[ -f "${POL_HDDID_FILE}" ]]; then
     echo "  ${UI_TEXT[NOBU_HDDID_FOUND]} ${POL_HDDID_FILE}"
 else
