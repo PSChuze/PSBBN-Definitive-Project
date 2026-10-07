@@ -58,6 +58,17 @@ kit-based installer (no FMOD/) is refused with exit status 3: reinstall it.
 
 prints what the drive has: absent, old (the kit-based install), english or
 japanese (from the browser title).
+
+    python -m mingol.stage.write DEVICE --stage DIR --hddid FILE \
+        --reinstall --saves BACKUP_DIR [--write]
+
+--reinstall replaces a partition --update refuses (the old kit-based install)
+without losing the game's saves. The files only the partition has, the same
+set --update keeps, are copied to BACKUP_DIR and read back there first; then
+the partition's passwords are cleared and pfsshell removes it (with its sub),
+and the fresh install puts the stage and the saved files together. Last, the
+saved files are read back from the new partition. If anything fails after the
+removal, BACKUP_DIR still holds them.
 """
 import argparse
 import json
@@ -216,6 +227,45 @@ def plain_overlay_names(tree, inst):
     return names
 
 
+def save_files(device, tree):
+    """{rel: bytes} for the files only the partition has: what --update keeps."""
+    from playonline.lib import pfsupdate
+    with pfsupdate.Installed(device, PARTITION) as inst:
+        ours = plain_overlay_names(tree, inst)
+        p = pfsupdate.plan(inst, tree, lambda rel: "/" not in rel and rel.upper() in ours)
+        return {rel: inst.read(rel) for rel in p.kept}
+
+
+def backup_saves(saves, backup):
+    """Write the saves under `backup` and read each one back."""
+    for rel, data in saves.items():
+        dst = os.path.join(backup, *rel.split("/"))
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        with open(dst, "wb") as f:
+            f.write(data)
+        with open(dst, "rb") as f:
+            if f.read() != data:
+                raise SystemExit("the copy of %s in %s does not read back" % (rel, backup))
+
+
+def remove_partition(device, pfsshell):
+    """Clear the MM21 passwords (the APA driver refuses to remove a partition
+    whose fpwd does not match), then rmpart, which takes the sub with it."""
+    part = find_partition(device, PARTITION)
+    with open(device, "r+b") as f:
+        f.seek(part[0] * SECTOR)
+        h = bytearray(f.read(1024))
+        h[0x30:0x40] = bytes(16)
+        struct.pack_into("<I", h, 0, polhdd.checksum(bytes(h)))
+        f.seek(part[0] * SECTOR)
+        f.write(h)
+    cmd = [pfsshell] if os.path.isfile(pfsshell) else shlex.split(pfsshell)
+    subprocess.run(cmd, input="device %s\nrmpart %s\nexit\n" % (device, PARTITION),
+                   text=True, check=True)
+    if find_partition(device, PARTITION):
+        raise SystemExit("pfsshell did not remove %s" % PARTITION)
+
+
 def read_attr(device, lba, n):
     with open(device, "rb") as f:
         f.seek(lba * SECTOR + ATTR_OFF)
@@ -306,6 +356,10 @@ def main(argv=None):
     ap.add_argument("--pfsshell", default="pfsshell",
                     help="pfsshell command line (a path with spaces is quoted as one word)")
     ap.add_argument("--keeplist", help="<OPL>/protect-parts.list on the exFAT partition")
+    ap.add_argument("--reinstall", action="store_true",
+                    help="remove the partition on the drive and install afresh, "
+                         "carrying the game's saves over (needs --saves)")
+    ap.add_argument("--saves", help="with --reinstall: where the saves are copied first")
     ap.add_argument("--write", action="store_true")
     a = ap.parse_args(argv)
     if a.probe:
@@ -330,11 +384,15 @@ def main(argv=None):
     if len(hddid) != 512 or hddid[:32] != b"Sony Computer Entertainment Inc.":
         raise SystemExit("%s does not look like a PS2 HDD ID" % a.hddid)
     there = find_partition(a.device, PARTITION)
-    if there and not a.update:
-        raise SystemExit("%s already exists on %s: update it with --update, or remove "
-                         "it first" % (PARTITION, a.device))
-    if a.update and not there:
-        raise SystemExit("%s is not on %s: nothing to update" % (PARTITION, a.device))
+    if a.update and a.reinstall:
+        ap.error("--update and --reinstall are alternatives")
+    if a.reinstall and not a.saves:
+        ap.error("--reinstall needs --saves")
+    if there and not (a.update or a.reinstall):
+        raise SystemExit("%s already exists on %s: update it with --update, or "
+                         "--reinstall it" % (PARTITION, a.device))
+    if (a.update or a.reinstall) and not there:
+        raise SystemExit("%s is not on %s: nothing to replace" % (PARTITION, a.device))
     four = net_four(a.device, hddid)
     if four.hex() != game.get("four"):
         raise SystemExit("the stage was sealed with four %s but %s's __net record holds %s"
@@ -342,7 +400,58 @@ def main(argv=None):
     print("== target %s, four %s" % (a.device, four.hex()))
     if a.update:
         return update(a, stage, tree, attr)
+    if a.reinstall:
+        return reinstall(a, stage, tree, attr)
+    return fresh(a, stage, tree, attr)
 
+
+def reinstall(a, stage, tree, attr):
+    from playonline.lib import pfsupdate
+    saves = save_files(a.device, tree)
+    print("== reinstall %s: %d file(s) only the partition has are carried over"
+          % (PARTITION, len(saves)))
+    for rel in sorted(saves):
+        print("   save %s (%d B)" % (rel, len(saves[rel])))
+    if not a.write:
+        print("== dry run: nothing written (pass --write)")
+        return 0
+    backup = os.path.abspath(a.saves)
+    backup_saves(saves, backup)
+    print("== saves copied to %s and read back" % backup)
+    remove_partition(a.device, a.pfsshell)
+    print("== removed the old %s" % PARTITION)
+
+    # The saves go in with the stage, then leave the stage again.
+    placed, made = [], []
+    try:
+        for rel, data in saves.items():
+            dst = os.path.join(tree, *rel.split("/"))
+            d = os.path.dirname(dst)
+            while not os.path.isdir(d):
+                made.append(d)
+                d = os.path.dirname(d)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, "wb") as f:
+                f.write(data)
+            placed.append(dst)
+        rc = fresh(a, stage, tree, attr)
+    finally:
+        for p in placed:
+            os.remove(p)
+        for d in sorted(made, key=len, reverse=True):
+            if os.path.isdir(d) and not os.listdir(d):
+                os.rmdir(d)
+    with pfsupdate.Installed(a.device, PARTITION) as inst:
+        bad = [rel for rel, data in saves.items()
+               if rel not in inst.files or inst.read(rel) != data]
+    if bad:
+        raise SystemExit("saves did not read back from the new partition (copies are "
+                         "in %s):\n  %s" % (backup, "\n  ".join(sorted(bad))))
+    print("== read back: all %d save file(s) are on the new partition" % len(saves))
+    return rc
+
+
+def fresh(a, stage, tree, attr):
     script = pfsshell_script(a.device, tree)
     with open(stage.rstrip("/\\") + ".pfsshell.txt", "w", newline="\n") as f:
         f.write(script)

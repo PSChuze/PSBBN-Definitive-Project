@@ -289,24 +289,37 @@ echo
 : "${UI_TEXT[GOLF_UPDATE_EN]:=English (the translation is downloaded from openlobby.fyi)}"
 : "${UI_TEXT[GOLF_UPDATE_JA]:=Japanese (as on the disc)}"
 : "${UI_TEXT[GOLF_UPDATE_CHOICE]:=Choose:}"
-: "${UI_TEXT[GOLF_UPDATE_OLD]:=This copy was installed by the older kit-based installer and cannot be updated in place. Uninstall it, then install it again.}"
+: "${UI_TEXT[GOLF_UPDATE_OLD]:=This copy was installed by the older kit-based installer and cannot be updated in place.}"
+: "${UI_TEXT[GOLF_REINSTALL_ASK]:=Uninstall it and install it again now? Your saves and settings are copied to the PC first and put back afterwards. (y/N)}"
+: "${UI_TEXT[GOLF_REINSTALL_SAVES]:=If anything goes wrong after the old copy is removed, your saves are in:}"
+: "${UI_TEXT[GOLF_REINSTALL_DONE]:=Minna no Golf Online was reinstalled. Your saves were kept.}"
 : "${UI_TEXT[GOLF_UPDATE_DOING]:=Updating Minna no Golf Online (this can take several minutes)...}"
 : "${UI_TEXT[GOLF_UPDATE_DONE]:=Minna no Golf Online was updated. Your saves were kept.}"
 GOLF_UPDATE=""
+GOLF_REINSTALL=""
+GOLF_PRESENT=""
+mgo_state=""
 if sudo "${HDL_DUMP}" toc "${DEVICE}" 2>>"${LOG_FILE}" | grep -q -- "PP.SCPS-15049..APPLICATION"; then
+    GOLF_PRESENT=1
     center_text "${UI_TEXT[GOLF_INSTALLED]}"
     echo
     mgo_accessflag
     echo
     mgo_state=$(mgosudo -m mingol.stage.write "${DEVICE}" --probe 2>>"${LOG_FILE}")
     echo "Installed: ${mgo_state:-unreadable}" >> "${LOG_FILE}"
-    if [[ "${mgo_state}" == "old" ]]; then
-        center_text "${UI_TEXT[GOLF_UPDATE_OLD]}"
-        echo
-        read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
-        echo
-        exit 0
-    fi
+fi
+# The old kit-based layout cannot take an in-place update: offer to replace it,
+# carrying the saves over (stage.write --reinstall), then go on as a fresh install.
+if [[ "${mgo_state}" == "old" ]]; then
+    center_text "${UI_TEXT[GOLF_UPDATE_OLD]}"
+    echo
+    printf "%s " "${UI_TEXT[GOLF_REINSTALL_ASK]}"
+    read -r answer </dev/tty
+    case "$answer" in
+        [Yy]*) GOLF_REINSTALL=1; echo ;;
+        *) exit 0 ;;
+    esac
+elif [[ -n "${GOLF_PRESENT}" ]]; then
     if [[ "${mgo_state}" != "english" && "${mgo_state}" != "japanese" ]]; then
         error_msg "${UI_TEXT[GOLF_ERROR_INSTALL]}"
     fi
@@ -380,6 +393,12 @@ else
     esac
     echo
 
+    if [[ -n "${GOLF_REINSTALL}" ]]; then
+        GOLF_SAVES="${GOLF_DIR}/backups/$(basename "${DEVICE}")/saves-$(date +%Y%m%d-%H%M%S)"
+        WRITE_ARGS=(--reinstall --saves "${GOLF_SAVES}")
+        echo "  ${UI_TEXT[GOLF_REINSTALL_SAVES]} ${GOLF_SAVES}"
+        echo
+    fi
     echo "${UI_TEXT[GOLF_DOING]}"
 fi
 echo
@@ -414,6 +433,8 @@ mgo_accessflag
 echo
 if [[ -n "${GOLF_UPDATE}" ]]; then
     center_text "${UI_TEXT[GOLF_UPDATE_DONE]}"
+elif [[ -n "${GOLF_REINSTALL}" ]]; then
+    center_text "${UI_TEXT[GOLF_REINSTALL_DONE]}"
 else
     center_text "${UI_TEXT[GOLF_DONE]}"
 fi
