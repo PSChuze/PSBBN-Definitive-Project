@@ -94,7 +94,7 @@ fi
 # the lang files carry no translation for them yet, so default them here and let
 # a real translation in the lang files override (only set when unset/empty).
 : "${UI_TEXT[NOBU_KIT_ASK]:=An install kit was found. Install Nobunaga to the drive now? (y/N)}"
-: "${UI_TEXT[NOBU_KIT_ASK_TRANSLATE]:=Apply the English translation? (y/N)}"
+: "${UI_TEXT[NOBU_KIT_ASK_TRANSLATE]:=Apply the English translation? It is downloaded from openlobby.fyi. (y/N)}"
 : "${UI_TEXT[NOBU_KIT_INSTALLING]:=Installing Nobunaga to the drive. This can take a few minutes...}"
 : "${UI_TEXT[NOBU_KIT_ERROR]:=Install failed. See logs/nobunaga-installer.log}"
 : "${UI_TEXT[NOBU_KIT_DONE]:=Nobunaga installed. Boot HDD-OSD to launch it.}"
@@ -113,10 +113,11 @@ fi
 : "${UI_TEXT[NOBU_UPDATE_ASK]:=Update the install in place? It is rebuilt from your disc; the saves and settings on the drive are kept. (y/N)}"
 : "${UI_TEXT[NOBU_UPDATE_LANG]:=Language of the game after the update:}"
 : "${UI_TEXT[NOBU_UPDATE_KEEP]:=Keep it as installed}"
-: "${UI_TEXT[NOBU_UPDATE_EN]:=English (the translation pack in games/NOBU/translation/)}"
+: "${UI_TEXT[NOBU_UPDATE_EN]:=English (the translation is downloaded from openlobby.fyi)}"
 : "${UI_TEXT[NOBU_UPDATE_JA]:=Japanese (as on the disc)}"
 : "${UI_TEXT[NOBU_UPDATE_CHOICE]:=Choose:}"
-: "${UI_TEXT[NOBU_UPDATE_NO_PACK]:=English needs the translation pack: extract it into games/NOBU/translation/ and run this step again.}"
+: "${UI_TEXT[NOBU_UPDATE_NO_PACK]:=The translation pack could not be downloaded from openlobby.fyi, and none is kept on this machine. Check the connection and run this step again.}"
+: "${UI_TEXT[NOBU_PACK_FETCHING]:=Getting the English translation pack...}"
 : "${UI_TEXT[NOBU_UPDATE_NEED]:=To update in place, this machine also needs:}"
 : "${UI_TEXT[NOBU_NEED_DISC]:=the game disc (an .iso in games/NOBU/, or the extracted tree in games/NOBU/disc/)}"
 : "${UI_TEXT[NOBU_NEED_HDDID]:=the drive ID (playonline.hddid), which is read from the drive when PlayOnline is on it}"
@@ -195,6 +196,25 @@ nobu_has_translation() {
 # nobuinstall leaves there does not count).
 nobu_has_pack() {
     [[ -n "$(find "${NOBU_DIR}/translation" -type f ! -name 'README*' 2>/dev/null | head -n 1)" ]]
+}
+
+# Sets NOBU_EN_ARGS to what nobuinstall needs for English, or leaves it empty
+# when there is none. First the published pack from openlobby.fyi (kept in
+# games/NOBU/translation-pack/, so an offline run reuses the last one), then
+# prebuilt files a tester dropped into games/NOBU/translation/.
+NOBU_EN_ARGS=()
+nobu_english_args() {
+    local pack
+    echo "  ${UI_TEXT[NOBU_PACK_FETCHING]}"
+    pack=$(NOBU_TRANSLATION_CACHE="${NOBU_DIR}/translation-pack" PYTHONPATH="${HELPER_DIR}" \
+        "${NOBU_PY}" -m nobunaga.download 2>>"${LOG_FILE}" | tee -a "${LOG_FILE}" | tail -n 1)
+    if [[ -n "${pack}" && -f "${pack}" ]]; then
+        NOBU_EN_ARGS=(--translation-pack "${pack}")
+    elif nobu_has_pack; then
+        NOBU_EN_ARGS=(--translation "${NOBU_DIR}/translation")
+    else
+        NOBU_EN_ARGS=()
+    fi
 }
 NOBU_UPDATE=""
 
@@ -322,7 +342,8 @@ if [[ -n "${INFO[installed]}" ]]; then
         3) nobu_lang="japanese" ;;
         *) exit 0 ;;
     esac
-    if [[ "${nobu_lang}" == "english" ]] && ! nobu_has_pack; then
+    [[ "${nobu_lang}" == "english" ]] && nobu_english_args
+    if [[ "${nobu_lang}" == "english" && ${#NOBU_EN_ARGS[@]} -eq 0 ]]; then
         center_text "${UI_TEXT[NOBU_UPDATE_NO_PACK]}"
         echo
         read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
@@ -467,16 +488,28 @@ if [[ -n "${NOBU_DISC_OK}" ]]; then
                 # (except README*) is overlaid onto the staged tree. The choice
                 # is always passed explicitly: nobuinstall applies a pack it
                 # finds there unless told --no-translation.
-                TR_FLAG="--no-translation"
+                TR_ARGS=(--no-translation)
                 UPDATE_FLAG=""
                 if [[ -n "${NOBU_UPDATE}" ]]; then
                     UPDATE_FLAG="--update"
-                    [[ "${nobu_lang}" == "english" ]] && TR_FLAG="--translation ${NOBU_DIR}/translation"
+                    [[ "${nobu_lang}" == "english" ]] && TR_ARGS=("${NOBU_EN_ARGS[@]}")
                     echo "${UI_TEXT[NOBU_UPDATE_DOING]}"
-                elif nobu_has_pack; then
+                else
                     printf "%s " "${UI_TEXT[NOBU_KIT_ASK_TRANSLATE]}"
                     read -r tr_answer </dev/tty
-                    case "$tr_answer" in [Yy]*) TR_FLAG="--translation ${NOBU_DIR}/translation";; esac
+                    case "$tr_answer" in
+                        [Yy]*)
+                            nobu_english_args
+                            if [[ ${#NOBU_EN_ARGS[@]} -eq 0 ]]; then
+                                center_text "${UI_TEXT[NOBU_UPDATE_NO_PACK]}"
+                                echo
+                                read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
+                                echo
+                                exit 0
+                            fi
+                            TR_ARGS=("${NOBU_EN_ARGS[@]}")
+                            ;;
+                    esac
                 fi
                 LOADER_FLAG=""
                 if [[ -f "${NOBU_LOADER}" ]]; then
@@ -493,12 +526,12 @@ if [[ -n "${NOBU_DISC_OK}" ]]; then
                     --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
                     --work "${WORK_DIR}/stage" \
                     ${LOADER_FLAG} ${UPDATE_FLAG} \
-                    --write ${TR_FLAG} \
+                    --write "${TR_ARGS[@]}" \
                     2>&1 | tee -a "${LOG_FILE}" | grep -v '^   kept ' | sed 's/^/  /'
                 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_KIT_ERROR]}"
                 NOBU_INSTALLED_NOW=1
                 nobu_accessflag
-                if [[ "${TR_FLAG}" == --translation* ]]; then
+                if [[ "${TR_ARGS[0]}" != --no-translation ]]; then
                     nobu_retitle english
                 else
                     nobu_retitle japanese

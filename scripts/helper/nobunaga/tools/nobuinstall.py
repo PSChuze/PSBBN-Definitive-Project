@@ -715,6 +715,11 @@ def main():
     ap.add_argument("--no-translation", action="store_true",
                     help="install the game's own Japanese text even when the "
                     "translation/ folder has a pack in it")
+    ap.add_argument("--translation-pack", metavar="ZIP",
+                    help="a published translation pack (nobunaga.download fetches "
+                    "it): UIMSG/WDMMSG/STRDAT are rebuilt in English from the "
+                    "disc's own copies and re-listed in CRC32TBL.BIN "
+                    "(nobunaga.english). Implies --no-translation's folder skip.")
     ap.add_argument("--loader", help="the pre-signed spoof loader KELF (polbbnexec-inputpatch.kelf) "
                     "to install as pfs:/dnasload.elf in place of the disc's stock dnasload (which "
                     "cannot pass the dead DNAS console binding). With --disc it is FILLED here for "
@@ -777,7 +782,7 @@ def main():
         print("   sealed %d containers, copied %d files, verdict-patched %d NBONLINE"
               % (n_c, n_f, n_p))
         # Translation handling: --translation wins; else auto-folder pattern.
-        if a.no_translation:
+        if a.no_translation or a.translation_pack:
             a.translation = None
         elif not a.translation:
             tdir, has = ensure_translation_dir(a.disc)
@@ -789,7 +794,14 @@ def main():
         print("   sealed %d containers, copied %d files, verdict-patched %d NBONLINE"
               % (n_c, n_f, n_p))
 
-    if a.translation:
+    if a.translation_pack:
+        from nobunaga import english
+        pack = english.load_pack(a.translation_pack)
+        counts = english.translate_text(staged, pack)
+        print("== translation: pack %s (%s): %s" % (
+            pack["version"], pack["date"],
+            ", ".join("%s %d strings" % (n, c) for n, c in sorted(counts.items()))))
+    elif a.translation:
         n_t = overlay_translation(staged, a.translation)
         print("== translation: overlaid %d data file(s) from %s" % (n_t, a.translation))
 
