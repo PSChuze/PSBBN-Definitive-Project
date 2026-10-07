@@ -217,9 +217,9 @@ if [[ -z "$(find "${BUNDLE_DIR}" -type f -print -quit 2>/dev/null)" ]]; then
     echo "  ${UI_TEXT[BOMB_EXTRACT_FOUND]} $(basename "${BOMB_IMG}")"
     echo "  ${UI_TEXT[BOMB_EXTRACT_RUNNING]}"
     BUNDLE_DIR="${WORK_DIR}/disctree"
+    # The tree stays Japanese here; bombinstall --translate makes it English.
     PYTHONPATH="${HELPER_DIR}" "${BOMB_PY}" -m bomb.bombdisc "${BOMB_IMG}" "${BUNDLE_DIR}" \
-        --pem "${BOMB_FILES}/BOMBREG.PEM" \
-        --tsv "${BOMB_FILES}/msg_FILES_install.en.tsv" >> "${LOG_FILE}" 2>&1 \
+        --pem "${BOMB_FILES}/BOMBREG.PEM" >> "${LOG_FILE}" 2>&1 \
         || error_msg "${UI_TEXT[BOMB_EXTRACT_FAIL]}"
     DISC_ARG=(--disc)
     echo
@@ -269,6 +269,14 @@ fi
 : "${UI_TEXT[BOMB_UPDATE_DOING]:=Updating Net de Bomberman...}"
 : "${UI_TEXT[BOMB_UPDATE_DONE]:=Net de Bomberman was updated. Your saves were kept.}"
 : "${UI_TEXT[BOMB_UPDATE_ERROR]:=The update failed. See logs/bomb-installer.log.}"
+: "${UI_TEXT[BOMB_UPDATE_LANG]:=Language of the game after the update:}"
+: "${UI_TEXT[BOMB_UPDATE_KEEP]:=Keep it as installed}"
+: "${UI_TEXT[BOMB_UPDATE_EN]:=English (the game's messages; menus drawn as pictures stay Japanese)}"
+: "${UI_TEXT[BOMB_UPDATE_JA]:=Japanese (as on the disc)}"
+: "${UI_TEXT[BOMB_ASK_TRANSLATE]:=Apply the English translation (the game's messages; menus drawn as pictures stay Japanese)? (y/N)}"
+# English: FILES.BIN's messages and the English name, via bombinstall --translate.
+BOMB_TSV="${BOMB_FILES}/msg_FILES_install.en.tsv"
+TR_ARGS=()
 if sudo "${HDL_DUMP}" toc "${DEVICE}" 2>>"${LOG_FILE}" | grep -q -- "PP.SLPS-20343.NET.BOMB"; then
     center_text "${UI_TEXT[BOMB_INSTALLED]}"
     echo
@@ -282,6 +290,24 @@ if sudo "${HDL_DUMP}" toc "${DEVICE}" 2>>"${LOG_FILE}" | grep -q -- "PP.SLPS-203
     printf "%s " "${UI_TEXT[BOMB_UPDATE_CHOICE]}"
     read -r answer </dev/tty
     if [[ "$answer" == "1" ]]; then
+        bomb_state=$(sudo -E env PYTHONPATH="${HELPER_DIR}" PSBBN_HELPER="${HELPER_DIR}" \
+            "${BOMB_PY}" -m bomb.state "${DEVICE}" 2>>"${LOG_FILE}")
+        echo "Installed language: ${bomb_state:-unreadable}" >> "${LOG_FILE}"
+        echo
+        echo "${UI_TEXT[BOMB_UPDATE_LANG]}"
+        echo "  1) ${UI_TEXT[BOMB_UPDATE_KEEP]} (${bomb_state})"
+        echo "  2) ${UI_TEXT[BOMB_UPDATE_EN]}"
+        echo "  3) ${UI_TEXT[BOMB_UPDATE_JA]}"
+        echo
+        printf "%s " "${UI_TEXT[BOMB_UPDATE_CHOICE]}"
+        read -r answer </dev/tty
+        case "$answer" in
+            1|"") bomb_lang="${bomb_state}" ;;
+            2) bomb_lang="english" ;;
+            3) bomb_lang="japanese" ;;
+            *) exit 0 ;;
+        esac
+        [[ "${bomb_lang}" == "english" ]] && TR_ARGS=(--translate "${BOMB_TSV}")
         echo
         echo "${UI_TEXT[BOMB_UPDATE_DOING]}"
         echo
@@ -294,6 +320,7 @@ if sudo "${HDL_DUMP}" toc "${DEVICE}" 2>>"${LOG_FILE}" | grep -q -- "PP.SLPS-203
             --helper "${HELPER_DIR}" \
             --work "${WORK_DIR}/stage" \
             "${ICON_ARG[@]}" \
+            "${TR_ARGS[@]}" \
             --update --write 2>&1 | tee -a "${LOG_FILE}" | grep -v '^   kept ' | sed 's/^/  /'
         [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[BOMB_UPDATE_ERROR]}"
         echo
@@ -319,6 +346,12 @@ case "$answer" in
     *) echo; echo "${UI_TEXT[NOBU_ABORTED]}"; sleep 2; exit 0 ;;
 esac
 echo
+printf "%s " "${UI_TEXT[BOMB_ASK_TRANSLATE]}"
+read -r tr_answer </dev/tty
+case "$tr_answer" in
+    [Yy]*) TR_ARGS=(--translate "${BOMB_TSV}") ;;
+esac
+echo
 
 # ---- install ------------------------------------------------------------
 echo "${UI_TEXT[BOMB_DOING]}"
@@ -332,6 +365,7 @@ bombsudo bomb.bombinstall "${DEVICE}" \
     --helper "${HELPER_DIR}" \
     --work "${WORK_DIR}/stage" \
     "${ICON_ARG[@]}" \
+    "${TR_ARGS[@]}" \
     --write 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[BOMB_ERROR_INSTALL]}"
 bomb_accessflag

@@ -108,9 +108,29 @@ BOOT_BLOCK = (
 # fpwd = apa_password("PP.SLPS-20343.NET.BOMB", b"T3nheNY3").
 APA_FPWD = bytes.fromhex("02373c11a0a32358")
 
+# The name follows the language: English only with the translation. The
+# Japanese strings are the disc's own (DATA0/HDDICON1.DAT, res/info.sys),
+# verbatim. `info` is what PSBBN's game list shows (res/info.sys); None
+# leaves the disc's file as it is.
+NAMES = {
+    "english": {
+        "icon": {"title0": "Net de Bomberman",
+                 "uninstall": ("", "")},
+        "info": {"title": "Net de Bomberman",
+                 "genre": "Action",
+                 "note": "The Bomberman battles that have won over countless "
+                         "fans with their simple play are finally online."},
+    },
+    "japanese": {
+        "icon": {"title0": "ネットでボンバーマン",
+                 "uninstall": ("ゲームを削除します。", "よろしいでしょうか？")},
+        "info": None,
+    },
+}
+
 ICON_SYS = (
     "PS2X\r\n"
-    "title0=Net de Bomberman\r\n"
+    "title0={title0}\r\n"
     "title1=\r\n"
     "bgcola=64\r\n"
     "bgcol0=0,0,0\r\n"
@@ -124,13 +144,38 @@ ICON_SYS = (
     "lightcol0=54,54,54\r\n"
     "lightcol1=16,16,16\r\n"
     "lightcol2=0,0,0\r\n"
-    "uninstallmes0=\r\n"
-    "uninstallmes1=\r\n"
+    "uninstallmes0={un0}\r\n"
+    "uninstallmes1={un1}\r\n"
     "uninstallmes2=\r\n"
 )
 
 
-def build_attr(icon_path, boot_block=BOOT_BLOCK):
+def translate_tree(staged, tsv):
+    """FILES.BIN's messages in English (bombtext, in place in each slot) and
+    the English title, genre and note in res/info.sys."""
+    import bombtext
+    files_bin = os.path.join(staged, "FILES.BIN")
+    tmp = files_bin + ".en"
+    if bombtext.cmd_msg_build(files_bin, tsv, tmp) != 0:
+        raise SystemExit("FILES.BIN translation failed")
+    os.replace(tmp, files_bin)
+    print("   FILES.BIN messages <- %s" % tsv)
+    info = os.path.join(staged, "res", "info.sys")
+    if os.path.isfile(info):
+        text = open(info, "rb").read().decode("utf-8")
+        want = NAMES["english"]["info"]
+        out = []
+        for line in text.splitlines(True):
+            key = line.split("=", 1)[0].strip()
+            if "=" in line and key in want:
+                end = line[len(line.rstrip("\r\n")):]
+                line = "%s= %s%s" % (line.split("=", 1)[0], want[key], end)
+            out.append(line)
+        open(info, "wb").write("".join(out).encode("utf-8"))
+        print("   res/info.sys: English title, genre and note")
+
+
+def build_attr(icon_path, boot_block=BOOT_BLOCK, lang="japanese"):
     """The attribute area bytes, via the PlayOnline reference builder."""
     _psbbn = os.environ.get("PSBBN_HELPER")
     if _psbbn and _psbbn not in sys.path:
@@ -139,7 +184,24 @@ def build_attr(icon_path, boot_block=BOOT_BLOCK):
     icon = open(icon_path, "rb").read()
     if len(icon) < 0x100 or icon[:8].hex() != "0000010001000000":
         raise SystemExit("icon does not look like a PS2 .ico (needs a real one; see README)")
-    return attrarea.build_area(boot_block.encode("ascii"), ICON_SYS.encode("ascii"), icon)
+    names = NAMES[lang]["icon"]
+    body = ICON_SYS.format(title0=names["title0"], un0=names["uninstall"][0],
+                           un1=names["uninstall"][1])
+    return attrarea.build_area(boot_block.encode("ascii"), body.encode("utf-8"), icon)
+
+
+def state(device):
+    """english or japanese by the browser name, absent without the partition."""
+    _psbbn = os.environ.get("PSBBN_HELPER")
+    if _psbbn and _psbbn not in sys.path:
+        sys.path.insert(0, _psbbn)
+    from playonline import apa, attrarea
+    found = apa.find_partition(device, GAME_PART)
+    if found is None:
+        return "absent"
+    area = attrarea.read_area(device, found[0])
+    title = ((attrarea.title0_of(area) if area else None) or "").strip()
+    return "english" if title == NAMES["english"]["icon"]["title0"] else "japanese"
 
 
 def real_hddid(device, out_path):
@@ -408,9 +470,15 @@ def main():
     ap.add_argument("--update", action="store_true",
                     help="update the partition already on the drive in place, "
                          "keeping the game's own files")
+    ap.add_argument("--translate", metavar="TSV",
+                    help="the English translation (msg_FILES_install.en.tsv): "
+                         "FILES.BIN's messages in English and the English name "
+                         "in the browser and PSBBN's list. Without it the game "
+                         "and its name stay Japanese, as on the disc.")
     ap.add_argument("--check-only", action="store_true")
     ap.add_argument("--write", action="store_true")
     a = ap.parse_args()
+    lang = "english" if a.translate else "japanese"
 
     if " " in a.work:
         raise SystemExit("--work must be a space-free path (pfsshell put "
@@ -451,6 +519,8 @@ def main():
         seal = lambda b: bombbundle.dnasbundle.seal(b, ata32, four)  # noqa: E731
     n_c, n_f = bombbundle.map_tree(a.bundle, staged, seal)
     print("   sealed %d containers, copied %d files" % (n_c, n_f))
+    if a.translate:
+        translate_tree(staged, a.translate)
 
     # Merge bootfiles into the same staged tree so they land at the partition
     # root next to the game files. Refuse to overwrite (name collision would
@@ -486,7 +556,7 @@ def main():
         attr_path = None
         if a.icon:
             attr_path = os.path.join(a.work, "attr.bin")
-            open(attr_path, "wb").write(build_attr(a.icon, BOOT_BLOCK))
+            open(attr_path, "wb").write(build_attr(a.icon, BOOT_BLOCK, lang))
         update_partition(a, staged, attr_path)
         return
 
@@ -508,7 +578,7 @@ def main():
     attr_path = None
     if a.icon:
         attr_path = os.path.join(a.work, "attr.bin")
-        open(attr_path, "wb").write(build_attr(a.icon, BOOT_BLOCK))
+        open(attr_path, "wb").write(build_attr(a.icon, BOOT_BLOCK, lang))
 
     if not a.write:
         print("== attr: dry run -- --write to apply")
