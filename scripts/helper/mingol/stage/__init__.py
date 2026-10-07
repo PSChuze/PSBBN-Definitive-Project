@@ -386,7 +386,7 @@ def stage(args):
         from . import english as englishmod
         english = englishmod.apply(root, m, translate=args.translate,
                                    pack_path=args.translation_pack,
-                                   local=args.translation_dir)
+                                   local=args.translation_dir, sealed=ENGLISH_SEALS)
         # English: the overlays load as plain files (bootpatch
         # PLAIN_OVERLAYS_PATCH); the sealed ones stay stock beside them.
         plain = bool(english) and not ENGLISH_SEALS

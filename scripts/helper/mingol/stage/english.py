@@ -49,6 +49,15 @@ markup byte 0x07 becomes \\x07, so a colour toggle reads "\\x07]"). The slot
 size is taken from the overlay itself (the string plus its zero padding), so
 the English plus a NUL must fit it. packaging/build_mingol_pack.py makes packs.
 
+A pack may also carry "patches": operator-approved code tweaks to an overlay
+it translates (the software keyboard opening in half-width English, in
+SYSTEM.BIN), as {"ZZBIN/SYSTEM.BIN": [{"off": "0x..", "orig": "<hex>",
+"new": "<hex>", "why": ".."}, ...]}. They go only into the plain overlays of
+an English install (never a sealed one), and only on the overlay the pack was
+made for with every original byte as listed; otherwise that overlay keeps
+the disc's code (the Japanese keyboard) with its English text, and a note
+says so.
+
 Protocol-coupled strings (login field names like &LOGIN=, host names, paths,
 PSaccountLib XML element names, the software-keyboard IME dictionary) are not
 in the pack on purpose; translating them would break login or input.
@@ -215,10 +224,51 @@ def load_pack(path):
                 raise Refused("%s in the pack is not UTF-8" % name)
             out[target] = (kind, sha1, rows(body))
         return {"format": fmt, "version": str(man.get("version", "?")),
-                "date": str(man.get("date", "?")), "text": out}
+                "date": str(man.get("date", "?")), "text": out,
+                "patches": load_patches(man.get("patches"), out)}
     finally:
         if z is not None:
             z.close()
+
+
+def load_patches(sec, text):
+    """The manifest's optional "patches" section, checked:
+    {target: [(offset, original bytes, new bytes)]}."""
+    if sec is None:
+        return {}
+    if not isinstance(sec, dict):
+        raise Refused("the pack's patches are not a JSON object")
+    out = {}
+    for target, lst in sorted(sec.items()):
+        if not _TARGET.match(target) or target not in text or not isinstance(lst, list):
+            raise Refused("the pack's patches name %r" % (target,))
+        got = []
+        for pt in lst:
+            try:
+                if not _OFF.match(pt["off"]):
+                    raise ValueError(pt["off"])
+                off = int(pt["off"], 16)
+                orig, new = bytes.fromhex(pt["orig"]), bytes.fromhex(pt["new"])
+            except (KeyError, TypeError, ValueError):
+                raise Refused("the pack has a malformed patch for %s" % target)
+            if not orig or len(orig) != len(new):
+                raise Refused("the pack has a malformed patch for %s" % target)
+            got.append((off, orig, new))
+        out[target] = got
+    return out
+
+
+def patch_overlay(old, data, patches, name):
+    """(`data` with `patches` in, None), or (`data` untouched, why not) when
+    any patch's original bytes are not on the disc's overlay `old` or were
+    changed by the English: all of an overlay's patches go in, or none."""
+    d = bytearray(data)
+    for off, orig, new in patches:
+        end = off + len(orig)
+        if end > len(old) or old[off:end] != orig or bytes(d[off:end]) != orig:
+            return data, "%s: the code at %#x is not what the patch was made for" % (name, off)
+        d[off:end] = new
+    return bytes(d), None
 
 
 def slot(d, off):
@@ -251,11 +301,14 @@ def overlay_build(data, table, name):
     return bytes(d), changed
 
 
-def translated(disc_root, pack):
+def translated(disc_root, pack, patch=True, note=None):
     """({target: English overlay bytes}, {target: strings replaced}) for the
     overlays under `disc_root` (which holds ZZBIN/*.BIN); writes nothing.
-    Refused unless every overlay checks out."""
+    Refused unless every overlay checks out. With `patch` the pack's code
+    patches go in too; an overlay whose code does not match keeps the disc's
+    (`note` is told why) and still gets its English."""
     new, counts = {}, {}
+    patched = []
     for target, (kind, sha1, table) in sorted(pack["text"].items()):
         path = os.path.join(disc_root, *target.split("/"))
         if not os.path.isfile(path):
@@ -266,16 +319,26 @@ def translated(disc_root, pack):
             raise Refused("%s is not the one the pack was made for (the SCPS-15049 disc's)"
                           % target)
         new[target], counts[target] = overlay_build(old, table, target)
+        todo = pack.get("patches", {}).get(target) if patch else None
+        if todo:
+            new[target], why = patch_overlay(old, new[target], todo, target)
+            if why is None:
+                patched.append("%s (%d)" % (target.split("/")[-1], len(todo)))
+            elif note is not None:
+                note("--translate: %s; left as on the disc (Japanese keyboard)" % why)
         if len(new[target]) != len(old):
             raise Refused("%s changed size" % target)
+    if patched and note is not None:
+        note("--translate: code patches in %s (software keyboard opens in English)"
+             % ", ".join(patched))
     return new, counts
 
 
-def translate_overlays(disc_root, pack):
+def translate_overlays(disc_root, pack, note=print):
     """Rewrite each overlay named by the pack, in place under `disc_root`
     (which holds ZZBIN/*.BIN). Returns {target: strings replaced}. Writes
     nothing unless every overlay checks out."""
-    new, counts = translated(disc_root, pack)
+    new, counts = translated(disc_root, pack, note=note)
     for target in sorted(new):
         with open(os.path.join(disc_root, *target.split("/")), "wb") as f:
             f.write(new[target])
@@ -356,7 +419,8 @@ def apply(root, man, translate=False, pack_path=None, local=None, sealed=False):
         if bad:
             raise Refused("it changes %s, whose signed hash cannot be redone"
                           % ", ".join(bad))
-        new, counts = translated(root, pack)
+        # The code patches go only into plain overlays, never a sealed one.
+        new, counts = translated(root, pack, patch=not sealed, note=man.note)
     except Refused as e:
         if pack_path:
             raise SystemExit("translation pack %s: %s" % (pack_path, e))
