@@ -71,3 +71,7 @@ media.cfg
 bnupdate.tar.gz
 path.cfg
 *.hddid
+
+# The DNAS constants every title helper loads at import time. *.BIN above
+# matches them case-insensitively on Windows, which kept three copies out.
+!scripts/helper/**/dnas-consts.bin
