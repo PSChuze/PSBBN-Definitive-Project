@@ -103,6 +103,12 @@ fi
 : "${UI_TEXT[POPN_RESWAP_RUNNING]:=Swapping the boot loader in place...}"
 : "${UI_TEXT[POPN_RESWAP_DONE]:=Loader swapped. Boot HDD-OSD to launch it.}"
 : "${UI_TEXT[POPN_RESWAP_ERROR]:=Loader swap failed. See logs/popn-installer.log}"
+: "${UI_TEXT[POPN_SEAL_MISMATCH]:=The game files on this drive are locked to a different drive ID than the one this machine would give the loader. Swapping now would boot to a black screen.}"
+: "${UI_TEXT[POPN_SEAL_RESEAL]:=re-lock the game files to this machine drive ID (rewrites MODULES and BLJA-00010 from the disc)}"
+: "${UI_TEXT[POPN_SEAL_KEEP]:=keep the drive as it is and use the ID its game files are locked to (read from its current loader)}"
+: "${UI_TEXT[POPN_SEAL_CANCEL]:=cancel, write nothing (default)}"
+: "${UI_TEXT[POPN_SEAL_ASK]:=Choose R, K or N:}"
+: "${UI_TEXT[POPN_SEAL_NO_RECOVER]:=The loader on the drive does not serve the ID its game files are locked to. Choose R (re-lock) instead. See logs/popn-installer.log}"
 : "${UI_TEXT[POPN_TR_ASK]:=Apply the English translation (text and menu images)? Building the images takes several minutes. (y/N)}"
 : "${UI_TEXT[POPN_RESWAP_UNAVAIL]:=This drive is already set up. To refresh the boot loader or apply the English translation in place, this machine also needs:}"
 : "${UI_TEXT[POPN_NEED_DISC]:=the game disc (a Redump .bin in games/POPN/, or an extracted tree in games/POPN/disc/)}"
@@ -317,15 +323,63 @@ if [[ -n "${INFO[installed]}" ]]; then
                     # English text + menu images; POPN_NO_TEXTURES=1 keeps the Japanese images
                     [[ -n "${POPN_TR_FLAG}" && -n "${POPN_NO_TEXTURES}" ]] && POPN_TR_FLAG+=" --no-textures"
                 fi
+                # Served-vs-sealed guard (plan gate 6). The loader serves ONE HDD
+                # ID; the containers already on the drive were sealed to some ID
+                # at install time. If they differ the game decrypts its modules
+                # to noise and the screen stays black (the 2026-10-07 regression:
+                # a swap served this machine's playonline.hddid over containers
+                # sealed to another ID). Check first, read-only; on a mismatch
+                # the default is to write nothing.
+                SWAP_HDDID="${POL_HDDID_FILE}"
+                SEAL_FLAG=""
+                sudo blockdev --flushbufs "${DEVICE}" >/dev/null 2>&1
+                sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" \
+                    "${POPN_INSTALL_PY}" "${DEVICE}" \
+                    --hddid "${POL_HDDID_FILE}" \
+                    --helper "${HELPER_DIR}" \
+                    --check-seal \
+                    2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                seal_rc=${PIPESTATUS[0]}
+                if [[ ${seal_rc} -eq 3 ]]; then
+                    echo
+                    echo "  ${UI_TEXT[POPN_SEAL_MISMATCH]}"
+                    echo "    R - ${UI_TEXT[POPN_SEAL_RESEAL]}"
+                    echo "    K - ${UI_TEXT[POPN_SEAL_KEEP]}"
+                    echo "    N - ${UI_TEXT[POPN_SEAL_CANCEL]}"
+                    printf "  %s " "${UI_TEXT[POPN_SEAL_ASK]}"
+                    read -r seal_answer </dev/tty
+                    case "$seal_answer" in
+                        [Rr]*) SEAL_FLAG="--reseal" ;;
+                        [Kk]*)
+                            SWAP_HDDID="${WORK_DIR}/sealed-to.hddid"
+                            rm -f "${SWAP_HDDID}"
+                            # Lifts the ID the drive's own loader serves and keeps
+                            # it only if the containers decrypt under it.
+                            sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" \
+                                "${POPN_INSTALL_PY}" "${DEVICE}" \
+                                --helper "${HELPER_DIR}" \
+                                --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
+                                --work "${WORK_DIR}/recover" \
+                                --recover-hddid "${SWAP_HDDID}" \
+                                2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+                            [[ ${PIPESTATUS[0]} -eq 0 && -f "${SWAP_HDDID}" ]] \
+                                || error_msg "${UI_TEXT[POPN_SEAL_NO_RECOVER]}"
+                            ;;
+                        *) echo; echo "${UI_TEXT[POPN_ABORTED]}"; sleep 2; exit 0 ;;
+                    esac
+                elif [[ ${seal_rc} -ne 0 ]]; then
+                    error_msg "${UI_TEXT[POPN_RESWAP_ERROR]}"
+                fi
                 echo "${UI_TEXT[POPN_RESWAP_RUNNING]}"
                 sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" \
                     "${POPN_INSTALL_PY}" "${DEVICE}" \
                     --disc "${POPN_DISC}" \
-                    --hddid "${POL_HDDID_FILE}" \
+                    --hddid "${SWAP_HDDID}" \
                     --helper "${HELPER_DIR}" \
                     --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
                     --loader "${POPN_LOADER}" \
                     ${POPN_TR_FLAG} \
+                    ${SEAL_FLAG} \
                     --loader-swap --write \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 if [[ ${PIPESTATUS[0]} -eq 0 ]]; then

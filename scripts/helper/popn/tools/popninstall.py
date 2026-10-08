@@ -34,6 +34,13 @@ Mirrors the shape of Nobunaga's nobuinstall.py, minus the neutral-bundle step
   5. passwords  Set fpwd/rpwd on the APA header (PSBBN's pfsshell mkpart leaves
                 them zero; the game refuses to mount if they don't match).
 
+  swap  (--loader-swap, existing install) refills pfs:/dnasload.elf only, after
+        the served-vs-sealed guard: a sealed container on the drive must
+        decrypt under the --hddid the loader will serve, or it refuses (exit 3;
+        --reseal re-seals the containers to it, --recover-hddid lifts the ID
+        the drive's own loader serves, saved only if the containers open with
+        it). --check-seal runs the guard alone.
+
 Everything runs as a dry-run (prints the plan) unless --write is passed.
 Never edits or touches the PlayOnline package; reads it only if --helper is
 supplied to reuse the fit/jail safety gate.
@@ -478,6 +485,240 @@ def stage_images(a, dest_dir):
     return names, False
 
 
+# ---- served-vs-sealed guard ---------------------------------------------------
+#
+# The loader serves ONE HDD ID; the game decrypts its sealed containers
+# (MODULES/*.IRX, BLJA-00010) with that ID + the four, and checks the drive
+# tail tag. A loader that serves a different ID than the containers were sealed
+# to boots to a black screen (plan gate 6; the 2026-10-07 regression: a
+# --loader-swap served the per-drive mint over psbb-sealed containers). So
+# before any loader is written into an existing install, one sealed container
+# is read back from the drive and must decrypt under the ID about to be served.
+
+SEAL_EXIT = 3                    # exit status of a served-vs-sealed refusal
+SEAL_PROBE = "MODULES/SIO2MAN.IRX"   # fully decrypted (small)
+# Every sealed file the install writes; each gets the cheap tail-tag check.
+SEALED_FILES = ["BLJA-00010"] + ["MODULES/%s.IRX" % m for m in MODULE_NAMES]
+
+
+def _helper_dir(a_helper):
+    h = a_helper or os.path.dirname(os.path.dirname(HERE))   # helper/popn/tools -> helper
+    if h not in sys.path:
+        sys.path.insert(0, h)
+    return h
+
+
+def _apa_subs(f, main_lba):
+    """{sub index: start} of the APA sub-partitions of the main at main_lba."""
+    subs, seen, lba = {}, set(), 0
+    while lba not in seen:
+        seen.add(lba)
+        f.seek(lba * SECTOR)
+        hdr = f.read(1024)
+        if len(hdr) < 1024 or struct.unpack_from("<I", hdr, 4)[0] != 0x00415041:
+            break
+        nxt = struct.unpack_from("<I", hdr, 8)[0]
+        start = struct.unpack_from("<I", hdr, 0x40)[0]
+        main, number = struct.unpack_from("<II", hdr, 0x58)
+        if main == main_lba and number:
+            subs[number] = start
+        if not nxt:
+            break
+        lba = nxt
+    return subs
+
+
+def read_installed(device, names, helper=None):
+    """{name: bytes or None} for files of the EXISTING PP.BLJA-00010, read with
+    the toolkit's pure-Python PFS reader. Read-only (the device is opened 'rb');
+    works on a drive or on a raw .img the same way."""
+    _helper_dir(helper)
+    from playonline import apa
+    from playonline.lib import polpfsread, polfill
+    lba, sectors = apa.find_partition(device, PARTITION)
+    out = {}
+    with open(device, "rb") as f:
+        part, root = polpfsread.mount(f, lba, sectors, _apa_subs(f, lba))
+        if part is None:
+            raise SystemExit("cannot read the PFS volume of %s on %s" % (PARTITION, device))
+        files = []
+        polpfsread.walk(part, root, out=files)
+        index = {p.lstrip("/").upper(): ino for p, ino in files}
+        for n in names:
+            ino = index.get(n.upper())
+            out[n] = polfill.read_content(part, ino) if ino else None
+    return out
+
+
+def seal_matches(blob, hddid_blob, four, deep=False):
+    """(ok, why) for one sealed drive-form container under (hddid, four):
+    every section's outer plaintext ends in the drive tail tag; with deep=True
+    section 0 also decrypts fully (dnasdec) to an ELF module. (The signed SHA-1
+    is not judged: dnasdec's model of it does not hold for disc_to_drive output,
+    which the console accepts.)"""
+    import dnas2, dnaskey, rc6, dnasdec
+    keys = dnas2.keys()
+    ata32 = ata_material(hddid_blob)
+    r7 = dnas2.unrecord(blob[0:128], keys[7][1], keys[7][2])
+    if r7 is None or r7[1] != b"96011a8e95fd1ffc":
+        return False, "not a DNAS2 drive-form container"
+    k1 = dnaskey.derive_k1(ata32, four)
+    sec = int.from_bytes(r7[0][0x20:0x24], "little") + 0x200
+    first, n = sec, 0
+    while sec + 0x300 < len(blob):
+        sess = dnas2.unrecord(blob[sec + 0x180:sec + 0x200], keys[11][1], keys[11][2])
+        if sess is None:
+            return False, "no session record at %#x" % (sec + 0x180)
+        h1 = rc6.cbc(blob[sec + 0x280:sec + 0x300], sess[0][:16], sess[0][16:32], True)
+        if h1[10:26] != b"a5713c8bdbe8d420":
+            return False, "H1 tag miss at %#x" % sec
+        sizes = None
+        for st in (h1[4], 3):
+            if st in keys:
+                sizes = dnas2.unrecord(blob[sec + 0x100:sec + 0x180], keys[st][1], keys[st][2])
+                if sizes:
+                    break
+        if sizes is None:
+            return False, "no sizes record at %#x" % (sec + 0x100)
+        v1 = struct.unpack("<I", sizes[0][:4])[0]
+        extent = sizes[0][10] * 16 + v1 + ((0x10 - (v1 & 0xF)) & 0xF) + 0x10
+        blk = rc6.cbc(blob[sec + 0x80:sec + 0x100], k1[0:16], k1[16:32], True)
+        k2 = dnaskey.derive_k2(blk, ata32, four)
+        end = sec + 0x300 + extent
+        tail = rc6.cbc(blob[end - 32:end], k2[0:16], k2[16:32], True)[16:32]
+        if tail != disc_to_drive.DRIVE_TAIL_TAG:
+            return False, "section %d does not decrypt to the drive tail tag" % n
+        n += 1
+        nxt = end + 0x80
+        if nxt + 0x300 >= len(blob):
+            break
+        sec = nxt
+    if not n:
+        return False, "no sections"
+    if deep:
+        try:
+            mod, _tag, _nxt, info = dnasdec.section_module(blob, first, ata32, four, k1, keys)
+        except Exception as e:
+            return False, "section 0 does not decrypt (%s)" % e
+        if mod[:4] != b"\x7fELF":
+            return False, "section 0 is not an ELF"
+    return True, "%d section(s), tail tag ok%s" % (n, ", section 0 decrypts to an ELF" if deep else "")
+
+
+def _sha8(b):
+    import hashlib
+    return hashlib.sha1(b).hexdigest()[:8]
+
+
+def check_seal(device, hddid_blob, four, helper=None, all_files=True):
+    """{ok, probe, bad, why, drive_loader_id, drive_loader_ok} for the ID about
+    to be served against the containers already on the drive. Read-only."""
+    names = SEALED_FILES if all_files else [SEAL_PROBE]
+    got = read_installed(device, names + ["dnasload.elf"], helper)
+    res = {"served": _sha8(hddid_blob), "bad": [], "probe": SEAL_PROBE}
+    probe = got.get(SEAL_PROBE)
+    if probe is None:
+        raise SystemExit("pfs:/%s is missing from %s on %s; cannot check what the "
+                         "install is sealed to" % (SEAL_PROBE, PARTITION, device))
+    ok, why = seal_matches(probe, hddid_blob, four, deep=True)
+    res["why"] = why
+    if not ok:
+        res["bad"].append(SEAL_PROBE)
+    for n in names:
+        if n == SEAL_PROBE or got.get(n) is None:
+            continue
+        if not seal_matches(got[n], hddid_blob, four)[0]:
+            res["bad"].append(n)
+    res["ok"] = not res["bad"]
+    # What the loader on the drive serves now, and whether the containers are
+    # sealed to THAT: the --recover-hddid answer.
+    res["drive_loader_id"] = res["drive_loader_ok"] = None
+    cur = got.get("dnasload.elf")
+    if cur:
+        _helper_dir(helper)
+        from playonline import loader as pol_loader
+        try:
+            info = pol_loader.read(cur)
+            if info.get("has_hddid"):
+                blk = info["hddid"]
+                res["drive_loader_id"] = _sha8(blk)
+                res["drive_loader_block"] = blk
+                res["drive_loader_ok"] = seal_matches(probe, blk, four, deep=True)[0]
+        except Exception:
+            pass
+    return res
+
+
+def report_seal(res, hddid_path):
+    if res["ok"]:
+        print("== seal guard: the containers on the drive are sealed to the served "
+              "HDD ID %s (%s: %s)" % (res["served"], res["probe"], res["why"]))
+        return
+    print("== seal guard: MISMATCH -- the loader would serve HDD ID %s (%s), but the "
+          "containers on the drive are NOT sealed to it" % (res["served"], hddid_path))
+    print("   %s: %s; %d sealed file(s) fail: %s"
+          % (res["probe"], res["why"], len(res["bad"]), ", ".join(res["bad"])))
+    print("   (the game would decrypt them to noise: black screen after the "
+          "loader, plan gate 6)")
+    if res["drive_loader_id"]:
+        print("   the loader now on the drive serves %s, and the containers %s sealed to it"
+              % (res["drive_loader_id"], "ARE" if res["drive_loader_ok"] else "are NOT"))
+    print("   choose one:")
+    print("     --reseal          re-seal MODULES/*.IRX + BLJA-00010 from the disc to "
+          "the served ID %s" % res["served"])
+    if res["drive_loader_ok"]:
+        print("     --recover-hddid OUT, then --hddid OUT: keep the drive's seal (%s)"
+              % res["drive_loader_id"])
+    else:
+        print("     --recover-hddid OUT only helps if the drive's current loader serves "
+              "the seal ID; it does not here")
+
+
+def reseal_files(a, work):
+    """Seal MODULES/*.IRX + BLJA-00010 from the disc to a.hddid into work/;
+    returns the pfsshell lines that replace them in the mounted partition."""
+    hddid_blob = open(a.hddid, "rb").read()
+    ata32 = ata_material(hddid_blob)
+    four = bytes.fromhex(a.four)
+    os.makedirs(os.path.join(work, "MODULES"), exist_ok=True)
+    blob = disc_to_drive.build_drive_form(
+        open(os.path.join(a.disc, "MAIN.BIN"), "rb").read(), ata32, four)
+    open(os.path.join(work, "BLJA-00010"), "wb").write(blob)
+    for m in MODULE_NAMES:
+        blob = disc_to_drive.build_drive_form(
+            open(os.path.join(a.disc, "MODULES", m + ".ENC"), "rb").read(), ata32, four)
+        if m == "SIO2MAN" and not seal_matches(blob, hddid_blob, four, deep=True)[0]:
+            raise SystemExit("re-seal self-check failed for %s; nothing written" % m)
+        open(os.path.join(work, "MODULES", m + ".IRX"), "wb").write(blob)
+    lines = ["lcd %s" % _quote(work.replace("\\", "/")),
+             "rm BLJA-00010", "put BLJA-00010", "cd MODULES",
+             "lcd %s" % _quote(os.path.join(work, "MODULES").replace("\\", "/"))]
+    for m in MODULE_NAMES:
+        lines += ["rm %s.IRX" % m, "put %s.IRX" % m]
+    lines.append("cd ..")
+    print("== reseal: %d containers sealed to %s (+ four %s)"
+          % (1 + len(MODULE_NAMES), _sha8(hddid_blob), a.four))
+    return lines
+
+
+def seal_guard(a):
+    """Run the guard for --loader-swap / --check-seal. False: the drive is sealed
+    to the served ID. True: it is not and --reseal was given (the caller
+    re-seals). Otherwise exits SEAL_EXIT: nothing is written."""
+    hddid_blob = open(a.hddid, "rb").read()
+    res = check_seal(a.device, hddid_blob, bytes.fromhex(a.four), a.helper)
+    report_seal(res, a.hddid)
+    if res["ok"]:
+        return False
+    if getattr(a, "reseal", False):
+        if not a.disc:
+            raise SystemExit("--reseal needs --disc")
+        print("== --reseal: the containers will be re-sealed to the served ID")
+        return True
+    print("== refusing: no loader written (served ID != sealed ID)")
+    sys.exit(SEAL_EXIT)
+
+
 def loader_swap(a):
     """Upgrade in place: fill the spoof loader for THIS drive and replace
     pfs:/dnasload.elf in the EXISTING PP.BLJA-00010, WITHOUT reinstalling. For
@@ -485,7 +726,14 @@ def loader_swap(a):
     game -- and, with --translate, also refresh pfs:/IMAGE.DAT + IMAGE1.DAT + IMAGE3.DAT with
     the English textures (so re-running updates an out-of-date translation;
     without it, or with --no-textures, both are restored to the disc's stock
-    Japanese). The sealed containers, attr and APA passwords are left untouched."""
+    Japanese). The sealed containers, attr and APA passwords are left untouched.
+
+    Seal guard first: one sealed container is read back from the drive and must
+    decrypt under the HDD ID the new loader would serve (seal_guard). On a
+    mismatch nothing is written and the exit status is 3, unless --reseal is
+    given, which re-seals MODULES/*.IRX + BLJA-00010 from the disc to that ID in
+    the same pfsshell pass. After --write the drive is read back and checked
+    again."""
     if not a.loader:
         raise SystemExit("--loader-swap requires --loader <polbbnexec-popn.kelf>")
     try:
@@ -494,10 +742,14 @@ def loader_swap(a):
         raise SystemExit("%s not found on %s (%r); it is not installed -- use the full "
                          "install, not --loader-swap" % (PARTITION, a.device, e))
     print("== loader-swap: %s present at LBA %d" % (PARTITION, lba))
+    # Gate 6: never write a loader that serves another ID than the drive's
+    # containers are sealed to (refuses unless --reseal).
+    reseal = seal_guard(a)
     work = a.work
     if os.path.exists(work):
         shutil.rmtree(work)
     os.makedirs(work)
+    reseal_lines = reseal_files(a, os.path.join(work, "reseal")) if reseal else []
     filled = os.path.join(work, "dnasload.elf")
     fill_loader(a.disc, a.loader, a.hddid, filled, a.helper, a.translate)
     print("== loader: filled %s for this drive -> dnasload.elf (%d B%s)"
@@ -516,6 +768,7 @@ def loader_swap(a):
         puts.append(n)
     script = "\n".join(
         ["device %s" % a.device, "mount %s" % PARTITION]
+        + reseal_lines
         + rms
         + ["lcd %s" % _quote(work.replace("\\", "/"))]
         + ["put %s" % p for p in puts]
@@ -527,6 +780,16 @@ def loader_swap(a):
         return
     print("== swapping the loader via pfsshell")
     subprocess.run([a.pfsshell], input=script, text=True, check=True)
+    # Read back: the drive must now be sealed to the ID its new loader serves.
+    after = check_seal(a.device, open(a.hddid, "rb").read(), bytes.fromhex(a.four), a.helper)
+    if not after["ok"] or after["drive_loader_id"] != after["served"]:
+        report_seal(after, a.hddid)
+        print("== READ-BACK FAILED: the drive's loader serves %s, the containers %s; "
+              "do not boot this, re-run with --reseal"
+              % (after["drive_loader_id"], "match" if after["ok"] else "do not match"))
+        sys.exit(SEAL_EXIT)
+    print("== read-back: loader serves %s and the containers are sealed to it"
+          % after["served"])
     print("== done: swapped pfs:/dnasload.elf in %s on %s" % (PARTITION, a.device))
 
 
@@ -541,9 +804,10 @@ def recover_hddid(a):
     (The block is not in a normal addressable sector -- a genuine Sony drive
     returns it over a proprietary ATA command, and a minted one is otherwise only
     in the .hddid file -- but the loader carries it so its atad shim can serve it,
-    which is exactly the copy we read here. This is the exact identity the sealed
-    containers decrypt against, so it is correct even if the original mint was
-    random/unseeded.)"""
+    which is exactly the copy we read here. It is saved only after a sealed
+    container on the drive is checked to decrypt under it: a loader on the drive
+    is not proof of the seal, a bad --loader-swap can leave one that serves
+    another ID. Exits 3 when it does not match.)"""
     out = a.recover_hddid
     try:
         lba = part_lba(a.helper, a.device)
@@ -552,24 +816,35 @@ def recover_hddid(a):
                          "this drive, so there is no loader to recover the HDD ID "
                          "from." % (PARTITION, a.device, e))
     print("== recover-hddid: %s present at LBA %d" % (PARTITION, lba))
-    work = a.work
-    if os.path.exists(work):
-        shutil.rmtree(work)
-    os.makedirs(work)
-    script = "\n".join(
-        ["device %s" % a.device, "mount %s" % PARTITION,
-         "lcd %s" % _quote(work.replace("\\", "/")),
-         "get dnasload.elf", "umount", "exit", ""])
-    print("== reading pfs:/dnasload.elf back via pfsshell")
-    subprocess.run([a.pfsshell], input=script, text=True, check=True)
-    got = os.path.join(work, "dnasload.elf")
-    if not os.path.isfile(got):
-        raise SystemExit("pfsshell did not copy dnasload.elf out of %s; cannot "
-                         "recover the HDD ID" % PARTITION)
-    if a.helper and a.helper not in sys.path:
-        sys.path.insert(0, a.helper)
+    blob = None
+    try:
+        # Read-only, no pfsshell: the same PFS reader the seal guard uses.
+        got = read_installed(a.device, ["dnasload.elf", SEAL_PROBE], a.helper)
+        blob, probe = got["dnasload.elf"], got[SEAL_PROBE]
+        print("== read pfs:/dnasload.elf + pfs:/%s back (PFS reader)" % SEAL_PROBE)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print("   PFS reader failed (%r); falling back to pfsshell" % (e,))
+        probe = None
+    if blob is None:
+        work = a.work
+        if os.path.exists(work):
+            shutil.rmtree(work)
+        os.makedirs(work)
+        script = "\n".join(
+            ["device %s" % a.device, "mount %s" % PARTITION,
+             "lcd %s" % _quote(work.replace("\\", "/")),
+             "get dnasload.elf", "umount", "exit", ""])
+        print("== reading pfs:/dnasload.elf back via pfsshell")
+        subprocess.run([a.pfsshell], input=script, text=True, check=True)
+        got = os.path.join(work, "dnasload.elf")
+        if not os.path.isfile(got):
+            raise SystemExit("pfsshell did not copy dnasload.elf out of %s; cannot "
+                             "recover the HDD ID" % PARTITION)
+        blob = open(got, "rb").read()
+    _helper_dir(a.helper)
     from playonline import loader as pol_loader
-    blob = open(got, "rb").read()
     try:
         info = pol_loader.read(blob)
     except Exception as e:
@@ -581,11 +856,23 @@ def recover_hddid(a):
                          "drive, or an unfilled loader); nothing to recover."
                          % PARTITION)
     block = info["hddid"]
+    # The loader on the drive is NOT proof of the seal: a bad --loader-swap
+    # (2026-10-07) left a loader serving another ID than the containers. Check.
+    if probe is not None:
+        ok, why = seal_matches(probe, block, bytes.fromhex(a.four), deep=True)
+        if not ok:
+            print("== the drive's loader serves %s, but the containers are NOT sealed "
+                  "to it (%s: %s); not saving it" % (_sha8(block), SEAL_PROBE, why))
+            print("   fix: --loader-swap --reseal with the ID you want served")
+            sys.exit(SEAL_EXIT)
+        print("== the containers are sealed to it (%s: %s)" % (SEAL_PROBE, why))
+    else:
+        print("   (seal not verified: the containers could not be read)")
     d = os.path.dirname(os.path.abspath(out))
     if d and not os.path.isdir(d):
         os.makedirs(d)
     open(out, "wb").write(block)
-    print("== recovered the drive's HDD ID -> %s (%d B)" % (out, len(block)))
+    print("== recovered the drive's HDD ID %s -> %s (%d B)" % (_sha8(block), out, len(block)))
     print("   key material: %s" % (block[0x40:0x48] + block[0x50:0x60]).hex())
 
 
@@ -634,7 +921,17 @@ def main():
                     "install was keyed to back out of the spoof loader already on the "
                     "drive (pfs:/dnasload.elf in %s) and write it here as a "
                     "playonline.hddid, so the install/swap can proceed without "
-                    "re-running the PlayOnline step. Requires --helper." % PARTITION)
+                    "re-running the PlayOnline step. Saved only if the drive's sealed "
+                    "containers decrypt under it (else exit 3)." % PARTITION)
+    ap.add_argument("--check-seal", dest="check_seal", action="store_true",
+                    help="read-only: check that the containers already on the drive are "
+                    "sealed to --hddid (the ID a loader filled now would serve). Exit 0 "
+                    "match, 3 mismatch. --loader-swap runs the same check first and "
+                    "refuses on a mismatch.")
+    ap.add_argument("--reseal", action="store_true",
+                    help="with --loader-swap: if the drive's containers are not sealed to "
+                    "--hddid, re-seal MODULES/*.IRX + BLJA-00010 from --disc to it in the "
+                    "same pfsshell pass, instead of refusing")
     a = ap.parse_args()
     # The installer pipes us through tee; line-buffer so progress shows live.
     try:
@@ -644,6 +941,12 @@ def main():
 
     if a.recover_hddid:
         recover_hddid(a)
+        return
+
+    if a.check_seal:
+        if not a.hddid:
+            raise SystemExit("--check-seal requires --hddid")
+        seal_guard(a)
         return
 
     if a.loader_swap:
