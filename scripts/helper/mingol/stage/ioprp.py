@@ -26,17 +26,17 @@ and its DNAS library check the IOP's loadfile version ("2700") and refuse
 or retry on any other.
 
 DNAS270.IMG holds the 2.70 kernel modules but no SYSMEM; on a disc boot the
-ROM's UDNL supplies that. The loader fills that gap itself: at boot it reads
-the console's BIOS ROM (kseg1 0xBFC00000), finds SYSMEM in the ROM's ROMDIR
-and inserts it, data and EXTINFO, as the image's first module before the
-reboot (romsysmem.h, in HippaulInstaller's playonline/games/mingol/
-loader-src, the source of polbbnexec-mingol.kelf). SYSMEM is not
-version-checked, so the console's own works; the same layout with
-Nobunaga's SYSMEM (sha1 356c7c48, work/IOPRP-dnas270-sysmem.IMG) was the
-first proven image, and with PCSX2's SCPH-50000 BIOS SYSMEM the game
-reaches its title screen too (2026-10-06). The installer therefore fills
-the slot with the disc's DNAS270.IMG as it is, and no second disc is
-needed.
+ROM's UDNL supplies that, and it does the same for SifIopRebootBuffer: the
+loader reboots with the image as it is and SYSMEM comes from the console's
+rom0. That is the shipped build (ROM_SYSMEM=0) and it boots the game on real
+hardware (2026-10-08). The loader source (HippaulInstaller's
+playonline/games/mingol/loader-src, the source of polbbnexec-mingol.kelf)
+can also splice the console's SYSMEM in itself (ROM_SYSMEM=1: it walks the
+BIOS ROMDIR at kseg1 0xBFC00000 and inserts SYSMEM, data and EXTINFO, as the
+image's first module, romsysmem.h). That splice is BIOS-dependent: proven
+under PCSX2 (SCPH-50000) but it hung on the operator's console on
+2026-10-08, so it is built out. Either way the installer fills the slot with
+the disc's DNAS270.IMG as it is, and no second disc is needed.
 
 ROMDIR format (ps2sdk romdir.h): 16-byte entries {name[10], u16 extinfo
 size, u32 size}, RESET/ROMDIR/EXTINFO first, a zero entry last; then the

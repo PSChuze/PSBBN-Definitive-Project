@@ -23,8 +23,10 @@
 #     PlayOnline shares that record);
 #   - the disc's boot ELF and DNAS.BIN get the disc-less edits (guarded, the
 #     result checked against the proven SHA-1s);
-#   - the IOP reboot image is the disc's 2.70 kernel (FMOD/DNAS270.IMG); the
-#     loader adds the console's own SYSMEM, out of its BIOS ROM, at boot;
+#   - the IOP reboot image is the disc's 2.70 kernel (FMOD/DNAS270.IMG) as
+#     it is; UDNL takes SYSMEM from the console's rom0 at the reboot (the
+#     loader's BIOS-ROM SYSMEM splice hung on real hardware on 2026-10-08
+#     and is built out, ROM_SYSMEM=0);
 #   - the disc's FMOD/ and FMOD2/ IOP modules go into the partition, where the
 #     loader's shim sends the game's cdrom0 module loads (no disc needed);
 #   - the attribute area is built from the disc's own icon;

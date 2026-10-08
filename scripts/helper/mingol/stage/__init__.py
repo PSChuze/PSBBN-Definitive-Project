@@ -62,8 +62,8 @@ from the player's disc.
   dnasload.elf
              the signed loader KELF the toolkit ships (DRIVERS=3, driver
              slots) filled for this disc and drive: the patched SCPS_150.49,
-             the 2.70 IOP kernel (the disc's DNAS270.IMG, see ioprp; the
-             loader adds the console's own SYSMEM from its BIOS ROM at boot),
+             the 2.70 IOP kernel (the disc's DNAS270.IMG as it is, see
+             ioprp; UDNL takes SYSMEM from the console's rom0 at the reboot),
              the disc's DEV9/ATAD/HDD/PFS IRXs
              (ATAD with its genuine-drive check skipped, atadgp)
              and the drive's HDD ID; argv[0] cdrom0:\\SCPS_150.49;1. Also
@@ -77,8 +77,8 @@ __net record at +0x201800, keyed to the drive's HDD ID. That record is never
 written here: `--device` decodes it and the containers are sealed with its
 four (`--four` passes one explicitly, for an offline stage).
 
-The one module the disc lacks (SYSMEM, for the IOP kernel image) comes from
-the console's own BIOS ROM, which the loader reads at boot (ioprp), so only
+The one module the disc lacks (SYSMEM, for the IOP kernel image) is the
+console's own, which UDNL takes from rom0 at the IOP reboot (ioprp), so only
 the Minna disc is needed. --aux-disc, --aux-search and --require-aux are
 still accepted, for older scripts, and ignored.
 """
@@ -298,7 +298,7 @@ def seal(root, tree, hddid, four, english=None):
 # ---- the IOP reboot image --------------------------------------------------
 
 def build_ioprp(root, m):
-    """The disc's DNAS270.IMG, as it is: the loader adds SYSMEM at boot."""
+    """The disc's DNAS270.IMG, as it is: UDNL takes SYSMEM from rom0."""
     from . import ioprp
     image = _read(root, "FMOD/DNAS270.IMG")
     ioprp.check_roundtrip(image)
@@ -308,7 +308,7 @@ def build_ioprp(root, m):
     if ioprp.sha1(image) != ioprp.DNAS270_SHA1:
         m.note("this pressing's FMOD/DNAS270.IMG (sha1 %s) is not the one the boot "
                "was proven with" % ioprp.sha1(image))
-    return image, "DNAS270.IMG + the console's BIOS SYSMEM (added by the loader)"
+    return image, "DNAS270.IMG (SYSMEM from the console's rom0 at the reboot)"
 
 
 # ---- the loader and the attribute area ------------------------------------
@@ -450,7 +450,7 @@ def stage(args):
     with open(os.path.join(out, "game.json"), "w") as f:
         json.dump({"key": KEY, "partition": PARTITION, "need_mib": PART_MIB,
                    "rpwd": pwd.hex(), "fpwd": pwd.hex(), "four": four.hex(),
-                   "sysmem": "the console BIOS ROM, by the loader", "notes": m.lines}, f, indent=1, sort_keys=True)
+                   "sysmem": "the console rom0, by UDNL at the IOP reboot", "notes": m.lines}, f, indent=1, sort_keys=True)
     print("staged %s: %d containers sealed, %d files copied, boot ELF %s, %s"
           % (PARTITION, sealed, copied, hashlib.sha1(elf).hexdigest()[:8], ioprp_what))
     return 0
@@ -465,8 +465,8 @@ def main(argv=None):
                     "(scripts/assets/mingol/polbbnexec-mingol.kelf)")
     ap.add_argument("--four", help="the __net four to seal with, 8 hex digits")
     ap.add_argument("--device", help="read the four from this drive's __net record")
-    # The Nobunaga disc used to supply SYSMEM; the loader takes the console's
-    # own now. Accepted, for older scripts, and ignored.
+    # The Nobunaga disc used to supply SYSMEM; the console's own (rom0) is
+    # used now. Accepted, for older scripts, and ignored.
     ap.add_argument("--aux-disc", help=argparse.SUPPRESS)
     ap.add_argument("--aux-search", action="append", help=argparse.SUPPRESS)
     ap.add_argument("--require-aux", action="store_true", help=argparse.SUPPRESS)
