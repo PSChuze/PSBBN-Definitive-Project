@@ -46,6 +46,7 @@
 #include <iopcontrol_special.h>
 #include <loadfile.h>
 #include <sbv_patches.h>
+#define NEWLIB_PORT_AWARE 1
 #include <fileio.h>
 #include <debug.h>
 #include <string.h>
@@ -91,7 +92,9 @@ extern unsigned char poltracechk_irx[];  extern unsigned int size_poltracechk_ir
 #define FORK_ELF_SLOT   2097152      /* the US Viewer's boot ELF is 1,909,516 */
 #endif
 #ifndef FORK_IOPRP_SLOT
-#define FORK_IOPRP_SLOT  262144      /* the US container's IOPRP is 250,425 */
+#define FORK_IOPRP_SLOT  278528      /* DNAS280.IMG (SLPS-20343) is 272,753; the
+                                     * shipped 262,144 slot was sized for the
+                                     * Viewer's own image */
 #endif
 
 /* The payload slots are members of the header, so the installer needs one

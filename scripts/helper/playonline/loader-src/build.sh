@@ -101,10 +101,10 @@ sed 's/0x00100000/0x01800000/' "$SDK/ee/startup/linkfile" > linkfile.hi
 ee-gcc -D_EE -O2 -G0 -Wall -DFORK_INSTALL -DDRIVERS="$DRIVERS" -DTRACE_LBA=0 $VERBOSE_FLAG \
        -I"$SDK/ee/include" -I"$SDK/common/include" \
        -c "$HERE/polbbnexec.c" -o polbbnexec.o
-ee-gcc -mno-crt0 -Tlinkfile.hi -L"$SDK/ee/lib" -o POLBBNEXEC.ELF \
-       "$SDK/ee/startup/crt0.o" polbbnexec.o \
+ee-gcc -Tlinkfile.hi -L"$SDK/ee/lib" -o POLBBNEXEC.ELF \
+       polbbnexec.o \
        ps2dev9_irx_blob.o ps2atad_irx_blob.o atadpatch_irx_blob.o poltracechk_irx_blob.o \
-       -ldebug -lpatches -liopreboot -lkernel -lc
+       -ldebug -lpatches -liopreboot -lkernel -lcglue -lc
 ee-strip POLBBNEXEC.ELF 2>/dev/null || true
 
 # Sign. The template lends its 32-byte header layout and nothing else.
