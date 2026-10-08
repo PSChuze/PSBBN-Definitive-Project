@@ -39,6 +39,7 @@ never changes them.
     python3 -m popn.retitle DRIVE english|japanese --write
 """
 import argparse
+import re
 import os
 import sys
 
@@ -72,10 +73,28 @@ def set_fields(text, fields):
     return new_text, changed
 
 
+def with_uninstall_lines(text):
+    """(text, added). Stock HDD-OSD lists an entry as "Corrupted Data" when its
+    icon.sys has no uninstallmes0..2 lines (PCSX2 + HDD-OSD rig, 2026-10-08);
+    every retail area carries them, empty or not. PSBBN does not care, which is
+    why areas written without them looked fine on PSBBN drives."""
+    if re.search(r"(?m)^uninstallmes0\s*=", text):
+        return text, False
+    eol = "\r\n" if "\r\n" in text else "\n"
+    eq = " = " if re.search(r"(?m)^title0 = ", text) else "="
+    if text and not text.endswith("\n"):
+        text += eol
+    text += "".join("uninstallmes%d%s%s" % (i, eq, eol) for i in range(3))
+    return text, True
+
+
 def area_with(area, fields):
     """(new area, [keys changed]). The slots stay where they are."""
     s = attrarea.slots(area)
     new_text, changed = set_fields(s[1][2].decode("utf-8"), fields)
+    new_text, added = with_uninstall_lines(new_text)
+    if added:
+        changed = changed + ["uninstallmes0-2"]
     if not changed:
         return area, []
     same_icon = (s[2][0], s[2][1]) == (s[3][0], s[3][1])

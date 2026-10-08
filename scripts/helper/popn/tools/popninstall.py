@@ -28,9 +28,13 @@ Mirrors the shape of Nobunaga's nobuinstall.py, minus the neutral-bundle step
             POPNPUZZ for both fpwd and rpwd (SLPM_624.64 opens it as
             `hdd0:PP.BLJA-00010,POPNPUZZ,POPNPUZZ`, see FACTS.md).
   3. put    Write the staged tree into the volume with pfsshell.
-  4. attr   Write an English browser-title attribute area at PP main +0x1000
-            (optional -- browser shows the title in HDD-OSD; skip -> "Corrupted
-            Data").
+  4. attr   Write the browser's attribute area at PP main +0x1000: the boot
+            block (BOOT2 = pfs:/dnasload.elf + DNASBOOT2 = pfs:/BLJA-00010),
+            icon.sys and the disc's own 3D icon. Built from the disc unless
+            --attr names a prebuilt area. HDD-OSD and HOSDMenu list a title
+            from this area only (PSBBN reads res/info.sys), so without it they
+            show "Corrupted Data". English title with --translate, else the
+            disc's Japanese one.
   5. passwords  Set fpwd/rpwd on the APA header (PSBBN's pfsshell mkpart leaves
                 them zero; the game refuses to mount if they don't match).
 
@@ -206,13 +210,88 @@ def part_lba(helper_dir, device):
     lba, _sectors = apa.find_partition(device, PARTITION)
     return lba
 
-def write_attr(device, lba, attr_path):
-    area = open(attr_path, "rb").read()
+# The browser names, as in popn/retitle.py (the Japanese pair is the disc's
+# own PAT_EXT/ICON.SYS text). retitle can switch them later in place.
+ATTR_TITLES = {
+    "english": ("pop'n Puzzle Dama Online", ""),
+    "japanese": ("pop'n対戦ぱずるだま", "ONLINE"),
+}
+# The boot block the console-proven drive carries (hwaudit 2026-10-08): the
+# loader, the DNAS container, retail-style VER/VMODE/HDDUNITPOWER, CRLF.
+ATTR_PRODUCT = "BLJA-00010"
+ATTR_VER = "1.00"
+ATTR_MAX = 0x400000 - ATTR_OFF      # the PFS superblock starts at +0x400000
+
+
+def _attrarea(helper_dir):
+    if helper_dir and helper_dir not in sys.path:
+        sys.path.insert(0, helper_dir)
+    from playonline import attrarea
+    return attrarea
+
+
+def build_attr(disc_root, helper_dir, language="english"):
+    """The attribute area for PP.BLJA-00010, from the disc's own icon.
+
+    Same shape as the area on the console-proven drive (written by
+    popnattr.py): slot 0 boot block, slot 1 PS2X icon.sys (UTF-8, `key = v`),
+    slot 2 the disc's NORMAL.ICO at 0x600, slot 3 pointing at slot 2."""
+    attrarea = _attrarea(helper_dir)
+    icon = None
+    for rel in (("PAT_EXT", "NORMAL.ICO"), ("ICON", "NORMAL.ICO")):
+        p = os.path.join(disc_root, *rel)
+        if os.path.isfile(p):
+            icon = open(p, "rb").read()
+            break
+    if icon is None:
+        raise SystemExit("no PAT_EXT/NORMAL.ICO or ICON/NORMAL.ICO under %s; "
+                         "pass --attr" % disc_root)
+    if len(icon) < 0x100 or icon[:4] != bytes.fromhex("00000100"):
+        raise SystemExit("%s does not look like a PS2 3D icon" % p)
+    boot = attrarea.build_boot_block(ATTR_PRODUCT, ATTR_VER, "pfs:/dnasload.elf")
+    title0, title1 = ATTR_TITLES[language]
+    # uninstallmes0..2 present (empty): without them stock HDD-OSD shows
+    # "Corrupted Data" (PCSX2 HDD-OSD rig, 2026-10-08).
+    icon_sys = attrarea.build_icon_sys(title0, title1, uninstall=("", "", ""),
+                                       encoding="utf-8", spaced=True)
+    return attrarea.build_area(boot, icon_sys, icon)
+
+
+def check_attr(area):
     if area[:9] != b"PS2ICON3D":
-        raise SystemExit("attr file has no PS2ICON3D magic")
+        raise SystemExit("attr area has no PS2ICON3D magic")
+    if len(area) > ATTR_MAX:
+        raise SystemExit("attr area is %d B; it would reach the PFS superblock"
+                         % len(area))
+
+
+def attr_present(device, lba):
+    with open(device, "rb") as f:
+        f.seek(lba * SECTOR + ATTR_OFF)
+        return f.read(9) == b"PS2ICON3D"
+
+
+def write_attr(device, lba, area):
+    """Write the area at main +0x1000 and read it back."""
+    if isinstance(area, str):
+        area = open(area, "rb").read()
+    check_attr(area)
     with open(device, "r+b") as f:
         f.seek(lba * SECTOR + ATTR_OFF)
         f.write(area)
+        f.flush()
+        f.seek(lba * SECTOR + ATTR_OFF)
+        if f.read(len(area)) != area:
+            raise SystemExit("attr read-back does not match what was written")
+    return len(area)
+
+
+def attr_area_for(a):
+    """--attr if given, else built from the disc in the install's language."""
+    if a.attr:
+        return open(a.attr, "rb").read(), "from %s" % a.attr
+    lang = "english" if a.translate else "japanese"
+    return build_attr(a.disc, _helper_dir(a.helper), lang), "built from the disc (%s title)" % lang
 
 def write_passwords(device, lba, helper_dir):
     """POPNPUZZ for both fpwd and rpwd. pfsshell mkpart leaves them zero;
@@ -726,7 +805,9 @@ def loader_swap(a):
     game -- and, with --translate, also refresh pfs:/IMAGE.DAT + IMAGE1.DAT + IMAGE3.DAT with
     the English textures (so re-running updates an out-of-date translation;
     without it, or with --no-textures, both are restored to the disc's stock
-    Japanese). The sealed containers, attr and APA passwords are left untouched.
+    Japanese). The sealed containers and APA passwords are left untouched; the
+    attribute area is written only when the drive has none (installs from
+    before the attr fix), so a retitled name is kept.
 
     Seal guard first: one sealed container is read back from the drive and must
     decrypt under the HDD ID the new loader would serve (seal_guard). On a
@@ -742,6 +823,13 @@ def loader_swap(a):
         raise SystemExit("%s not found on %s (%r); it is not installed -- use the full "
                          "install, not --loader-swap" % (PARTITION, a.device, e))
     print("== loader-swap: %s present at LBA %d" % (PARTITION, lba))
+    # Installs from before the attr fix have none: HDD-OSD and HOSDMenu list
+    # them as "Corrupted Data". Add it; an existing area (a retitled name) is kept.
+    need_attr = not attr_present(a.device, lba)
+    if need_attr:
+        area, how = attr_area_for(a)
+        check_attr(area)
+        print("== attr: none on the drive; will write one (%d B, %s)" % (len(area), how))
     # Gate 6: never write a loader that serves another ID than the drive's
     # containers are sealed to (refuses unless --reseal).
     reseal = seal_guard(a)
@@ -780,6 +868,9 @@ def loader_swap(a):
         return
     print("== swapping the loader via pfsshell")
     subprocess.run([a.pfsshell], input=script, text=True, check=True)
+    if need_attr:
+        write_attr(a.device, lba, area)
+        print("== attr written and read back (%d B at main +0x1000)" % len(area))
     # Read back: the drive must now be sealed to the ID its new loader serves.
     after = check_seal(a.device, open(a.hddid, "rb").read(), bytes.fromhex(a.four), a.helper)
     if not after["ok"] or after["drive_loader_id"] != after["served"]:
@@ -882,7 +973,9 @@ def main():
     ap.add_argument("--disc", help="extracted disc root (required to install or swap)")
     ap.add_argument("--hddid", help="512-byte hddid block (playonline.hddid); required to "
                     "install or swap, produced by --recover-hddid on a new machine")
-    ap.add_argument("--attr", help="attr-area.bin (English title + icon); optional")
+    ap.add_argument("--attr", help="a prebuilt attr-area.bin to write instead of the one "
+                    "built from the disc's PAT_EXT/NORMAL.ICO (English title with --translate, "
+                    "else Japanese); --loader-swap writes it only when the drive has none")
     ap.add_argument("--loader", help="the pre-signed spoof loader KELF (polbbnexec-popn.kelf) to "
                     "install as pfs:/dnasload.elf in place of the disc's stock dnasload (which "
                     "cannot pass the dead DNAS console binding). FILLED here for this drive from "
@@ -1006,6 +1099,11 @@ def main():
     puts = sum(1 for ln in lines if ln.startswith("put"))
     print("   ... (%d put lines)" % puts)
 
+    # Built before any write so a missing icon stops the install early.
+    area, how = attr_area_for(a)
+    check_attr(area)
+    print("== attr: %d B, %s" % (len(area), how))
+
     if not a.write:
         print("== dry-run complete; pass --write to apply (mkpart + put + attr + pwd)")
         return
@@ -1014,11 +1112,8 @@ def main():
     subprocess.run([a.pfsshell], input=script, text=True, check=True)
     lba = part_lba(a.helper, a.device)
     print("== attr / passwords: PP main LBA = %d" % lba)
-    if a.attr:
-        write_attr(a.device, lba, a.attr)
-        print("   attr written")
-    else:
-        print("   attr skipped (no --attr; browser will show 'Corrupted Data')")
+    write_attr(a.device, lba, area)
+    print("   attr written and read back (%d B)" % len(area))
     pwd = write_passwords(a.device, lba, a.helper)
     print("   passwords set: POPNPUZZ (%s)" % pwd.hex())
     print("== done: pop'n installed to %s on %s" % (PARTITION, a.device))

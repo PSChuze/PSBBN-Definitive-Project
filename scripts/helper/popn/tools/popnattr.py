@@ -36,7 +36,10 @@ def build(disc_root, title0, title1, attrarea):
     boot = attrarea.build_boot_block("BLJA-00010", "1.00", "pfs:/dnasload.elf")
     # ASCII for the Latin title; the FFXI/POL family uses UTF-8 for Japanese
     # titles but ASCII is compatible everywhere for a Latin string.
-    icon_sys = attrarea.build_icon_sys(title0, title1, encoding="ascii", spaced=True)
+    # uninstallmes0..2 present (empty): without them stock HDD-OSD shows
+    # "Corrupted Data" (PCSX2 HDD-OSD rig, 2026-10-08).
+    icon_sys = attrarea.build_icon_sys(title0, title1, uninstall=("", "", ""),
+                                       encoding="ascii", spaced=True)
     area = attrarea.build_area(boot, icon_sys, icon)
     return area, len(boot), len(icon_sys), len(icon)
 

@@ -401,9 +401,16 @@ def verify_disc(disc_root):
         if "BOOT2" in ln.upper():
             boot2 = ln; break
     if DISC_BOOT2 not in boot2:
-        raise SystemExit("SYSTEM.CNF BOOT2 = %r; expected %r "
-                         "(the Hiryuu no Shou disc, SLPM-65197 expansion)."
-                         % (boot2.strip(), DISC_BOOT2))
+        which = ""
+        if "SLPM_651.97" in boot2:
+            which = ("This is the ORIGINAL 2003 Nobunaga no Yabou Online disc "
+                     "(SLPM-65197, boot file SLPM_651.97), which cannot be installed. ")
+        raise SystemExit("SYSTEM.CNF BOOT2 = %r; expected %r. %s"
+                         "The install needs the Hiryuu no Shou EXPANSION disc "
+                         "(Nobunaga no Yabou Online: Hiryuu no Shou, 2004, SLPM-65783, "
+                         "boot file SLPM_657.83). Put that disc's .iso in the games folder "
+                         "and run this step again."
+                         % (boot2.strip(), DISC_BOOT2, which))
     game = os.path.join(disc_root, DISC_GAME.replace("/", os.sep))
     if not os.path.isfile(game):
         raise SystemExit("disc extract is missing %s. Extract the whole disc, "
@@ -589,7 +596,10 @@ def build_attr_from_disc(disc_root, out_path, title0=None, title1=""):
         raise SystemExit("no ICO under %s; provide --attr explicitly" % res)
     boot = attrarea.build_boot_block(INSTALLED_BOOT, "1.00",
                                      "pfs:/dnasload.elf")
-    icon_sys = attrarea.build_icon_sys(title0, title1, encoding="ascii", spaced=True)
+    # uninstallmes0..2 present (empty): without them stock HDD-OSD shows
+    # "Corrupted Data" (PCSX2 HDD-OSD rig, 2026-10-08).
+    icon_sys = attrarea.build_icon_sys(title0, title1, uninstall=("", "", ""),
+                                       encoding="ascii", spaced=True)
     area = attrarea.build_area(boot, icon_sys, icon)
     open(out_path, "wb").write(area)
     print("== attr auto-built: %s (%d B)  title0=%r" % (out_path, len(area), title0))
