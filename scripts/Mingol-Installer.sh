@@ -135,7 +135,7 @@ fi
 : "${UI_TEXT[GOLF_DOING]:=Installing Minna no Golf Online (this can take several minutes)...}"
 : "${UI_TEXT[GOLF_ERROR_INSTALL]:=The install failed. See logs/mingol-installer.log.}"
 : "${UI_TEXT[GOLF_ERROR_RECORD]:=The drive's shared DNAS record could not be used, so nothing was written. Please send logs/mingol-installer.log: it holds a read-only dump of the record.}"
-: "${UI_TEXT[GOLF_RECORD_REPAIR]:=MINGOL_REPAIR_RECORD=1: putting back the PlayOnline step's DNAS record (only if the one on the drive cannot be read with any known drive ID)...}"
+: "${UI_TEXT[GOLF_RECORD_REPAIR]:=Putting back the PlayOnline step's DNAS record (only if the one on the drive cannot be read with any known drive ID)...}"
 : "${UI_TEXT[GOLF_DONE]:=Minna no Golf Online was installed.}"
 : "${UI_TEXT[GOLF_DONE_HINT]:=It appears in the browser; it boots with no disc.}"
 : "${UI_TEXT[GOLF_ASK_TRANSLATE]:=Install the English translation? It is downloaded from openlobby.fyi. (y/N)}"
@@ -470,22 +470,57 @@ if [[ "${MINGOL_REPAIR_RECORD:-}" == 1 ]]; then
     [[ ${PIPESTATUS[0]} -eq 0 ]] || echo "  [!] the record was left as it is (see logs/mingol-installer.log)"
     sudo chown -R "$(id -u):$(id -g)" "$(dirname "${rec_backup}")" 2>/dev/null
 fi
-mgosudo -m mingol.stage \
-    --disc "${GOLF_SRC}" \
-    --hddid "${POL_HDDID_FILE}" \
-    --out "${STAGE_DIR}" \
-    --kelf "${LOADER_KELF}" \
-    --device "${DEVICE}" \
-    "${TR_ARGS[@]}" \
-    "${SERVER_ARGS[@]}" \
-    2>&1 | tee -a "${LOG_FILE}" | grep -v '^progress: sealing' | sed 's/^/  /'
-if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
-    if tail -n 20 "${LOG_FILE}" | grep -q "__net"; then
-        mgo_record_info
-        error_msg "${UI_TEXT[GOLF_ERROR_RECORD]}"
+# mgo_stage_run: stage the install; 0 on success, 2 when the stage refused the
+# drive's shared __net record, 1 on any other failure.
+mgo_stage_run() {
+    mgosudo -m mingol.stage \
+        --disc "${GOLF_SRC}" \
+        --hddid "${POL_HDDID_FILE}" \
+        --out "${STAGE_DIR}" \
+        --kelf "${LOADER_KELF}" \
+        --device "${DEVICE}" \
+        "${TR_ARGS[@]}" \
+        "${SERVER_ARGS[@]}" \
+        2>&1 | tee -a "${LOG_FILE}" | grep -v '^progress: sealing' | sed 's/^/  /'
+    [[ ${PIPESTATUS[0]} -eq 0 ]] && return 0
+    tail -n 20 "${LOG_FILE}" | grep -q "__net" && return 2
+    return 1
+}
+# mgo_record_repair: put back the record the PlayOnline step mints for this
+# drive ID, after saving the old sector. write.py refuses when the record
+# already decodes under any known ID or when the drive's loaders disagree.
+mgo_record_repair() {
+    local rec_backup
+    rec_backup="${GOLF_DIR}/backups/$(basename "${DEVICE}")/net-record-before-repair-$(date +%Y%m%d-%H%M%S).bin"
+    mgosudo -m mingol.stage.write "${DEVICE}" --repair-record \
+        --hddid "${POL_HDDID_FILE}" --backup "${rec_backup}" --write \
+        2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+    local rc=${PIPESTATUS[0]}
+    sudo chown -R "$(id -u):$(id -g)" "$(dirname "${rec_backup}")" 2>/dev/null
+    return "${rc}"
+}
+: "${UI_TEXT[GOLF_RECORD_ASK]:=The shared DNAS record on this drive was written for another drive ID, so neither this installer nor the console can read it. Replace it with the record the PlayOnline step makes for this drive? The old one is saved under games/GOLF/backups/. (y/N)}"
+: "${UI_TEXT[GOLF_RECORD_REPAIRED]:=The DNAS record was replaced. Staging again...}"
+: "${UI_TEXT[GOLF_RECORD_KEPT]:=The record was left as it is.}"
+mgo_stage_run; mgo_rc=$?
+if [[ ${mgo_rc} -eq 2 ]]; then
+    mgo_record_info
+    if [[ "${MINGOL_REPAIR_RECORD:-}" == 1 ]]; then
+        mgo_ans=y
+    else
+        echo
+        read -r -p "${UI_TEXT[GOLF_RECORD_ASK]} " mgo_ans
     fi
-    error_msg "${UI_TEXT[GOLF_ERROR_INSTALL]}"
+    if [[ "${mgo_ans,,}" == y* ]] && mgo_record_repair; then
+        echo "  ${UI_TEXT[GOLF_RECORD_REPAIRED]}"
+        sudo blockdev --flushbufs "${DEVICE}" >/dev/null 2>&1
+        mgo_stage_run; mgo_rc=$?
+    else
+        echo "  ${UI_TEXT[GOLF_RECORD_KEPT]}"
+    fi
+    [[ ${mgo_rc} -eq 0 ]] || error_msg "${UI_TEXT[GOLF_ERROR_RECORD]}"
 fi
+[[ ${mgo_rc} -eq 0 ]] || error_msg "${UI_TEXT[GOLF_ERROR_INSTALL]}"
 
 # --translate stays Japanese when no pack can be had or it does not fit the
 # disc. On a new install that is a working Japanese game, but an update the
