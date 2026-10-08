@@ -20,7 +20,8 @@ partition that carries both the game data and the loader:
             space-free -- pfsshell's parser splits on whitespace and does
             not honor quoting -- so we stage inside --work (default is
             HERE/_stage; the install-run.sh points it at $HOME/bombstage).
-  5. attr   one browser entry: BOOT2 = pfs:/bombload.kelf.
+  5. attr   one browser entry: BOOT2 = pfs:/bombload.kelf +
+            DNASBOOT2 = pfs:/MAIN.BIN.
 
 Earlier revisions of this file made two partitions (a small boot one
 alongside the game) and used pfsshell's `lcd` to change local dir before
@@ -87,8 +88,14 @@ SCE_MAGIC = b"Sony Computer Entertainment Inc."
 # size, the KELF path provably can. The loader is self-contained either way
 # (reboots the IOP itself with the embedded DNAS280.IMG, loads ps2sdk
 # ps2dev9/ps2atad + the scefix HDD-ID shim + Sony HDD/PFS, then BOMBBOOT).
+#
+# DNASBOOT2 = pfs:/MAIN.BIN goes with it: BOOT2 + DNASBOOT2 is the only attr
+# shape our loader has launched with on real hardware (2026-10-02, the
+# DNAS-shaped attr, bombattrswap --mode dnas); BOOT2 alone is untested
+# there. HippaulInstaller's games/bomb BOOT_BLOCK ships the same shape.
 BOOT_BLOCK = (
     "BOOT2 = pfs:/%s\r\n"
+    "DNASBOOT2 = pfs:/MAIN.BIN\r\n"
     "VER = 1.02\r\n"
     "VMODE = NTSC\r\n"
     "HDDUNITPOWER = NICHDD\r\n"
