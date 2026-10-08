@@ -10,10 +10,11 @@ toolkit ships:
     scripts/assets/nobunaga/*.kelf
     scripts/assets/popn/*.kelf
     scripts/assets/mingol/*.kelf
-    scripts/assets/bomb/bootfiles/bombload.elf, bombload.kelf
-    scripts/assets/bomb/bootfiles-debug/bombload.elf, bombload.kelf
+    scripts/assets/bomb/bootfiles/bombload.elf, bombload*.kelf
+    scripts/assets/bomb/bootfiles-debug/bombload.elf, bombload*.kelf
 
-(.bak-* copies are skipped) and prints, per file: DRIVERS mode, IOPRP
+(.bak-* copies are skipped) and prints, per file: the console region it is
+signed for (MGZones and AppType from the KELF header), DRIVERS mode, IOPRP
 version (an unfilled polbbnexec has an empty slot: the installer fills the
 title's own image per drive), the sceCdRI spoof id, the scefix version
 (Bomberman), the fill-time trace slot (TRACELBA, polbbnexec v4) and, for
@@ -28,6 +29,11 @@ Exit status 1 when any rule fails (PLAN-hw-boot-all-titles section 2):
     build does not (and carries "walking ROMDIR" instead)
   - a polbbnexec loader without exactly one TRACELBA slot (bombload is a
     different loader family with no fill-time slot: reported, not failed)
+  - region (scripts/helper/region.sh, sign-region-loaders.py): a KELF whose
+    signatures do not verify (with PS2KEYS); <name>.kelf not zoned for a
+    Japanese console; <name>-us.kelf or <name>-all.kelf missing, not zoned for
+    its console (a Japan-only file under a US or all-regions name is refused),
+    or carrying a body other than <name>.kelf's
 --report-only TITLE turns that title's failures into notes (e.g. an asset
 another session is rebuilding). hwaudit.py lives in the Nobunaga project
 (nobunaga/tools); --hwaudit or $HWAUDIT points at it.
@@ -36,6 +42,7 @@ import argparse
 import glob
 import json
 import os
+import struct
 import subprocess
 import sys
 
@@ -57,6 +64,9 @@ KEYS_CANDIDATES = [os.environ.get("PS2KEYS"), os.path.expanduser("~/PS2KEYS.dat"
                    "/mnt/d/PS2HDDs/PS2KEYS.dat", "/mnt/e/ps2hdd/PS2KEYS.dat"]
 
 TRACE_MAGIC = b"TRACELBA"
+# console region -> the MGZones bits its loader must carry (region.sh)
+REGIONS = {"jp": 0x01, "us": 0x02, "all": 0xFF}
+ZONE_NAMES = {0x01: "jp", 0x02: "us", 0xFF: "all"}
 SPLICE_OFF = b"splice DISABLED"
 SPLICE_ON = b"walking ROMDIR"
 
@@ -66,12 +76,70 @@ def assets():
     for title, pattern in (("nobunaga", "nobunaga/*.kelf"), ("popn", "popn/*.kelf"),
                            ("mingol", "mingol/*.kelf"),
                            ("bomb", "bomb/bootfiles/bombload.elf"),
-                           ("bomb", "bomb/bootfiles/bombload.kelf"),
+                           ("bomb", "bomb/bootfiles/bombload*.kelf"),
                            ("bomb", "bomb/bootfiles-debug/bombload.elf"),
-                           ("bomb", "bomb/bootfiles-debug/bombload.kelf")):
+                           ("bomb", "bomb/bootfiles-debug/bombload*.kelf")):
         for p in sorted(glob.glob(os.path.join(ASSETS, pattern))):
             out.append((title, p))
     return out
+
+
+def region_of(path):
+    """(region the file name says, path of its Japanese sibling)."""
+    base, ext = os.path.splitext(path)
+    for r in ("us", "all", "jp"):
+        if base.endswith("-" + r):
+            return r, base[:-len(r) - 1] + ext
+    return "jp", path
+
+
+def kelf_header(blob):
+    """(AppType, MGZones, HeaderSize) of a KELF, or None for an ELF."""
+    if blob[:4] == b"\x7fELF" or len(blob) < 32:
+        return None
+    _cs, hs, _st, app, _fl, _bc, zones = struct.unpack_from("<IHBBHHI", blob, 16)
+    return app, zones, hs
+
+
+def check_region(path, blob, au, siblings):
+    """Region fields for the row, and failures."""
+    fails, row = [], {}
+    hdr = kelf_header(blob)
+    if hdr is None:
+        return dict(region="-", zones="-", apptype="-", sig="-"), fails
+    app, zones, hs = hdr
+    region, jp = region_of(path)
+    row.update(region=region, zones="0x%02X" % zones, apptype="0x%02X" % app)
+    k = au.get("kelf") or {}
+    row["sig"] = ("ok" if k.get("signatures_ok") else
+                  "FAIL" if "signatures_ok" in k else "not checked (no PS2KEYS)")
+    if k.get("signatures_ok") is False:
+        fails.append("KELF signatures do not verify: %s" % k.get("error"))
+    want = REGIONS[region]
+    if zones & want != want:
+        fails.append("named for a %s console but MGZones 0x%02X (%s) does not open there"
+                     % (region, zones, ZONE_NAMES.get(zones, "?")))
+    if region == "jp":
+        for r in ("us", "all"):
+            base, ext = os.path.splitext(path)
+            if not os.path.isfile("%s-%s%s" % (base, r, ext)):
+                fails.append("no %s variant %s-%s%s (that console would get "
+                             "nothing; run sign-region-loaders.py)"
+                             % (r, os.path.basename(base), r, ext))
+    else:
+        ref = siblings.get(jp)
+        if ref is None and os.path.isfile(jp):
+            ref = siblings[jp] = open(jp, "rb").read()
+        if ref is None:
+            fails.append("no Japanese loader %s to compare with" % os.path.basename(jp))
+        else:
+            rh = kelf_header(ref)
+            if rh is None or ref[rh[2]:] != blob[hs:]:
+                fails.append("body differs from %s (must be the same content, "
+                             "signed again)" % os.path.basename(jp))
+            else:
+                row["body"] = "= %s" % os.path.basename(jp)
+    return row, fails
 
 
 def first(paths, what):
@@ -164,8 +232,10 @@ def main(argv=None):
         raise SystemExit("hwaudit.py not found: pass --hwaudit or set HWAUDIT")
     keys = first([a.keys] + KEYS_CANDIDATES, "keys")
     rows, bad = [], 0
+    siblings = {}
     for title, path in assets():
         blob = open(path, "rb").read()
+        siblings[path] = blob
         try:
             au = audit(hw, path, keys)
         except Exception as e:
@@ -173,9 +243,14 @@ def main(argv=None):
             bad += 1
             continue
         row, fails = check(title, path, au, plain_body(blob))
+        rrow, rfails = check_region(path, blob, au, siblings)
+        row.update(rrow)
+        fails += rfails
         rows.append(dict(row, failures=fails))
         verdict = "ok  " if not fails else ("NOTE" if title in a.report_only else "FAIL")
-        print("%s %-8s %-48s %s" % (verdict, title, row["file"], row["sha1"]))
+        print("%s %-8s %-48s %s  region %-3s zones %-4s AppType %-4s sig %s%s"
+              % (verdict, title, row["file"], row["sha1"], row["region"], row["zones"],
+                 row["apptype"], row["sig"], "  body %s" % row["body"] if "body" in row else ""))
         print("       %s %s | DRIVERS %s | IOPRP %s | spoof %s | scefix %s | trace %s%s"
               % (row["form"], row["family"], row["drivers"], row["ioprp"], row["spoof"],
                  row["scefix"], row["trace"],

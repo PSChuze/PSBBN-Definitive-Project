@@ -9,8 +9,10 @@ loaders among them are checked with one command before a release:
 It runs `nobunaga/tools/hwaudit.py --loader` (Nobunaga project, read-only;
 `--hwaudit PATH` or `$HWAUDIT` if it is not found) on every shipped loader:
 `nobunaga/*.kelf`, `popn/*.kelf`, `mingol/*.kelf`,
-`bomb/bootfiles/bombload.{elf,kelf}` (`.bak-*` copies are skipped). Per file it
-prints the DRIVERS mode, the IOPRP version (an unfilled polbbnexec slot is
+`bomb/bootfiles*/bombload.elf` and `bombload*.kelf` (`.bak-*` copies are
+skipped). Per file it prints the console region it is signed for (MGZones and
+AppType from the KELF header, and whether its signatures verify), the DRIVERS
+mode, the IOPRP version (an unfilled polbbnexec slot is
 filled per drive with the title's own image), the sceCdRI spoof id, the
 scefix version, the fill-time trace slot and, for Minna, the ROM SYSMEM
 splice state. It exits 1 when a rule of the hardware contract
@@ -22,6 +24,7 @@ splice state. It exits 1 when a rule of the hardware contract
 | Bomberman | scefix 1.2 or newer, sceCdRI spoof present |
 | Minna | the BIOS-ROM SYSMEM splice off: the loader carries the "splice DISABLED" string of a ROM_SYSMEM=0 build (the splice hung on real hardware on 2026-10-08) |
 | every polbbnexec | exactly one `TRACELBA` fill-time trace slot (bombload has none: reported only) |
+| every KELF | signatures verify (with PS2KEYS); `<name>.kelf` opens on a Japanese console, `<name>-us.kelf` and `<name>-all.kelf` exist, open on their console (a Japan-only file under a US or all-regions name is refused) and carry the same body as `<name>.kelf` |
 
 `--report-only TITLE` keeps a title's failures as notes, for an asset that is
 being rebuilt elsewhere.
@@ -45,3 +48,46 @@ nobunaga/tools/traceslot.py). Tester notes: RELEASE-NOTES-hw-boot.md.
 Bomberman's debug pair keeps the on-partition name `bombload.kelf` (the name
 the browser entry boots): the installer stages `bootfiles/` with the
 `bootfiles-debug/` loader in its place.
+
+## One loader per console region
+
+A KELF's header carries a MagicGate region mask (MGZones), and a console opens
+a KELF only when its own region's bit is set there. It checks before any
+loader code runs, so a loader zoned for another region drops straight back to
+the browser with nothing drawn. Every title loader ships the way the
+PlayOnline step ships `playonline/polbbnexec*.kelf`, once per console region,
+signed from the same content (only the 32-byte header and what is derived
+from it differ):
+
+| file | console | AppType | MGZones | header from |
+|---|---|---|---|---|
+| `<name>.kelf` | Japanese | 0x0B | 0x01 | Nobunaga's own `dnasload.elf` (as before) |
+| `<name>-us.kelf` | US | 0x0B | 0x02 | `playonline/polbbnexec-us.kelf` (Square Enix's US `dnasload.elf`; proven on a US console) |
+| `<name>-all.kelf` | European and any other | 0x01 | 0xFF | `playonline/polbbnexec-all.kelf` (all eight bits; proven on a console from outside the US and Japan) |
+
+`scripts/helper/sign-region-loaders.py --keys PS2KEYS.dat` signs the `-us` and
+`-all` copies of every title loader from its `<name>.kelf` (re-run it after a
+loader is rebuilt; `--check` writes nothing and fails on a missing or stale
+copy). The installers pick the copy through `scripts/helper/region.sh`, called
+from `debugtext.sh`: the console region is `POL_CONSOLE` when set, else what
+the drive already says (the zone mask of the PlayOnline Viewer's loader, as
+the PlayOnline step reads it, or of a US or all-regions title loader), else the
+PlayOnline step's own question (`POL_SELECT_CONSOLE`, `[U/j/e]`). Bomberman
+stages its boot files in its work folder with only the chosen copy, named
+`bombload.kelf`.
+
+| loader | jp | us | all |
+|---|---|---|---|
+| `nobunaga/polbbnexec-inputpatch` | b6da0082 | db7ff679 | 26d46572 |
+| `nobunaga/polbbnexec-nobu-verbose` | 0688ba91 | 3d407c3e | 8f01c6df |
+| `popn/polbbnexec-popn` | 99bc9bbc | 9d41c19c | c625040f |
+| `popn/polbbnexec-popn-verbose` | 04a340be | 3a76025c | 8d69532e |
+| `mingol/polbbnexec-mingol` | ab62750a | def210fc | cbb0f654 |
+| `mingol/polbbnexec-mingol-verbose` | 31ac2af8 | 72358602 | 6fd7d707 |
+| `bomb/bootfiles/bombload` | af144da3 | 54b48e36 | bec01aa9 |
+| `bomb/bootfiles-debug/bombload` | 9cd0dffc | 3b6dd18d | 86992bcb |
+
+The Japanese copies are the console-proven files, unchanged. No title loader
+has yet been started from its `-us` or `-all` copy on a console; the
+PlayOnline loaders signed the same way have (US: `-us`; a console outside the
+US and Japan: `-all`).
