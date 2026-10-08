@@ -48,6 +48,25 @@ game does not start.
   You can run the title's step again at any time and answer N to turn the text
   off. Your saves are kept.
 
+- **Consoles from every region (new).** Until now every title's loader opened
+  only on a Japanese PS2. On a US, European or other console the game went
+  straight back to the PSBBN browser with nothing on the screen, and no error
+  anywhere. Each title now ships one loader per console region, as the
+  PlayOnline step does, and the installer asks the PlayOnline step's question:
+
+      Which region is the PS2 console this drive will be used in: US, Japanese, or European and other? [U/j/e]
+
+  Answer for the console the drive will be used in (not the region of the
+  game or of your discs). If the PlayOnline Viewer is already on the drive,
+  or a title was installed with this release, the answer is read from the
+  drive and not asked again. To change it (the drive moved to another
+  console), set `POL_CONSOLE=us`, `jp` or `eu` for the step and run it again.
+
+  **Wrong region looks like this:** you pick the game in the browser, the
+  screen goes dark for a moment and you are back in the browser, with no text
+  even with boot debug text on (the console refuses the loader before any of
+  it runs). If that happens, run the step again and check the region answer.
+
 ## If a game does not boot
 
 1. In the PSBBN toolkit, open Extras and run the step for that game again.
@@ -86,13 +105,19 @@ game does not start.
        sudo dd if=/dev/sdX of=trace-GAME.bin bs=512 skip=N count=1
 
 5. Send us the photo, `hwaudit.txt`, `hwaudit.json`, any `trace-GAME.bin`, the
-   installer log from `logs/` (for example `logs/bomb-installer.log`), and
-   your console model (the SCPH number on the label at the back or bottom).
+   installer log from `logs/` (for example `logs/bomb-installer.log`), your
+   console model (the SCPH number on the label at the back or bottom) and the
+   console region you answered.
 
 When the game works again, run the step once more with **N** to remove the
 text.
 
 ## Known limits
+
+- **US and European loaders are new.** The title loaders for US and for
+  European and other consoles are signed the same way as the PlayOnline
+  loaders that start on those consoles, but no title has been started from
+  them on a console yet. Reports from US and European testers are the test.
 
 - **Nobunaga text input stays Japanese by default.** The game's text is in
   English with the translation, but typing still starts in Japanese input

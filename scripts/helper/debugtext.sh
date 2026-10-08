@@ -35,7 +35,11 @@
 # what it saw while the game booted into that sector.
 #
 #   debugtext_ask                   once per run; sets DEBUG_TEXT=1 (Y) or 0 (N)
-#   debugtext_pick SILENT VERBOSE   sets DEBUG_LOADER to the one to install
+#   debugtext_pick SILENT VERBOSE   sets DEBUG_LOADER to the one to install,
+#                                   in the variant for the console's region
+#                                   (region.sh: region_pick; asks the console
+#                                   region once per run when the drive does
+#                                   not say it)
 #   debugtext_trace_arm DEVICE PARTITION MOUNT TAG [LOADER]
 #                                   puts trace.bin, sets DEBUG_TRACE_LBA; with
 #                                   LOADER (the staged dnasload.elf) also sets
@@ -52,6 +56,8 @@
 : "${UI_TEXT[DEBUG_TEXT_NO_TWIN]:=The debug build of this loader is not in this toolkit, so the normal one (no text) is installed.}"
 : "${UI_TEXT[DEBUG_TEXT_TRACE_ON]:=Boot record armed at drive sector}"
 : "${UI_TEXT[DEBUG_TEXT_TRACE_FAIL]:=The boot record could not be armed on this drive (see the log); the text still shows.}"
+
+source "${HELPER_DIR}/region.sh"
 
 DEBUG_TEXT_ASKED=""
 DEBUG_LOADER=""
@@ -82,13 +88,16 @@ debugtext_ask() {
 debugtext_pick() {
     local silent="$1" verbose="$2"
     DEBUG_LOADER="${silent}"
-    [[ "${DEBUG_TEXT}" == 1 ]] || return 0
-    if [[ -f "${verbose}" ]]; then
-        DEBUG_LOADER="${verbose}"
-    else
-        echo "[!] debug text: no verbose twin at ${verbose}; installing ${silent}" >> "${LOG_FILE}"
-        echo "  ${UI_TEXT[DEBUG_TEXT_NO_TWIN]}"
+    if [[ "${DEBUG_TEXT}" == 1 ]]; then
+        if [[ -f "${verbose}" ]]; then
+            DEBUG_LOADER="${verbose}"
+        else
+            echo "[!] debug text: no verbose twin at ${verbose}; installing ${silent}" >> "${LOG_FILE}"
+            echo "  ${UI_TEXT[DEBUG_TEXT_NO_TWIN]}"
+        fi
     fi
+    region_pick "${DEBUG_LOADER}"
+    DEBUG_LOADER="${REGION_LOADER}"
     echo "debug text: loader ${DEBUG_LOADER}" >> "${LOG_FILE}"
 }
 
