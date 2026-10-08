@@ -271,9 +271,9 @@ fi
 : "${UI_TEXT[BOMB_UPDATE_ERROR]:=The update failed. See logs/bomb-installer.log.}"
 : "${UI_TEXT[BOMB_UPDATE_LANG]:=Language of the game after the update:}"
 : "${UI_TEXT[BOMB_UPDATE_KEEP]:=Keep it as installed}"
-: "${UI_TEXT[BOMB_UPDATE_EN]:=English (the game's messages; menus drawn as pictures stay Japanese)}"
+: "${UI_TEXT[BOMB_UPDATE_EN]:=English (the game’s messages; menus drawn as pictures stay Japanese)}"
 : "${UI_TEXT[BOMB_UPDATE_JA]:=Japanese (as on the disc)}"
-: "${UI_TEXT[BOMB_ASK_TRANSLATE]:=Apply the English translation (the game's messages; menus drawn as pictures stay Japanese)? (y/N)}"
+: "${UI_TEXT[BOMB_ASK_TRANSLATE]:=Apply the English translation (the game’s messages; menus drawn as pictures stay Japanese)? (y/N)}"
 # English: FILES.BIN's messages and the English name, via bombinstall --translate.
 BOMB_TSV="${BOMB_FILES}/msg_FILES_install.en.tsv"
 TR_ARGS=()

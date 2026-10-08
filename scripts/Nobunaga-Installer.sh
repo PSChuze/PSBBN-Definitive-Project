@@ -121,8 +121,8 @@ fi
 : "${UI_TEXT[NOBU_UPDATE_NEED]:=To update in place, this machine also needs:}"
 : "${UI_TEXT[NOBU_NEED_DISC]:=the game disc (an .iso in games/NOBU/, or the extracted tree in games/NOBU/disc/)}"
 : "${UI_TEXT[NOBU_NEED_HDDID]:=the drive ID (playonline.hddid), which is read from the drive when PlayOnline is on it}"
-: "${UI_TEXT[NOBU_UPDATE_DOING]:=Updating Nobunaga's Ambition Online (this can take several minutes)...}"
-: "${UI_TEXT[NOBU_UPDATE_DONE]:=Nobunaga's Ambition Online was updated. Your saves were kept.}"
+: "${UI_TEXT[NOBU_UPDATE_DOING]:=Updating Nobunaga’s Ambition Online (this can take several minutes)...}"
+: "${UI_TEXT[NOBU_UPDATE_DONE]:=Nobunaga’s Ambition Online was updated. Your saves were kept.}"
 
 mkdir -p "${LOGS_DIR}" "${WORK_DIR}"
 
