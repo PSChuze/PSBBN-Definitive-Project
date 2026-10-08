@@ -91,3 +91,7 @@ The Japanese copies are the console-proven files, unchanged. No title loader
 has yet been started from its `-us` or `-all` copy on a console; the
 PlayOnline loaders signed the same way have (US: `-us`; a console outside the
 US and Japan: `-all`).
+
+## UI text
+
+`scripts/helper/check-ui-text.sh` refuses a straight apostrophe inside a `: "${UI_TEXT[KEY]:=...}"` default (older bash fails to parse it; use U+2019) and syntax-checks every script. Run it with `check-loader-assets.py` before publishing.
