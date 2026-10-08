@@ -26,7 +26,8 @@ mingolinstall.py did them:
 
   1. check     the partition is not there yet, and the drive's own __net record
                decodes with this HDD ID to the four the stage sealed with (the
-               record is read, never written: it is the one PlayOnline shares).
+               record is read, never written here: it is the one PlayOnline
+               shares; only --repair-record below writes it, on request).
   2. mkpart    PP.SCPS-15049..APPLICATION, 1536 MiB PFS (pfsshell shapes it as a
                1 GiB main + one 512 MiB sub, the retail layout), then put tree/.
   3. password  rpwd = fpwd = apa_password(id, "MM21") on the main header (the
@@ -59,6 +60,19 @@ kit-based installer (no FMOD/) is refused with exit status 3: reinstall it.
 prints what the drive has: absent, old (the kit-based install), english or
 japanese (from the browser title).
 
+    python -m mingol.stage.write DEVICE --record-info --hddid FILE
+
+prints, read-only, what the shared __net record decodes to under the given HDD
+ID, under every ID a loader on the drive serves and under the zero ID: the
+four, and whether the PlayOnline step minted it or a console wrote it.
+
+    python -m mingol.stage.write DEVICE --repair-record --hddid FILE --backup OUT [--write]
+
+replaces a record that decodes under none of those IDs with the record the
+PlayOnline step mints for FILE (the only write this module makes to __net, and
+only on request: the installer runs it when MINGOL_REPAIR_RECORD=1). A record
+that decodes under any known ID is refused.
+
     python -m mingol.stage.write DEVICE --stage DIR --hddid FILE \
         --reinstall --saves BACKUP_DIR [--write]
 
@@ -86,6 +100,7 @@ PASSWORD = b"MM21"
 PART_MIB = 1536
 ATTR_OFF = 0x1000
 NET_RECORD_OFF = 0x201800
+RECORD_LEN = 512
 
 
 def partitions(device):
@@ -103,23 +118,205 @@ def find_partition(device, name):
     return None
 
 
-def net_four(device, hddid):
-    """Decode the drive's own __net DNAS record (partition +0x201800) with its HDD ID.
-    polrecord's reply[84..99] is HDD ID bytes 0x50..0x60 (the ATA reply sits at +4)."""
+def read_record(device):
+    """(lba of __net, the 512-byte sector at +0x201800)."""
     net = find_partition(device, "__net")
     if not net:
         raise SystemExit("no __net partition on %s" % device)
     with open(device, "rb") as f:
         f.seek(net[0] * SECTOR + NET_RECORD_OFF)
-        rec = f.read(32)
+        return net[0], f.read(RECORD_LEN)
+
+
+def decode_record(rec, hddid):
+    """The record's 20-byte plaintext under this HDD ID, or None when it does not
+    decode. The key is polrecord.derive_key(HDD ID bytes 0x50..0x60) and nothing
+    else: the console i.Link is not part of it, it is only stored inside the
+    plaintext at [4:12]. A good decode has zeros at [12:20]."""
+    dec = bytes(polrecord.decode(rec[:32], polrecord.derive_key(hddid[0x50:0x60])))
+    return None if any(dec[12:20]) else dec[:20]
+
+
+def record_writer(dec, hddid=None):
+    """Who wrote a decoded record, from its identity field [4:12]."""
+    ident = dec[4:12]
+    if hddid is not None:
+        from playonline.lib import ci_transcrypt
+        if ident == ci_transcrypt.default_identity(hddid):
+            return "minted by the PlayOnline step"
+    if not any(ident):
+        return "identity zero"
+    console = struct.pack(">II", *struct.unpack("<II", ident))
+    return "written for console i.Link %s" % console.hex()
+
+
+def record_candidates(device, hddid):
+    """[(label, 512-byte block)]: the given ID, every ID a filled loader on the
+    drive serves, and the all-zero ID (PCSX2, or a console that was served
+    none). Entries with the same key material are merged into one label."""
+    out = [("playonline.hddid", hddid)]
+    for name, blk in served_loaders(device):
+        out.append(("the loader in %s" % name, blk))
+    out.append(("a zero HDD ID (PCSX2, or a console served no ID)", bytes(512)))
+    uniq = []
+    for label, blk in out:
+        same = [i for i, (_l, b) in enumerate(uniq) if b[0x50:0x60] == blk[0x50:0x60]]
+        if same:
+            i = same[0]
+            uniq[i] = ("%s = %s" % (uniq[i][0], label), uniq[i][1])
+        else:
+            uniq.append((label, blk))
+    return uniq
+
+
+def served_loaders(device):
+    """[(partition, block)] for every filled loader on the drive (read-only)."""
+    try:
+        from playonline.hddid import served_on_drive
+        return served_on_drive(device)
+    except Exception as e:                      # noqa: BLE001 - diagnostics only
+        print("[!] could not read the loaders on %s: %s" % (device, e), file=sys.stderr)
+        return []
+
+
+def record_info(device, hddid):
+    """Read-only report of the __net record for a bug report: [lines]."""
+    import hashlib
+    lba, rec = read_record(device)
+    lines = ["__net LBA %d, record at +0x%x" % (lba, NET_RECORD_OFF),
+             "record head %s" % rec[:36].hex(),
+             "record sha256 %s, %s" % (hashlib.sha256(rec).hexdigest()[:16],
+                                       "EMPTY" if not any(rec) else "present"),
+             "playonline.hddid sha1 %s, key material %s"
+             % (hashlib.sha1(hddid).hexdigest()[:8], (hddid[0x40:0x48] + hddid[0x50:0x60]).hex())]
     if not any(rec):
+        return lines
+    for label, blk in record_candidates(device, hddid):
+        dec = decode_record(rec, blk)
+        lines.append("  %-52s %s" % (
+            "%s (key %s)" % (label, blk[0x50:0x58].hex()),
+            "decodes: four %s, %s" % (dec[:4].hex(), record_writer(dec, hddid))
+            if dec else "does not decode"))
+    return lines
+
+
+REPORT_HINT = ("Nothing was written. Please send logs/mingol-installer.log: the "
+               "installer adds a read-only dump of the record to it (the same as "
+               "`python3 -m mingol.stage.write DRIVE --record-info --hddid "
+               "games/POL/playonline.hddid`).")
+
+
+def net_four(device, hddid):
+    """The four the stage seals with: the drive's own __net DNAS record
+    (partition +0x201800) decoded with the HDD ID the loader will serve.
+
+    At boot Minna's DNAS decodes the same record with the ID the loader serves
+    (this `hddid`), so the four has to come from that decode: a record keyed to
+    any other ID gives the console a different four than any we could seal with,
+    and there is no safe default. When the record does not decode, every other
+    ID the drive is known to answer with is tried, to say why."""
+    _lba, rec = read_record(device)
+    if not any(rec[:32]):
         raise SystemExit("the __net DNAS record is empty: this drive has never been "
                          "provisioned (run the PlayOnline step first)")
-    dec = bytes(polrecord.decode(rec, polrecord.derive_key(hddid[0x50:0x60])))
-    if any(dec[12:20]):
-        raise SystemExit("the __net record does not decode with this HDD ID (%s): "
-                         "wrong playonline.hddid?" % dec[:20].hex())
-    return dec[:4]
+    dec = decode_record(rec, hddid)
+    if dec:
+        print("__net record: four %s, %s" % (dec[:4].hex(), record_writer(dec, hddid)),
+              file=sys.stderr)
+        return dec[:4]
+    cands = record_candidates(device, hddid)
+    for label, blk in cands[1:]:
+        other = decode_record(rec, blk)
+        if not other:
+            continue
+        if any(blk):
+            raise SystemExit(
+                "the __net record is keyed to the HDD ID %s serves (key %s), not to "
+                "this PC's playonline.hddid (key %s): the playonline.hddid here is not "
+                "the one this drive was installed with. Move games/POL/playonline.hddid "
+                "aside and run again: it is then read back from the drive.\n%s"
+                % (label, blk[0x40:0x48].hex(), hddid[0x40:0x48].hex(), REPORT_HINT))
+        raise SystemExit(
+            "the __net record is keyed to a zero HDD ID (four %s, %s): it was written "
+            "under PCSX2 or by a console that was served no drive ID, so it does not "
+            "decode with playonline.hddid on the console either.\n%s"
+            % (other[:4].hex(), record_writer(other), REPORT_HINT))
+    if "the loader in" in cands[0][0]:
+        why = ("%s serves this same ID, so the console cannot read this record "
+               "either: it was written for another HDD ID (a record left from an "
+               "earlier install of the drive, or one a console wrote under another "
+               "ID). Anything else keyed through it (FFXI) cannot decrypt on this "
+               "drive either." % cands[0][0].split(" = ", 1)[1])
+    else:
+        why = ("no loader on the drive serves this ID, so either playonline.hddid "
+               "or the record is not this drive's.")
+    raise SystemExit(
+        "the __net record does not decode with playonline.hddid (key %s) nor with "
+        "any ID a loader on the drive serves: %s Minna's DNAS reads its four from "
+        "this record, so the game cannot be sealed to it.\n%s"
+        % (hddid[0x40:0x48].hex(), why, REPORT_HINT))
+
+
+def repair_record(device, hddid, backup, write=False):
+    """Put back the record the PlayOnline step mints (route.mint_record: four
+    ci_transcrypt.DEFAULT_FOUR, identity from the HDD ID), keyed to `hddid`.
+
+    Only when every filled loader on the drive serves exactly `hddid` and the record
+    decodes under none of record_candidates: such a record cannot be read on
+    the console through the served ID, so nothing the
+    drive's loaders serve can be using it, and the PlayOnline step itself writes
+    this same record whenever it routes the Viewer (FFXI's containers are keyed
+    to its four). The old sector is saved to `backup` first and read back."""
+    from playonline.lib import ci_transcrypt
+    lba, rec = read_record(device)
+    # The console decodes the record with the ID its loader serves. Only when the
+    # loaders on this drive all serve exactly `hddid` is a record that `hddid`
+    # cannot decode known to be useless; otherwise `hddid` may be the wrong file
+    # and the record the right one.
+    loaders = served_loaders(device)
+    if not loaders or any(blk != hddid for _name, blk in loaders):
+        raise SystemExit("not every loader on %s serves this HDD ID (%s), so it cannot "
+                         "be told whether the record or playonline.hddid is wrong: not "
+                         "replacing the record"
+                         % (device, ", ".join("%s %s" % (n, "same" if b == hddid else "OTHER")
+                                              for n, b in loaders) or "no filled loader"))
+    # The record is PlayOnline's: its own loader has to be one of them.
+    from playonline.titles import TITLES
+    viewers = {t.partition for t in TITLES.values() if t.boot == "pfs:/dnasload.elf"}
+    if not any(name in viewers for name, _blk in loaders):
+        raise SystemExit("the PlayOnline Viewer's loader is not on %s: not replacing "
+                         "the record PlayOnline shares" % device)
+    if any(rec[:32]):
+        for label, blk in record_candidates(device, hddid):
+            dec = decode_record(rec, blk)
+            if dec:
+                raise SystemExit("the __net record decodes with %s (four %s): not "
+                                 "replacing it" % (label, dec[:4].hex()))
+    _ata24, key = ci_transcrypt.ata_material(hddid, False)
+    new = polrecord.encode(polrecord.mint(ci_transcrypt.DEFAULT_FOUR,
+                                          ci_transcrypt.default_identity(hddid)), key)
+    if len(new) != RECORD_LEN or decode_record(new, hddid) is None:
+        raise SystemExit("the minted record does not decode back")
+    if not write:
+        return "would replace the __net record (LBA %d + 0x%x) with four %s  (plan only)" % (
+            lba, NET_RECORD_OFF, ci_transcrypt.DEFAULT_FOUR.hex())
+    if os.path.exists(backup):
+        raise SystemExit("%s already exists; not overwriting a backup" % backup)
+    os.makedirs(os.path.dirname(os.path.abspath(backup)), exist_ok=True)
+    with open(backup, "wb") as f:
+        f.write(rec)
+    with open(backup, "rb") as f:
+        if f.read() != rec:
+            raise SystemExit("the backup %s did not read back" % backup)
+    with open(device, "r+b") as f:
+        f.seek(lba * SECTOR + NET_RECORD_OFF)
+        f.write(new)
+        f.flush()
+        os.fsync(f.fileno())
+    if read_record(device)[1] != new:
+        raise SystemExit("the __net record did not read back as written")
+    return "replaced the __net record with the PlayOnline step's (four %s); the old one is in %s" % (
+        ci_transcrypt.DEFAULT_FOUR.hex(), backup)
 
 
 def _quote(name):
@@ -361,9 +558,28 @@ def main(argv=None):
                          "carrying the game's saves over (needs --saves)")
     ap.add_argument("--saves", help="with --reinstall: where the saves are copied first")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--record-info", action="store_true",
+                    help="with --hddid: print what the __net record decodes to under "
+                         "every ID the drive is known to answer with, and stop (read-only)")
+    ap.add_argument("--repair-record", action="store_true",
+                    help="with --hddid and --backup: when the __net record decodes under "
+                         "no known ID, replace it with the one the PlayOnline step mints "
+                         "for this HDD ID (dry run unless --write)")
+    ap.add_argument("--backup", help="with --repair-record: where the old record sector is saved")
     a = ap.parse_args(argv)
     if a.probe:
         print(probe(a.device))
+        return 0
+    if a.record_info or a.repair_record:
+        if not a.hddid:
+            ap.error("--record-info and --repair-record need --hddid")
+        with open(a.hddid, "rb") as f:
+            hddid = f.read()
+        if a.repair_record:
+            if not a.backup:
+                ap.error("--repair-record needs --backup")
+            print(repair_record(a.device, hddid, a.backup, a.write))
+        print("\n".join(record_info(a.device, hddid)))
         return 0
     if not (a.stage and a.hddid):
         ap.error("--stage and --hddid are required")
