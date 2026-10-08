@@ -185,6 +185,90 @@ nobu_accessflag() {
     fi
 }
 
+# Optional boot diagnostics (NOBU_TRACE=1, default off). The loader's
+# atadpatch writes a gate record (kernel, atad, partition and __net opens,
+# served HDD ID, ExecPS2) into one sector while the game boots, but only if
+# that sector already carries the POLTRACENOBUTRC1 tag and the loader's
+# TRACELBA slot points at it. So: put a tagged 512-byte trace.bin into the
+# partition, find its absolute LBA, set the slot in the staged dnasload.elf
+# (tools/traceslot.py, no re-signing) and put the loader again. Read the sector
+# back after a boot with work/loader/trace-read.sh + trace-decode.py.
+nobu_trace_arm() {
+    local part="PP.SLPM-65197.KOEI.NOBUON" tag="POLTRACENOBUTRC1"
+    local tdir="${WORK_DIR}/trace" loader="${WORK_DIR}/stage/PP.SLPM-65197.KOEI.NOBUON/dnasload.elf"
+    local slot_py="${NOBU_TOOLS}/traceslot.py" lba
+    [[ -f "${slot_py}" ]] || slot_py="${HELPER_DIR}/nobunaga/tools/traceslot.py"
+    if [[ ! -f "${loader}" || ! -f "${slot_py}" ]]; then
+        echo "[!] trace: staged loader or traceslot.py missing; trace not armed." >> "${LOG_FILE}"
+        return 0
+    fi
+    mkdir -p "${tdir}"
+    "${NOBU_PY}" -c "import sys; t=b'${tag}'; open(sys.argv[1],'wb').write(t+bytes(512-len(t)))" "${tdir}/trace.bin"
+    printf 'device %s
+mount %s
+rm trace.bin
+lcd %s
+put trace.bin
+umount
+exit
+'         "${DEVICE}" "${part}" "${tdir}" | sudo "${HELPER_DIR}/PFS Shell.elf" >> "${LOG_FILE}" 2>&1
+    sudo blockdev --flushbufs "${DEVICE}" 2>/dev/null
+    lba=$(sudo env PYTHONPATH="${HELPER_DIR}" "${NOBU_PY}" - "${DEVICE}" "${part}" "${tag}" <<'PY'
+import struct, sys
+from playonline import apa
+dev, part, tag = sys.argv[1], sys.argv[2], sys.argv[3].encode()
+f = open(dev, "rb")
+main, _ = apa.find_partition(dev, part)
+# The main partition plus its sub-partitions (their header's main field at
+# 0x58 points back at it): pfs may place trace.bin in either.
+ranges = []
+for p in apa.partitions(dev):
+    f.seek(p.lba * 512)
+    if p.lba == main or (p.is_sub and struct.unpack("<I", f.read(0x5c)[0x58:])[0] == main):
+        ranges.append((p.lba, p.sectors))
+for start, sectors in ranges:
+    pos, end, carry = start * 512, (start + sectors) * 512, b""
+    f.seek(pos)
+    while pos < end:
+        data = f.read(min(1 << 20, end - pos))
+        if not data:
+            break
+        buf, k = carry + data, 0
+        while True:
+            k = buf.find(tag, k)
+            if k < 0:
+                break
+            at = pos - len(carry) + k
+            if at % 512 == 0:
+                print(at // 512)
+                sys.exit(0)
+            k += 1
+        carry = buf[-(len(tag) - 1):]
+        pos += len(data)
+print(-1)
+PY
+)
+    if [[ -z "${lba}" || "${lba}" -le 0 ]]; then
+        echo "[!] trace: could not locate trace.bin on ${DEVICE}; trace not armed." >> "${LOG_FILE}"
+        return 0
+    fi
+    sudo "${NOBU_PY}" "${slot_py}" "${loader}" --set "${lba}" --check "${DEVICE}" >> "${LOG_FILE}" 2>&1 || {
+        echo "[!] trace: traceslot --set ${lba} failed; trace not armed." >> "${LOG_FILE}"
+        return 0
+    }
+    printf 'device %s
+mount %s
+rm dnasload.elf
+lcd %s
+put dnasload.elf
+umount
+exit
+'         "${DEVICE}" "${part}" "$(dirname "${loader}")" | sudo "${HELPER_DIR}/PFS Shell.elf" >> "${LOG_FILE}" 2>&1
+    sudo blockdev --flushbufs "${DEVICE}" 2>/dev/null
+    echo "trace: armed trace.bin at LBA ${lba}, loader slot set" >> "${LOG_FILE}"
+    echo "  Boot trace armed (trace.bin at LBA ${lba})."
+}
+
 # True when the kit carries a translation pack. A kit built without one still
 # has translation/ holding a PUT-TRANSLATION-HERE.txt placeholder, which is not
 # a pack (nobu-translate.sh skips PUT-* files the same way).
@@ -414,8 +498,12 @@ NOBU_INSTALL_PY="${NOBU_TOOLS}/nobuinstall.py"
 # keys), then installs it as pfs:/dnasload.elf in place of the disc's stock
 # dnasload, which cannot pass the dead DNAS console binding. It serves the
 # drive's HDD ID and spoofs the psbb i.Link the access_flag25 record is keyed
-# to, and carries the English text-input default. Ships in the toolkit assets;
-# override with $NOBU_LOADER_OVERRIDE.
+# to, and carries the English text-input default (a VBlank hook copied to
+# 0x000FE000, outside the game heap). Built DRIVERS=4 (ps2sdk dev9/atad, no
+# SCE-genuine drive gate; DRIVERS=2 never passed that gate on hardware), silent,
+# with the v4 trace slot left at 0 (off; NOBU_TRACE=1 arms it, see
+# nobu_trace_arm). Ships in the toolkit assets; override with
+# $NOBU_LOADER_OVERRIDE.
 NOBU_LOADER="${NOBU_LOADER_OVERRIDE:-${SCRIPTS_DIR}/assets/nobunaga/polbbnexec-inputpatch.kelf}"
 NOBU_INSTALLED_NOW=0
 
@@ -530,6 +618,7 @@ if [[ -n "${NOBU_DISC_OK}" ]]; then
                     2>&1 | tee -a "${LOG_FILE}" | grep -v '^   kept ' | sed 's/^/  /'
                 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[NOBU_KIT_ERROR]}"
                 NOBU_INSTALLED_NOW=1
+                [[ "${NOBU_TRACE:-0}" == 1 ]] && nobu_trace_arm
                 nobu_accessflag
                 if [[ "${TR_ARGS[0]}" != --no-translation ]]; then
                     nobu_retitle english
