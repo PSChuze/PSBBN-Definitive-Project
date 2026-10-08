@@ -25,3 +25,23 @@ splice state. It exits 1 when a rule of the hardware contract
 
 `--report-only TITLE` keeps a title's failures as notes, for an asset that is
 being rebuilt elsewhere.
+
+## Silent and debug twins
+
+Each title ships its loader twice, built from one source and signed the same
+way, so the only difference is the on-screen text. The installers ask "Show
+boot debug text on the console?" (scripts/helper/debugtext.sh): N installs the
+silent loader, Y the debug twin and, where the loader has a boot record, arms
+it (trace.bin in the game partition, the TRACELBA slot set with
+nobunaga/tools/traceslot.py). Tester notes: RELEASE-NOTES-hw-boot.md.
+
+| title | silent (N) | debug (Y) |
+|---|---|---|
+| Nobunaga | `nobunaga/polbbnexec-inputpatch.kelf` (DRIVERS=4, **no input hook** since 2026-10-08 despite the name: b6da0082; the hook build is `polbbnexec-inputpatch.kelf.hook-unproven`, it stopped boot #56 on the console) | `nobunaga/polbbnexec-nobu-verbose.kelf` (FORK_VERBOSE, DRIVERS=4, no input hook) |
+| pop'n | `popn/polbbnexec-popn.kelf` | `popn/polbbnexec-popn-verbose.kelf` (FORK_VERBOSE, same pre-v4 source; record LBA baked at 19264032) |
+| Minna | `mingol/polbbnexec-mingol.kelf` | `mingol/polbbnexec-mingol-verbose.kelf` (FORK_VERBOSE, ROM SYSMEM splice off) |
+| Bomberman | `bomb/bootfiles/bombload.{elf,kelf}` | `bomb/bootfiles-debug/bombload.{elf,kelf}` (SCREEN build, 5 s hold; no record slot) |
+
+Bomberman's debug pair keeps the on-partition name `bombload.kelf` (the name
+the browser entry boots): the installer stages `bootfiles/` with the
+`bootfiles-debug/` loader in its place.

@@ -66,6 +66,12 @@ LOG_FILE="${LOGS_DIR}/mingol-installer.log"
 GAMES_PATH="${TOOLKIT_PATH}/games"
 MINGOL_ASSETS="${ASSETS_DIR}/mingol"
 WORK_DIR="${SCRIPTS_DIR}/tmp/mingol"
+# The in-place update (playonline.lib.pfsupdate) refuses a stage path with a
+# space in it; a toolkit checked out under such a path (e.g. "PlayOnline
+# Project") stages in /tmp instead.
+if [[ "${WORK_DIR}" =~ [[:space:]] ]]; then
+    WORK_DIR="${TMPDIR:-/tmp}/psbbn-mingol-$(id -u)"
+fi
 
 arch="$(uname -m)"
 if [[ "$arch" = "x86_64" ]]; then
@@ -128,6 +134,8 @@ fi
 : "${UI_TEXT[GOLF_PLAN_BOOT]:=install a disc-less loader so the title boots from HDD, no disc required}"
 : "${UI_TEXT[GOLF_DOING]:=Installing Minna no Golf Online (this can take several minutes)...}"
 : "${UI_TEXT[GOLF_ERROR_INSTALL]:=The install failed. See logs/mingol-installer.log.}"
+: "${UI_TEXT[GOLF_ERROR_RECORD]:=The drive's shared DNAS record could not be used, so nothing was written. Please send logs/mingol-installer.log: it holds a read-only dump of the record.}"
+: "${UI_TEXT[GOLF_RECORD_REPAIR]:=MINGOL_REPAIR_RECORD=1: putting back the PlayOnline step's DNAS record (only if the one on the drive cannot be read with any known drive ID)...}"
 : "${UI_TEXT[GOLF_DONE]:=Minna no Golf Online was installed.}"
 : "${UI_TEXT[GOLF_DONE_HINT]:=It appears in the browser; it boots with no disc.}"
 : "${UI_TEXT[GOLF_ASK_TRANSLATE]:=Install the English translation? It is downloaded from openlobby.fyi. (y/N)}"
@@ -191,6 +199,23 @@ mgo_accessflag() {
         echo "  DNAS boot record in place (__net+0x202000); the PlayOnline record is untouched."
     else
         echo "  [!] could not write the DNAS boot record; see logs/mingol-installer.log"
+    fi
+}
+
+# Boot debug text, asked once before the stage (scripts/helper/debugtext.sh):
+# Y stages the FORK_VERBOSE twin of the loader, which prints every stage on the
+# TV and stops with the reason when one fails, and arms the boot record (a
+# POLTRACEMGOETRC1-tagged trace.bin in the partition, the loader's TRACELBA
+# slot pointed at it); N the silent loader with the slot at 0 (off).
+source "${HELPER_DIR}/debugtext.sh"
+
+mgo_trace_arm() {
+    local part="PP.SCPS-15049..APPLICATION"
+    if debugtext_trace_arm "${DEVICE}" "${part}" "${part}" POLTRACEMGOETRC1 \
+            "${STAGE_DIR}/tree/dnasload.elf"; then
+        echo "  ${UI_TEXT[DEBUG_TEXT_TRACE_ON]} ${DEBUG_TRACE_LBA}."
+    else
+        echo "  ${UI_TEXT[DEBUG_TEXT_TRACE_FAIL]}"
     fi
 }
 
@@ -258,7 +283,10 @@ fi
 echo "Disc: ${GOLF_SRC}" >> "${LOG_FILE}"
 
 # ---- the signed loader (ship-side) --------------------------------------
+# The silent loader and its FORK_VERBOSE twin (boot debug text); both were
+# booted on the console with the BIOS-ROM SYSMEM splice built out.
 LOADER_KELF="${MINGOL_ASSETS}/polbbnexec-mingol.kelf"
+LOADER_KELF_VERBOSE="${MINGOL_ASSETS}/polbbnexec-mingol-verbose.kelf"
 if [[ ! -f "${LOADER_KELF}" ]]; then
     echo "[X] Missing loader: ${LOADER_KELF}" >> "${LOG_FILE}"
     error_msg "${UI_TEXT[GOLF_ERROR_LOADER]}"
@@ -405,6 +433,10 @@ else
 fi
 echo
 
+debugtext_ask
+debugtext_pick "${LOADER_KELF}" "${LOADER_KELF_VERBOSE}"
+LOADER_KELF="${DEBUG_LOADER}"
+
 # Servers: by default the stage points the game at the revival's servers
 # (ADDRESS.XB, and the Feega CA as ROOT_ED.PEM); MINGOL_SERVERS=stock in
 # the environment keeps the disc's server table and Sony's root.
@@ -412,6 +444,32 @@ SERVER_ARGS=()
 [[ "${MINGOL_SERVERS:-}" == "stock" ]] && SERVER_ARGS=(--stock-servers)
 
 STAGE_DIR="${WORK_DIR}/stage"
+# The four is read from the drive: drop any pages the kernel still holds from
+# before another machine (or the PlayOnline step) wrote the record.
+sudo blockdev --flushbufs "${DEVICE}" >/dev/null 2>&1
+# mgo_record_info: a read-only dump of the shared __net record (what it decodes
+# to under playonline.hddid, under every ID a loader on the drive serves and
+# under the zero ID), for the log a tester sends.
+mgo_record_info() {
+    echo "---- __net record (read-only) ----" >> "${LOG_FILE}"
+    mgosudo -m mingol.stage.write "${DEVICE}" --record-info \
+        --hddid "${POL_HDDID_FILE}" >> "${LOG_FILE}" 2>&1
+}
+# A record no known drive ID decodes can be replaced by the one the PlayOnline
+# step mints for this drive ID, on request only (the old sector is saved).
+# write.py refuses when the record decodes under any known ID.
+if [[ "${MINGOL_REPAIR_RECORD:-}" == 1 ]]; then
+    echo "  ${UI_TEXT[GOLF_RECORD_REPAIR]}"
+    mgo_record_info
+    rec_backup="${GOLF_DIR}/backups/$(basename "${DEVICE}")/net-record-before-repair-$(date +%Y%m%d-%H%M%S).bin"
+    mgosudo -m mingol.stage.write "${DEVICE}" --repair-record \
+        --hddid "${POL_HDDID_FILE}" --backup "${rec_backup}" --write \
+        2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
+    # A refusal (the record already decodes, or the loaders disagree) is not
+    # fatal: the stage below checks the record again either way.
+    [[ ${PIPESTATUS[0]} -eq 0 ]] || echo "  [!] the record was left as it is (see logs/mingol-installer.log)"
+    sudo chown -R "$(id -u):$(id -g)" "$(dirname "${rec_backup}")" 2>/dev/null
+fi
 mgosudo -m mingol.stage \
     --disc "${GOLF_SRC}" \
     --hddid "${POL_HDDID_FILE}" \
@@ -421,7 +479,24 @@ mgosudo -m mingol.stage \
     "${TR_ARGS[@]}" \
     "${SERVER_ARGS[@]}" \
     2>&1 | tee -a "${LOG_FILE}" | grep -v '^progress: sealing' | sed 's/^/  /'
-[[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[GOLF_ERROR_INSTALL]}"
+if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+    if tail -n 20 "${LOG_FILE}" | grep -q "__net"; then
+        mgo_record_info
+        error_msg "${UI_TEXT[GOLF_ERROR_RECORD]}"
+    fi
+    error_msg "${UI_TEXT[GOLF_ERROR_INSTALL]}"
+fi
+
+# --translate stays Japanese when no pack can be had or it does not fit the
+# disc. On a new install that is a working Japanese game, but an update the
+# player asked to make English would instead take an English drive back to
+# Japanese: stop before anything is written.
+: "${UI_TEXT[GOLF_UPDATE_NO_PACK]:=The English translation could not be used (see logs/mingol-installer.log); nothing was changed. Put the pack (.zip) in games/GOLF/translation/ and try again.}"
+if [[ -n "${GOLF_UPDATE}" && "${mgo_lang}" == "english" ]] \
+        && ! grep -q "overlays installed as plain files" "${STAGE_DIR}/game.json"; then
+    echo "[X] Update to English: the stage stayed Japanese; nothing written." >> "${LOG_FILE}"
+    error_msg "${UI_TEXT[GOLF_UPDATE_NO_PACK]}"
+fi
 
 mgosudo -m mingol.stage.write "${DEVICE}" \
     --stage "${STAGE_DIR}" \
@@ -431,6 +506,16 @@ mgosudo -m mingol.stage.write "${DEVICE}" \
     --write 2>&1 | tee -a "${LOG_FILE}" | grep -v '^   kept ' | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[GOLF_ERROR_INSTALL]}"
 mgo_accessflag
+[[ "${DEBUG_TEXT}" == 1 ]] && mgo_trace_arm
+
+# PSBBN's game list shows /res/info.sys, which a partition from the retail or
+# the kit-based installer carries and an update keeps: give it the name of the
+# language the game is now in (the browser entry already has it, from attr.bin).
+mgo_now=$(mgosudo -m mingol.stage.write "${DEVICE}" --probe 2>>"${LOG_FILE}")
+if [[ "${mgo_now}" == "english" || "${mgo_now}" == "japanese" ]]; then
+    mgosudo -m mingol.stage.retitle "${DEVICE}" "${mgo_now}" --write >> "${LOG_FILE}" 2>&1 \
+        || echo "  [!] could not set the PSBBN game-list name; see logs/mingol-installer.log"
+fi
 
 echo
 if [[ -n "${GOLF_UPDATE}" ]]; then

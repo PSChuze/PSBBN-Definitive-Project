@@ -11,6 +11,7 @@ toolkit ships:
     scripts/assets/popn/*.kelf
     scripts/assets/mingol/*.kelf
     scripts/assets/bomb/bootfiles/bombload.elf, bombload.kelf
+    scripts/assets/bomb/bootfiles-debug/bombload.elf, bombload.kelf
 
 (.bak-* copies are skipped) and prints, per file: DRIVERS mode, IOPRP
 version (an unfilled polbbnexec has an empty slot: the installer fills the
@@ -65,7 +66,9 @@ def assets():
     for title, pattern in (("nobunaga", "nobunaga/*.kelf"), ("popn", "popn/*.kelf"),
                            ("mingol", "mingol/*.kelf"),
                            ("bomb", "bomb/bootfiles/bombload.elf"),
-                           ("bomb", "bomb/bootfiles/bombload.kelf")):
+                           ("bomb", "bomb/bootfiles/bombload.kelf"),
+                           ("bomb", "bomb/bootfiles-debug/bombload.elf"),
+                           ("bomb", "bomb/bootfiles-debug/bombload.kelf")):
         for p in sorted(glob.glob(os.path.join(ASSETS, pattern))):
             out.append((title, p))
     return out

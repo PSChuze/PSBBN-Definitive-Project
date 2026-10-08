@@ -170,6 +170,38 @@ popn_retitle() {
         || echo "[!] retitle ($1) failed; the name in the browser is unchanged." >> "${LOG_FILE}"
 }
 
+# Boot debug text, asked with the install or the loader swap
+# (scripts/helper/debugtext.sh): Y installs the FORK_VERBOSE twin of the
+# loader, which prints every stage on the TV and stops with the reason when one
+# fails; N the silent one. The twins are the console-proven pre-v4 build, whose
+# boot record LBA is compiled in (19264032, no fill-time slot): Y puts a tagged
+# trace.bin in the partition all the same, and the record is kept only when
+# pfs placed it at that sector.
+source "${HELPER_DIR}/debugtext.sh"
+: "${UI_TEXT[POPN_TRACE_FIXED]:=This loader writes its boot record to one fixed drive sector, and trace.bin did not land there on this drive, so no record is kept; the text still shows.}"
+POPN_TRACE_LBA=19264032
+POPN_LOADER_VERBOSE="${POPN_LOADER_VERBOSE_OVERRIDE:-${SCRIPTS_DIR}/assets/popn/polbbnexec-popn-verbose.kelf}"
+
+# Swaps POPN_LOADER for its verbose twin on Y (not when POPN_LOADER_OVERRIDE
+# names a loader of its own).
+popn_debugtext() {
+    debugtext_ask
+    [[ -n "${POPN_LOADER_OVERRIDE}" ]] && return 0
+    debugtext_pick "${POPN_LOADER}" "${POPN_LOADER_VERBOSE}"
+    POPN_LOADER="${DEBUG_LOADER}"
+}
+
+popn_trace_arm() {
+    if ! debugtext_trace_arm "${DEVICE}" PP.BLJA-00010 PP.BLJA-00010 POLTRACEPOPNTC1; then
+        echo "  ${UI_TEXT[DEBUG_TEXT_TRACE_FAIL]}"
+    elif [[ "${DEBUG_TRACE_LBA}" == "${POPN_TRACE_LBA}" ]]; then
+        echo "  ${UI_TEXT[DEBUG_TEXT_TRACE_ON]} ${DEBUG_TRACE_LBA}."
+    else
+        echo "trace: trace.bin at ${DEBUG_TRACE_LBA}, loader writes ${POPN_TRACE_LBA}: no record on this drive" >> "${LOG_FILE}"
+        echo "  ${UI_TEXT[POPN_TRACE_FIXED]}"
+    fi
+}
+
 on_exit() {
     [[ -n "${SUDO_KEEPALIVE}" ]] && kill "${SUDO_KEEPALIVE}" 2>/dev/null
     return 0
@@ -299,8 +331,10 @@ if [[ -n "${INFO[installed]}" ]]; then
     # In-place loader re-swap: refresh pfs:/dnasload.elf with the spoof loader
     # (filled for this drive) WITHOUT reinstalling -- so a tester can iterate on
     # loader / boot-ELF-patch changes, or add the disc-less bypass to a drive that
-    # was installed with the stock dnasload. Sealed containers, attr and passwords
-    # are untouched. Needs the disc extract, the loader asset, and the drive's ID.
+    # was installed with the stock dnasload. Sealed containers and passwords are
+    # untouched; a missing browser entry (attr area) is written, so an install
+    # from before the attr fix stops showing "Corrupted Data" in HDD-OSD.
+    # Needs the disc extract, the loader asset, and the drive's ID.
     POPN_DISC="${POPN_DIR}/disc"
     POPN_TOOLS="${POPN_TOOLS_OVERRIDE:-${POPN_DIR}/tools}"
     [[ -f "${POPN_TOOLS}/popninstall.py" ]] || POPN_TOOLS="${SCRIPTS_DIR}/../../popn/popn/tools"
@@ -323,6 +357,7 @@ if [[ -n "${INFO[installed]}" ]]; then
                     # English text + menu images; POPN_NO_TEXTURES=1 keeps the Japanese images
                     [[ -n "${POPN_TR_FLAG}" && -n "${POPN_NO_TEXTURES}" ]] && POPN_TR_FLAG+=" --no-textures"
                 fi
+                popn_debugtext
                 # Served-vs-sealed guard (plan gate 6). The loader serves ONE HDD
                 # ID; the containers already on the drive were sealed to some ID
                 # at install time. If they differ the game decrypts its modules
@@ -390,6 +425,7 @@ if [[ -n "${INFO[installed]}" ]]; then
                     else
                         popn_retitle japanese
                     fi
+                    [[ "${DEBUG_TEXT}" == 1 ]] && popn_trace_arm
                     center_text "${UI_TEXT[POPN_RESWAP_DONE]}"
                 else
                     error_msg "${UI_TEXT[POPN_RESWAP_ERROR]}"
@@ -460,6 +496,7 @@ if [[ -f "${POPN_DISC}/SYSTEM.CNF" ]] && [[ -f "${POPN_DISC}/MAIN.BIN" ]] \
         read -r answer </dev/tty
         case "$answer" in
             [Yy]*)
+                popn_debugtext
                 LOADER_FLAG=""
                 if [[ -f "${POPN_LOADER}" ]]; then
                     LOADER_FLAG="--loader ${POPN_LOADER}"
@@ -488,6 +525,7 @@ if [[ -f "${POPN_DISC}/SYSTEM.CNF" ]] && [[ -f "${POPN_DISC}/MAIN.BIN" ]] \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[POPN_KIT_ERROR]}"
                 POPN_INSTALLED_NOW=1
+                [[ "${DEBUG_TEXT}" == 1 && -n "${LOADER_FLAG}" ]] && popn_trace_arm
                 # English name only with the translation; otherwise the disc's.
                 if [[ -n "${POPN_TR_FLAG}" ]]; then
                     popn_retitle english

@@ -57,6 +57,12 @@ LOG_FILE="${LOGS_DIR}/bomb-installer.log"
 GAMES_PATH="${TOOLKIT_PATH}/games"
 BOMB_FILES="${SCRIPTS_DIR}/assets/bomb"
 WORK_DIR="${SCRIPTS_DIR}/tmp/bomb"
+# The in-place update (playonline.lib.pfsupdate) refuses a stage path with a
+# space in it, and so does bombinstall --work; a toolkit checked out under
+# such a path (e.g. "PlayOnline Project") stages in /tmp instead.
+if [[ "${WORK_DIR}" =~ [[:space:]] ]]; then
+    WORK_DIR="${TMPDIR:-/tmp}/psbbn-bomb-$(id -u)"
+fi
 
 arch="$(uname -m)"
 if [[ "$arch" = "x86_64" ]]; then
@@ -151,6 +157,32 @@ bomb_accessflag() {
     else
         echo "  [!] could not write the DNAS boot record; see logs/bomb-installer.log"
     fi
+}
+
+# Boot debug text, asked once before the install or update
+# (scripts/helper/debugtext.sh). bootfiles/ carries the silent loader;
+# bootfiles-debug/ the SCREEN build of the same source (scefix 1.2, same link
+# and signing), which prints its [boot]/[bb] lines on the TV, stops with the
+# reason when a step fails and holds 5 s before the game starts. On Y the boot
+# files are bootfiles/ with that loader in place of the silent one: it is
+# pfs:/bombload.kelf either way, the name the browser entry boots. This loader
+# has no boot record slot, so nothing else is armed.
+source "${HELPER_DIR}/debugtext.sh"
+BOMB_BOOT="${BOMB_FILES}/bootfiles"
+bomb_debugtext() {
+    debugtext_ask
+    [[ "${DEBUG_TEXT}" == 1 ]] || return 0
+    if [[ ! -f "${BOMB_FILES}/bootfiles-debug/bombload.kelf" ]]; then
+        echo "[!] debug text: no ${BOMB_FILES}/bootfiles-debug/bombload.kelf" >> "${LOG_FILE}"
+        echo "  ${UI_TEXT[DEBUG_TEXT_NO_TWIN]}"
+        return 0
+    fi
+    BOMB_BOOT="${WORK_DIR}/bootfiles-debug"
+    rm -rf "${BOMB_BOOT}"
+    mkdir -p "${BOMB_BOOT}"
+    cp "${BOMB_FILES}/bootfiles/"* "${BOMB_BOOT}/"
+    cp "${BOMB_FILES}/bootfiles-debug/"bombload.* "${BOMB_BOOT}/"
+    echo "debug text: boot files ${BOMB_BOOT}" >> "${LOG_FILE}"
 }
 
 on_exit() {
@@ -308,13 +340,13 @@ if sudo "${HDL_DUMP}" toc "${DEVICE}" 2>>"${LOG_FILE}" | grep -q -- "PP.SLPS-203
             *) exit 0 ;;
         esac
         [[ "${bomb_lang}" == "english" ]] && TR_ARGS=(--translate "${BOMB_TSV}")
-        echo
+        bomb_debugtext
         echo "${UI_TEXT[BOMB_UPDATE_DOING]}"
         echo
         bombsudo bomb.bombinstall "${DEVICE}" \
             --bundle "${BUNDLE_DIR}" \
             "${DISC_ARG[@]}" \
-            --boot "${BOMB_FILES}/bootfiles" \
+            --boot "${BOMB_BOOT}" \
             --hddid "${HDDID_FILE}" \
             --pfsshell "${PFS_SHELL}" \
             --helper "${HELPER_DIR}" \
@@ -353,13 +385,15 @@ case "$tr_answer" in
 esac
 echo
 
+bomb_debugtext
+
 # ---- install ------------------------------------------------------------
 echo "${UI_TEXT[BOMB_DOING]}"
 echo
 bombsudo bomb.bombinstall "${DEVICE}" \
     --bundle "${BUNDLE_DIR}" \
     "${DISC_ARG[@]}" \
-    --boot "${BOMB_FILES}/bootfiles" \
+    --boot "${BOMB_BOOT}" \
     --hddid "${HDDID_FILE}" \
     --pfsshell "${PFS_SHELL}" \
     --helper "${HELPER_DIR}" \
