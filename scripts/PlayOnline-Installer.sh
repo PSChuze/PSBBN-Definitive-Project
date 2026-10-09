@@ -952,6 +952,17 @@ for k in "${ORDER[@]}"; do
     polmod stage "$disc" --title "$k" --out "${WORK_DIR}/$k" >> "${LOG_FILE}" 2>&1 \
         || error_msg "${UI_TEXT[POL_ERROR_STAGE]} $k"
 
+    # A run that moved Dirge to a larger partition (below) and stopped after
+    # removing the old one left the whole title in dirge-keep. Install from
+    # that copy, so its updates and settings come back with it.
+    DIRGE_KEEP="${WORK_DIR}/dirge-keep"
+    if [[ $REFRESH -eq 0 && "$k" == dirge-jp ]] \
+            && polmod dirgekeep check "${DIRGE_KEEP}" >> "${LOG_FILE}" 2>&1; then
+        echo "${UI_TEXT[POL_DIRGE_RESUME]} ${DIRGE_KEEP}"
+        rm -rf "${WORK_DIR}/$k"
+        ln -s "${DIRGE_KEEP}/tree" "${WORK_DIR}/$k"
+    fi
+
     # Prepare the tree before it is measured: the plaintext modules written
     # beside the disc's add a few MiB to the Viewer, and a title that cannot
     # be converted fails here, before any partition is created.
@@ -1019,6 +1030,35 @@ for k in "${ORDER[@]}"; do
     # its own partition, so both are written again; that replaces only what
     # it would have written (the entry it replaces is backed up). The second
     # comparison is the verification: it exits 3 when nothing differs.
+    #
+    # Dirge installed before this package copied its movies has them missing
+    # from a 4096 MiB partition that cannot hold them, and a partition cannot
+    # grow. The title is copied to the PC and read back, the drive is checked
+    # for room, and only then is the partition removed. The install path below
+    # makes it again at the new size from the copy, with the movies added and
+    # the updates and settings it had kept; see dirgekeep.py.
+    if [[ $REFRESH -eq 1 && "$k" == dirge-jp ]] \
+            && polsudo dirgekeep needs "$DEVICE" --src "${WORK_DIR}/$k" >> "${LOG_FILE}" 2>&1; then
+        echo "${UI_TEXT[POL_DIRGE_KEEP]} ${DIRGE_KEEP}"
+        if ! polmod dirgekeep check "${DIRGE_KEEP}" >> "${LOG_FILE}" 2>&1; then
+            sudo rm -rf "${DIRGE_KEEP}"
+            polsudo dirgekeep keep "$DEVICE" --src "${WORK_DIR}/$k" --out "${DIRGE_KEEP}" \
+                >> "${LOG_FILE}" 2>&1 || error_msg "${UI_TEXT[POL_ERROR_DIRGE_KEEP]}"
+            sudo chown -R "$(id -u):$(id -g)" "${DIRGE_KEEP}"
+        fi
+        size=$(polroot size --src "${DIRGE_KEEP}/tree" --title "$k" --drive "$DEVICE" --plain \
+               2>>"${LOG_FILE}" | tr -d '\r')
+        [[ -n "$size" ]] || error_msg "${UI_TEXT[POL_ERROR_DIRGE_NOROOM]}"
+        echo "${UI_TEXT[POL_DIRGE_MOVE]} ${size}M"
+        printf 'device %s\nrmpart %s\nexit\n' "$DEVICE" "$part" \
+            | sudo "${PFS_SHELL}" >> "${LOG_FILE}" 2>&1
+        if sudo "${HDL_DUMP}" toc "$DEVICE" 2>>"${LOG_FILE}" | grep -q -- "$part"; then
+            error_msg "${UI_TEXT[POL_ERROR_DIRGE_RMPART]} ${DIRGE_KEEP}"
+        fi
+        rm -rf "${WORK_DIR}/$k"
+        ln -s "${DIRGE_KEEP}/tree" "${WORK_DIR}/$k"
+        REFRESH=0
+    fi
     if [[ $REFRESH -eq 1 ]]; then
         echo "${UI_TEXT[POL_DOING_RESYNC]} $k"
         rm -f "${WORK_DIR}/$k-resync.txt"
@@ -1115,6 +1155,12 @@ for k in "${ORDER[@]}"; do
         --title "$k" --src "${WORK_DIR}/$k" --verify \
         >> "${LOG_FILE}" 2>&1 || error_msg "${UI_TEXT[POL_ERROR_VERIFY]} $k"
 
+    # A link to dirge-keep when the title came from the kept copy: removing
+    # the link leaves the copy, which goes only now that the partition verified.
+    if [[ -L "${WORK_DIR}/$k" ]]; then
+        rm -f "${WORK_DIR}/$k"
+        [[ "$k" == dirge-jp ]] && sudo rm -rf "${DIRGE_KEEP}"
+    fi
     rm -rf "${WORK_DIR}/$k"
 done
 

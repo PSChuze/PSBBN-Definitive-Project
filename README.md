@@ -1040,7 +1040,7 @@ Unlike other PS2 games, PlayOnline titles cannot be launched from OPL or NHDDL. 
 
 ### PlayOnline Requirements
 - A drive with [PSBBN](#install-psbbn-and-hosdmenu) or [HOSDMenu](#install-hosdmenu-only) already installed
-- Free space in the PS2 partition area of the drive. A full install of every title needs roughly 18 GB (*Final Fantasy XI* takes 8 GB, *Front Mission Online* and *Dirge of Cerberus* 4 GB each). The Viewer, *Tetra Master* and *JongHoLow* together fit in under 2 GB
+- Free space in the PS2 partition area of the drive. A full install of every title needs roughly 22 GB (*Final Fantasy XI* and *Dirge of Cerberus* take 8 GB each, *Front Mission Online* 4 GB). The Viewer, *Tetra Master* and *JongHoLow* together fit in under 2 GB
 - Your own disc images, placed in the `POL` folder inside your `games` folder. `.iso`, `.img`, `.bin` and `.chd` files are supported. A `.chd` file is extracted once, next to the original, which needs free space for the full-size image
 - A community-run PlayOnline server to connect to. Square Enix's PS2 service has closed, so the games cannot go online without one
 
@@ -1064,6 +1064,8 @@ When more than one disc supplies the same title, the newest build is used. *Vana
 5. Review the list of partitions that will be created, and confirm
 
 Nothing already on the drive is modified. A title that is already installed is skipped, so your saves and any updates are kept. If you run the option again you will be offered the chance to refresh installed titles from your discs.
+
+*Dirge of Cerberus* installed by an earlier version of this installer is missing its movies, which it then skips unless the disc is in the drive. Refreshing it adds them. They do not fit its old 4 GB partition, so the refresh copies the title to the PC, checks the drive has 8 GB free, removes the old partition and installs the title again at 8 GB from the copy, with its updates and settings. The copy is kept in `scripts/tmp/playonline/dirge-keep` until the new partition verifies; if the run stops part way, running the option again finishes it from there.
 
 ### Installing PlayOnline without PSBBN (experimental)
 PlayOnline can also go on a drive with neither PSBBN nor HOSDMenu on it: one formatted for the PS2 by HDD-OSD or the HDD Utility Disc, where the titles are started from Sony's own browser. This uses the same installer, and needs only Python and one package in place of the toolkit's full setup.
