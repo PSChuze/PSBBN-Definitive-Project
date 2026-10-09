@@ -1475,6 +1475,9 @@ option_three() {
             }
         fi
 
+        # Feega: our CA + English Feega screens for eng (the pack just replaced the edclient XMLs).
+        sudo bash "${HELPER_DIR}/feega/psbbn-feega.sh" "${STORAGE_DIR}/__linux.4" "$lang" "${ASSETS_DIR}" "${LOG_FILE}"
+
         mkdir -p "${SCRIPTS_DIR}/tmp"
 
         case "$lang" in

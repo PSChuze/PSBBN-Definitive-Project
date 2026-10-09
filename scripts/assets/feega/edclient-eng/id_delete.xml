@@ -1,0 +1,607 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RESOURCE screen_w="640" screen_h="480" version="1.1" xmlns="http://www.scei.co.jp/bn/2002/">
+
+	<!-- スクリプト -->
+	<SCRIPT id="main" src="id_delete" type="binary/small"/>
+	<SCRIPT id="ed_page" src="ed_page" type="binary/small"/>
+	<SCRIPT id="focus" src="../parts/focus" type="binary/small"/>
+	<SCRIPT id="dialog" src="../parts/dialog" type="binary/small"/>
+	<SCRIPT id="edit_box" src="../parts/edit_box" type="binary/small"/>
+	<SCRIPT id="menu_item" src="menu_item" type="binary/small"/>
+
+	<!-- リンク -->
+	<LINK id="bg" href="bg.xml"/>
+	<LINK id="LINK_TOP" href="id_save_menu.xml"/>
+	<LINK id="LINK_MEMBER_MENU" href="member_menu.xml"/>
+
+	<!-- テクスチャ -->
+	<IMG id="IMG_PAGE" src="texture/page.tm2"/>
+	<IMG id="IMG_NEXT" src="texture/next_dark.tm2"/>
+	<IMG id="IMG_NEXT_HI" src="texture/next_hi.tm2"/>
+	<IMG id="IMG_PREV" src="texture/prev_dark.tm2"/>
+	<IMG id="IMG_PREV_HI" src="texture/prev_hi.tm2"/>
+
+	<!-- dialog:削除確認 -->
+	<dialog id="DIALOG_DELETE_CONFIRM" type="yesno">
+		<text text_id="msged_savedel_confirm_ask"/>
+		<item text_id="msged_combtn_yes"/>
+		<item text_id="msged_combtn_no"/>
+	</dialog>
+	
+	<!-- dialog:退会内容と保存データが異なる -->
+	<dialog id="DIALOG_DISAGREE" type="cancel">
+		<text text_id="msged_confirmerr_feegaid_delete"/>
+	</dialog>
+	
+	<!-- dialog:未フォーマット -->
+	<dialog id="DIALOG_UNFORMAT" type="cancel">
+		<text text_id=""/>
+	</dialog>
+
+	<!-- dialog:フォーマット確認(P04) -->
+	<dialog id="DIALOG_FORMAT_CONFIRM" type="yesno">
+		<text text_id="msged_saveinit_ask"/>
+		<item text_id="msged_combtn_yes"/>
+		<item text_id="msged_combtn_no"/>
+	</dialog>
+	
+	<!-- dialog:フォーマット中... -->
+	<dialog id="DIALOG_FORMAT_MEMORY_CARD" type="device">
+		<text text_id="msged_saveinit1"/>
+		<text text_id="msged_saveinit2"/>
+	</dialog>
+	
+	<!-- dialog:フォーマット完了 -->
+	<dialog id="DIALOG_FORMAT_COMPLETE" type="decide">
+		<text text_id="msged_saveinit_complete"/>
+	</dialog>
+	
+	<!-- dialog:メモリーカード読み込み中... -->
+<!--
+	<dialog id="DIALOG_LOAD_MEMORY_CARD" type="device">
+		<text text_id=""/>
+	</dialog>
+-->
+	
+	<!-- dialog:HDD読込み中... -->
+<!--
+	<dialog id="DIALOG_LOAD_HDD" type="device">
+		<text text_id=""/>
+	</dialog>
+-->
+	
+	<!-- dialog:メモリーカードセーブ中... -->
+	<dialog id="DIALOG_SAVE_MEMORY_CARD" type="device">
+		<text text_id="msged_savemc_save1"/>
+		<text text_id="msged_savemc_save2"/>
+	</dialog>
+	
+	<!-- dialog:HDDセーブ中... -->
+	<dialog id="DIALOG_SAVE_HDD" type="device">
+		<text text_id="msged_savemc_save1"/>
+	</dialog>
+	
+	<!-- dialog:メモリーカード削除中... -->
+	<dialog id="DIALOG_DELETE_MEMORY_CARD" type="device">
+		<text text_id="msged_savedel_delete1"/>
+		<text text_id="msged_savedel_delete2"/>
+	</dialog>
+	
+	<!-- dialog:HDD削除中... -->
+	<dialog id="DIALOG_DELETE_HDD" type="device">
+		<text text_id="msged_savedel_del1"/>
+		<text text_id="msged_savedel_del2"/>
+	</dialog>
+	
+	<!-- dialog:削除完了 -->
+	<dialog id="DIALOG_DELETE_COMPLETE" type="cancel">
+		<text text_id="msged_savedel_delete_complete"/>
+	</dialog>
+	
+	<!-- dialog:MC空き容量が足りません(P09) -->
+	<dialog id="DIALOG_MC_NO_SPACE" type="cancel">
+		<text text_id="msged_savemc_nospace"/>
+	</dialog>
+	
+	<!-- dialog:HDD空き容量が足りません(P17) -->
+	<dialog id="DIALOG_HDD_NO_SPACE" type="cancel">
+		<!-- text text_id="msged_savemc_nospace_inner"/ -->
+		<text text_id="msged_savemc_save_fail_p17"/>
+	</dialog>
+	
+	<!-- dialog:ファイルがありません(P04) -->
+	<dialog id="DIALOG_NO_EXIST_FILE" type="cancel">
+		<text text_id="msged_saveerror_nodata"/>
+	</dialog>
+	
+	<!-- dialog:既にファイルが存在します -->
+	<dialog id="DIALOG_EXIST_FILE" type="cancel">
+		<text text_id="msged_savemc_overwrite_ask"/>
+	</dialog>
+	
+	<!-- dialog:メモリーカードが抜かれました(P01) -->
+	<dialog id="DIALOG_NO_CARD" type="cancel">
+		<text text_id="msged_savemc_device_eject"/>
+	</dialog>
+	
+	<!-- dialog:別のメモリカードに差し替えられた -->
+	<dialog id="DIALOG_CHANGE_CARD" type="cancel">
+		<text text_id="msged_confirmerr_anothermc_changed"/>
+	</dialog>
+	
+	<!-- dialog:MC読込みが不可能な場合(P05) -->
+	<dialog id="DIALOG_MC_INVALID_PARAM" type="yesno">
+		<text text_id="msged_saveerror_newsave_delete"/>
+		<item text_id="msged_combtn_yes"/>
+		<item text_id="msged_combtn_no"/>
+	</dialog>
+	
+	<!-- dialog:MC他のPS2で作成された場合(P06) -->
+	<dialog id="DIALOG_MC_INVALID_ID" type="yesno">
+		<text text_id="msged_saveerror_otherps2_delete"/>
+		<item text_id="msged_combtn_yes"/>
+		<item text_id="msged_combtn_no"/>
+	</dialog>
+	
+	<!-- dialog:MC未サポートのバージョン(P07) -->
+	<dialog id="DIALOG_MC_NOSUPPORT_VERSION" type="yesno">
+		<text text_id="msged_saveerror_illegalid_delete"/>
+		<item text_id="msged_combtn_yes"/>
+		<item text_id="msged_combtn_no"/>
+	</dialog>
+	
+	<!-- dialog:HDD読込みが不可能な場合 -->
+	<dialog id="DIALOG_HDD_INVALID_PARAM" type="yesno">
+		<text text_id="msged_saveerror_newsave_delete_p12"/>
+		<item text_id="msged_combtn_yes"/>
+		<item text_id="msged_combtn_no"/>
+	</dialog>
+	
+	<!-- dialog:HDD他のPS2で作成された場合 -->
+	<dialog id="DIALOG_HDD_INVALID_ID" type="yesno">
+		<text text_id="msged_saveerror_otherps2_delete_p13"/>
+		<item text_id="msged_combtn_yes"/>
+		<item text_id="msged_combtn_no"/>
+	</dialog>
+	
+	<!-- dialog:HDD未サポートのバージョン -->
+	<dialog id="DIALOG_HDD_NOSUPPORT_VERSION" type="yesno">
+		<text text_id="msged_saveerror_illegalid_delete_p14"/>
+		<item text_id="msged_combtn_yes"/>
+		<item text_id="msged_combtn_no"/>
+	</dialog>
+	
+	<!-- dialog:中断 -->
+	<dialog id="DIALOG_ABORT" type="yesno">
+		<text text_id="msged_com_cancel_ask"/>
+		<item text_id="msged_combtn_yes"/>
+		<item text_id="msged_combtn_no"/>
+	</dialog>
+	
+	<!-- dialog:EDシステムエラー -->
+<!--
+	<dialog id="ERR_DIALOG_ED_SYSTEM" type="cancel">
+		<text text_id=""/>
+	</dialog>
+-->
+
+	<!-- dialog:サーバーエラー -->
+<!--
+	<dialog id="ERR_DIALOG_NO_SERVICE" type="cancel">
+		<text text_id=""/>
+	</dialog>
+-->
+	
+	<!-- dialog:読込みエラー -->
+<!--
+	<dialog id="ERR_DIALOG_LOAD_FAIL" type="cancel">
+		<text text_id=""/>
+	</dialog>
+-->
+	
+	<!-- dialog:フォーマットエラー -->
+	<dialog id="ERR_DIALOG_FORMAT_FAIL" type="cancel">
+		<text text_id="msged_saveinit_fail"/>
+	</dialog>
+	
+	<!-- dialog:セーブエラー(P10) -->
+	<dialog id="ERR_DIALOG_SAVE_FAIL" type="cancel">
+		<text text_id="msged_savemc_save_fail"/>
+	</dialog>
+	
+	<!-- dialog:削除エラー(P08) -->
+	<dialog id="ERR_DIALOG_DELETE_FAIL" type="cancel">
+		<text text_id="msged_savedel_warn_fail_p08"/>
+	</dialog>
+
+	<!-- page:読込み先選択 -->
+	<page id="PAGE_SELECT">
+		<pad_help circle="Enter" cross="Back"/>
+		<window img_id="IMG_PAGE"/>
+		
+		<text_label x="320" y="150" size="" color="" text_id="msged_savechange_device_select_title"/>
+		<text_label x="320" y="180" size="" color="" text_id="msged_savechange_device_select"/>
+		
+		<item id="item0" type="menu_item" x="320" y="240" w="300" menu_id="menu_device" align_h="center" visible="3" current="0">
+			<relation up="" down="" left="" right=""/>
+		</item>
+	</page>
+
+	<!-- page:削除ID、パスワード確認 -->
+	<page id="PAGE_CONFIRM">
+		<pad_help circle="Enter" cross="Back"/>
+		<window img_id="IMG_PAGE"/>
+		
+		<text_label x="320" y="150" size="" color="" text_id="msged_savedel_confirm_title"/>
+		<text_label x="320" y="180" size="" color="" text_id="msged_savedel_confirm"/>
+		<text_label x="120" y="260" w="400" align_h="left" size="" color="" text_id="" param="psbbid"/>
+		<text_label x="120" y="300" w="400" align_h="left" size="" color="" text_id="" param="password"/>
+	</page>
+
+	<!-- page:完了 -->
+	<page id="PAGE_COMPLETE">
+		<pad_help cross="Back"/>
+		<window img_id="IMG_PAGE"/>
+		
+		<text_label x="320" y="150" size="" color="" text_id="msged_savedel_delete_complete_title"/>
+		<text_label x="120" y="220" align_h="left" size="" color="" text_id="msged_savedel_delete_complete"/>
+	</page>
+	
+	
+	<!-- ##RESOURCE-TEXT## -->
+	<TEXT id="msged_combtn_ok"	value='OK' />
+	<TEXT id="msged_combtn_yes"	value='Yes' />
+	<TEXT id="msged_combtn_no"	value='No' />
+	<TEXT id="msged_combtn_dicide"	value='Enter' />
+	<TEXT id="msged_combtn_return"	value='Back' />
+	<TEXT id="msged_combtn_noagree"	value='Disagree' />
+	<TEXT id="msged_combtn_agree"	value='Agree' />
+	<TEXT id="msged_common_btn_option"	value='Details' />
+	<TEXT id="msged_common_sendto_on"	value='Send' />
+	<TEXT id="msged_common_sendto_off"	value='Do Not Send' />
+	<TEXT id="msged_common_start"	value='Start' />
+	<TEXT id="msged_common_send"	value='Send' />
+	<TEXT id="msged_common_buy_yes"	value='Purchase' />
+	<TEXT id="msged_common_buy_no"	value='Do Not Purchase' />
+	<TEXT id="msged_com_cancel_ask"	value='Cancel this? Are you sure?' />
+	<TEXT id="msged_feega_title_enter"	value='Join feega' />
+	<TEXT id="msged_feega_title_confirm_registration"	value='View/Change feega Registration' />
+	<TEXT id="msged_feega_title_leave"	value='Leave feega' />
+	<TEXT id="msged_feega_title_agreement"	value='feega Terms' />
+	<TEXT id="msged_feega_title_idpasswd"	value='Save feega-ID and Password' />
+	<TEXT id="msged_feega_title_guide"	value='feega Guide' />
+	<TEXT id="msged_comcertification_feegaid_use_ask"	value='This is a paid service.\nUse your saved feega-ID?' />
+	<TEXT id="msged_comcertification_ssl_use_connection"	value='Communication with the server is encrypted\nwith SSL for your security.' />
+	<TEXT id="msged_com_connecting"	value='Please wait...' />
+	<TEXT id="msged_member_entry_information_explanation"	value='Joining feega.\nfeega is a membership authentication and\nnetwork billing service from Sony Finance\nInternational.\nThere is no joining fee or annual fee.' />
+	<TEXT id="msged_member_entry_information"	value='Notice' />
+	<TEXT id="msged_member_entry_information_under12"	value='For Players Under 12 / Minors' />
+	<TEXT id="msged_member_entry_agreement"	value='feega Terms of Use' />
+	<TEXT id="msged_member_entry_agreement_personal"	value='feega Terms of Use and Privacy Policy' />
+	<TEXT id="msged_member_entry_agreement_ask"	value='Do you agree to the feega Terms of Use and\nPrivacy Policy?\nYou cannot join feega without agreeing.' />
+	<TEXT id="msged_member_entry_title"	value='Your Information' />
+	<TEXT id="msged_member_entry_personalinfomation_request"	value='Enter your information.' />
+	<TEXT id="msged_member_entry_detail_familyname"	value='Last Name (Katakana)' />
+	<TEXT id="msged_member_entry_detail_name"	value='First Name (Katakana)' />
+	<TEXT id="msged_member_entry_detail_birthday"	value='Date of Birth' />
+	<TEXT id="msged_member_entry_detail_year"	value='Year' />
+	<TEXT id="msged_member_entry_detail_mouth"	value='Month' />
+	<TEXT id="msged_member_entry_detail_day"	value='Day' />
+	<TEXT id="msged_member_entry_detail_sex"	value='Sex' />
+	<TEXT id="msged_member_entry_detail_female"	value='Female' />
+	<TEXT id="msged_member_entry_detail_male"	value='Male' />
+	<TEXT id="msged_member_entry_password_request"	value='Enter a password of 6 to 16 characters using both letters and numbers.\nPasswords are not case-sensitive.' />
+	<TEXT id="msged_member_entry_password"	value='Password' />
+	<TEXT id="msged_member_entry_password_2nd"	value='Re-enter' />
+	<TEXT id="msged_member_entry_password_notice"	value='Write down your password so you do not forget it.' />
+	<TEXT id="msged_member_entry_mailaddress_request"	value='Enter your email address. It is used to contact you.' />
+	<TEXT id="msged_member_entry_mailaddress"	value='Email Address' />
+	<TEXT id="msged_member_entry_mailaddress_cellerphone"	value='Mail sent to mobile phone addresses may not arrive correctly because of length limits. Avoid using a mobile phone address if possible.' />
+	<TEXT id="msged_member_entry_maildelivery"	value='Email Updates' />
+	<TEXT id="msged_member_entry_maildelivery_request"	value='Yes' />
+	<TEXT id="msged_member_entry_maildelivery_norequest"	value='No' />
+	<TEXT id="msged_member_entry_maildelivery_notice"	value='With email updates on, you will receive news and announcements.\nYou can turn them off at any time from View/Change feega Registration.' />
+	<TEXT id="msged_member_entry_postalcode_request"	value='Enter your postal code.' />
+	<TEXT id="msged_member_entry_postalcode"	value='Postal Code' />
+	<TEXT id="msged_member_entry_creditcard_registration_notice"	value='If you register a credit card, you will not need to enter it each time you use a service.\n\nThe card number is the 14 to 16 digit number on the front of the card.\nThe expiration date is printed on the front as month/year.' />
+	<TEXT id="msged_member_entry_creditcard_information_title"	value='Credit Card Information' />
+	<TEXT id="msged_member_entry_creditcard_information_request_option"	value='Enter your credit card information.' />
+	<TEXT id="msged_member_entry_creditcard_no"	value='Card Number' />
+	<TEXT id="msged_member_entry_creditcard_period"	value='Expiration Date' />
+	<TEXT id="msged_member_entry_creditcard_period_mouth"	value='Month' />
+	<TEXT id="msged_member_entry_creditcard_period_year"	value='Year' />
+	<TEXT id="msged_member_entry_creditcard_need_input_securitycode"	value='Some credit cards also require a security code on the next screen.' />
+	<TEXT id="msged_member_entry_creditcard_registration_skip"	value='To skip card registration, leave these fields blank and continue.' />
+	<TEXT id="msged_member_entry_creditcard_securitycode_explanation"	value='The security code is the last 3 digits of the\n7 or 19 digit number printed on the back of the card.' />
+	<TEXT id="msged_member_entry_creditcard_securitycode"	value='Security Code' />
+	<TEXT id="msged_member_entry_creditcard_securitycode_request"	value='Enter the security code.' />
+	<TEXT id="msged_member_entry_creditcard_securitycode_no"	value='Security Code' />
+	<TEXT id="msged_member_entry_creditcard_securitycode_explain"	value='The security code is the last 3 digits of the 7 or 19 digit number printed in the signature strip on the back of the card.' />
+	<TEXT id="msged_member_entry_tablelist_title"	value='Registration Summary' />
+	<TEXT id="msged_member_entry_tablelist_pdbbid"	value='feega-ID: %s' />
+	<TEXT id="msged_member_entry_tablelist_inquiry"	value='Inquiry No.: %s-%s' />
+	<TEXT id="msged_member_entry_tablelist_password"	value='Password: %s' />
+	<TEXT id="msged_member_entry_tablelist_username"	value='Name: %s %s' />
+	<TEXT id="msged_member_entry_tablelist_birthday"	value='Date of Birth: %04d/%02d/%02d' />
+	<TEXT id="msged_member_entry_tablelist_sex"	value='Sex: %s' />
+	<TEXT id="msged_member_entry_tablelist_mailaddress"	value='Email: %s' />
+	<TEXT id="msged_member_entry_tablelist_maildelivery"	value='Email Updates: %s' />
+	<TEXT id="msged_member_entry_tablelist_postalcode"	value='Postal Code: %s-%s' />
+	<TEXT id="msged_member_entry_tablelist_creditcardno"	value='Card Number: %s' />
+	<TEXT id="msged_member_entry_tablelist_creditcardno_period"	value='Expires: %02d/%02d' />
+	<TEXT id="msged_member_entry_registration"	value='Sending your information to the server.\nDo not turn off the PlayStation®2 or disconnect the network.' />
+	<TEXT id="msged_member_entry_registration_title"	value='Registration Complete' />
+	<TEXT id="msged_member_entry_registration_complete"	value='You are now a feega member.' />
+	<TEXT id="msged_member_entry_registration_tablelist_psbbid"	value='feega-ID: %s' />
+	<TEXT id="msged_member_entry_registration_tablelist_password"	value='Password: %s' />
+	<TEXT id="msged_member_entry_registration_tablelist_inquiry"	value='Inquiry No.: %s' />
+	<TEXT id="msged_member_entry_registration_keepacopy"	value='Your feega-ID and password are needed to use feega games and services.\nYour inquiry number is needed when contacting feega Customer Support.\nWrite all of them down.' />
+	<TEXT id="msged_member_entry_registration_keepacopy_ask"	value='A confirmation will be sent to your email address.\nIf it does not arrive, contact feega Customer Support.\nHave you written down your feega-ID, password and\ninquiry number?' />
+	<TEXT id="msged_save_ask"	value='Save your feega-ID and password?\nOnce saved, you will not need to enter them each\ntime you use a service.\nYou can also do this later from Save feega-ID and Password.' />
+	<TEXT id="msged_info_change_personal_certification"	value='Verify Identity' />
+	<TEXT id="msged_info_change_inputidpassword"	value='Enter your feega-ID and password.' />
+	<TEXT id="msged_info_change_password_notice"	value='Passwords are not case-sensitive.' />
+	<TEXT id="msged_info_change_psbbid"	value='feega-ID' />
+	<TEXT id="msged_info_change_password"	value='Password' />
+	<TEXT id="msged_info_change_registration_ask"	value='Changing your registration details.' />
+	<TEXT id="msged_info_change_usrinformation_title"	value='Change Your Information' />
+	<TEXT id="msged_info_change_usrinformation_password"	value='You can change your password. Use 6 to 16 characters with both letters and numbers.\nPasswords are not case-sensitive.' />
+	<TEXT id="msged_info_change_usrinformation_mailaddress"	value='You can change your email address.' />
+	<TEXT id="msged_info_change_usrinformation_postcode"	value='You can change your postal code.' />
+	<TEXT id="msged_info_change_usrinformation_creditcardinfo_ask"	value='Change your credit card information?' />
+	<TEXT id="msged_info_change_usrinformation_creditcardinfo_change"	value='No Change' />
+	<TEXT id="msged_info_change_usrinformation_creditcardinfo_nochange"	value='Change (Register New)' />
+	<TEXT id="msged_info_change_usrinformation_creditcardinfo_delete"	value='Delete' />
+	<TEXT id="msged_info_change_usrinformation_creditcardinfo_title"	value='Change Credit Card' />
+	<TEXT id="msged_info_change_usrinformation_creditcardinfo_inputinfo"	value='You can change your credit card information.\nTo register a new card, enter its information.' />
+	<TEXT id="msged_info_change_creditcard_service_explanation"	value='Any services paid with the registered card will switch to the new payment method.' />
+	<TEXT id="msged_info_change_usrinformation_creditcardinfo_delete_confirm"	value='Your registered credit card will be deleted.\nIt cannot be deleted while you have a subscription.\nAre you sure?' />
+	<TEXT id="msged_info_change_usrinformation_list_title"	value='Summary of Changes' />
+	<TEXT id="msged_info_change_registration"	value='Sending your changes to the server.\nIf you changed your password, write it down.\nDo not turn off the PlayStation®2 or disconnect the network.' />
+	<TEXT id="msged_info_change_sendto_server"	value='Send now?' />
+	<TEXT id="msged_info_change_registration_title"	value='Change Complete' />
+	<TEXT id="msged_info_change_registration_complete"	value='Your changes have been saved.' />
+	<TEXT id="msged_info_change_registration_news_maildelivary_notice"	value='A confirmation will be sent to your email address. If it does not arrive, contact feega Customer Support.' />
+	<TEXT id="msged_save_change_ask"	value='Save the new password?' />
+	<TEXT id="msged_member_withdrawal_confirmation"	value='This will delete your feega registration.\nAfter leaving, you can no longer use services with this feega-ID. Purchased services end even if they have not expired, and subscriptions are cancelled automatically.' />
+	<TEXT id="msged_member_withdrawal_title"	value='Confirm Leaving' />
+	<TEXT id="msged_member_withdrawal_personal_delete"	value='The following member information will be deleted.' />
+	<TEXT id="msged_member_withdrawal_psbbid"	value='feega-ID: %s' />
+	<TEXT id="msged_member_withdrawal_username"	value='Name: %s' />
+	<TEXT id="msged_member_withdrawal_sendto"	value='Sending the deletion to the server.\nDo not turn off the PlayStation®2 or disconnect the network.' />
+	<TEXT id="msged_member_withdrawal_sendto_ask"	value='Send now?' />
+	<TEXT id="msged_member_withdrawal_leave_title"	value='Membership Ended' />
+	<TEXT id="msged_member_withdrawal_leave_complete"	value='Your member information has been deleted.' />
+	<TEXT id="msged_member_withdrawal_leave_news_maildelivary_notice"	value='A confirmation will be sent to your registered email address. If it does not arrive, contact feega Customer Support.' />
+	<TEXT id="msged_save_delete_ask"	value='Delete the saved feega-ID and password?' />
+	<TEXT id="msged_savecom_newsave_title"	value='New Save' />
+	<TEXT id="msged_savecom_change_title"	value='View/Change' />
+	<TEXT id="msged_savecom_delete_title"	value='Delete' />
+	<TEXT id="msged_saveinit_ask"	value='Not formatted.\n(P04)\n\nFormat the memory card (8MB) (for PlayStation®2)?' />
+	<TEXT id="msged_saveinit1"	value='Formatting memory card (8MB) (for PlayStation®2)...' />
+	<TEXT id="msged_saveinit2"	value='Do not turn off the PlayStation®2 or remove the memory card (8MB) (for PlayStation®2).' />
+	<TEXT id="msged_saveinit_complete"	value='Format complete.' />
+	<TEXT id="msged_saveinit_fail"	value='Format failed.' />
+	<TEXT id="msged_savemc_idpasswd"	value='Enter feega-ID and Password' />
+	<TEXT id="msged_savemc_idpasswd_input"	value='Enter your feega-ID and password.' />
+	<TEXT id="msged_savemc_device_select_title"	value='Select Save Location' />
+	<TEXT id="msged_savemc_device_select"	value='Select where to save.' />
+	<TEXT id="msged_savemc_device_mc1"	value='MEMORY CARD Slot 1' />
+	<TEXT id="msged_savemc_device_mc2"	value='MEMORY CARD Slot 2' />
+	<TEXT id="msged_savemc_device_hdd"	value='PlayStation®BB Unit' />
+	<TEXT id="msged_savemc_save1"	value='Saving...' />
+	<TEXT id="msged_savemc_save2"	value='Do not turn off the PlayStation®2 or remove the memory card (8MB) (for PlayStation®2).' />
+	<TEXT id="msged_savemc_save_inner1"	value='Saving...' />
+	<TEXT id="msged_savemc_save_inner2"	value='Do not turn off the PlayStation®2.' />
+	<TEXT id="msged_savemc_save_complete_title"	value='Save Complete' />
+	<TEXT id="msged_savemc_save_complete1"	value='Save complete.' />
+	<TEXT id="msged_savemc_save_complete2"	value='You can view what was saved from View/Change in the Save feega-ID and Password menu.' />
+	<TEXT id="msged_savemc_overwrite_ask"	value='A feega-ID is already saved here.\nChoose another location, or change it from View/Change\nin the Save feega-ID and Password menu.' />
+	<TEXT id="msged_savemc_nospace"	value='Not enough free space on the memory card (8MB) (for PlayStation®2). At least 25 KB is required.\n(P09)' />
+	<TEXT id="msged_savemc_nospace_inner"	value='Not enough free space on the PlayStation®BB Unit.\n(P16)' />
+	<TEXT id="msged_savemc_save_fail"	value='Save failed.\n(P10)' />
+	<TEXT id="msged_savemc_save_fail_p17"	value='Save failed.\n(P17)' />
+	<TEXT id="msged_savemc_save_fail_p11"	value='Save failed.\n(P11)' />
+	<TEXT id="msged_savemc_save_fail_p21"	value='Save failed.\n(P21)' />
+	<TEXT id="msged_savemc_device_eject"	value='No memory card (8MB) (for PlayStation®2)\nis inserted.\n(P01)' />
+	<TEXT id="msged_savemc_device_eject_p02"	value='No memory card (8MB) (for PlayStation®2)\nis inserted.\n(P02)' />
+	<TEXT id="msged_savemc_device_eject_p03"	value='No memory card (8MB) (for PlayStation®2)\nis inserted.\n(P03)' />
+	<TEXT id="msged_savechange_device_select_title"	value='Select Location' />
+	<TEXT id="msged_savechange_device_select"	value='Select where to load the feega-ID and password from.' />
+	<TEXT id="msged_savechange_input_idpasswd_title"	value='Enter feega-ID and Password' />
+	<TEXT id="msged_savechange_input_idpasswd"	value='Enter the feega-ID and password to save.' />
+	<TEXT id="msged_savechange_confirm_ask"	value='Change the saved feega-ID?' />
+	<TEXT id="msged_savechange_complete_title"	value='Change Complete' />
+	<TEXT id="msged_savechange_complete1"	value='Your changes have been saved.' />
+	<TEXT id="msged_savedel_confirm_title"	value='Confirm Delete' />
+	<TEXT id="msged_savedel_confirm"	value='The following feega-ID and password will be deleted.' />
+	<TEXT id="msged_savedel_confirm_ask"	value='Delete the saved feega-ID?' />
+	<TEXT id="msged_savedel_delete1"	value='Deleting...' />
+	<TEXT id="msged_savedel_delete2"	value='Do not turn off the PlayStation®2 or remove the memory card (8MB) (for PlayStation®2).' />
+	<TEXT id="msged_savedel_del1"	value='Deleting...' />
+	<TEXT id="msged_savedel_del2"	value='Do not turn off the PlayStation®2.' />
+	<TEXT id="msged_savedel_delete_complete_title"	value='Deleted' />
+	<TEXT id="msged_savedel_delete_complete"	value='Delete complete.' />
+	<TEXT id="msged_savedel_warn_fail_p08"	value='Delete failed.\n(P08)' />
+	<TEXT id="msged_savedel_warn_fail_p15"	value='Delete failed.\n(P15)' />
+	<TEXT id="msged_savedel_warn_fail_p11"	value='Delete failed.\n(P11)' />
+	<TEXT id="msged_savedel_warn_fail_p21"	value='Delete failed.\n(P21)' />
+	<TEXT id="msged_saveerror__newsave_createid"	value='The saved feega-ID cannot be read.\n(P05)\n\nDelete it and save a new one?' />
+	<TEXT id="msged_saveerror_newsave_createid_unit"	value='The saved feega-ID cannot be read.\n(P12)\n\nDelete it and save a new one?' />
+	<TEXT id="msged_saveerror_otherps2_createid"	value='The saved feega-ID was created on another PlayStation®2 and cannot be read.\n(P06)\n\nDelete it and save a new one?' />
+	<TEXT id="msged_saveerror_otherps2_createid_unit"	value='The saved feega-ID was created on another PlayStation®2 and cannot be read.\n(P13)\n\nDelete it and save a new one?' />
+	<TEXT id="msged_saveerror_illegalid_createid"	value='The saved feega-ID is not supported.\n(P07)\n\nDelete it and save a new one?' />
+	<TEXT id="msged_saveerror_illegalid_createid_unit"	value='The saved feega-ID is not supported.\n(P14)\n\nDelete it and save a new one?' />
+	<TEXT id="msged_saveerror_nodata_none"	value='No saved feega-ID.\n(P04)' />
+	<TEXT id="msged_saveerror_nodata"	value='No saved feega-ID.\n(P18)' />
+	<TEXT id="msged_saveerror_nodata_unit"	value='No saved feega-ID.\n(P20)' />
+	<TEXT id="msged_saveerror_newsave_delete"	value='The saved feega-ID cannot be read.\n(P05)\n\nDelete it?' />
+	<TEXT id="msged_saveerror_newsave_delete_p12"	value='The saved feega-ID cannot be read.\n(P12)\n\nDelete it?' />
+	<TEXT id="msged_saveerror_otherps2_delete"	value='The saved feega-ID was created on another PlayStation®2 and cannot be read.\n(P06)\n\nDelete it?' />
+	<TEXT id="msged_saveerror_otherps2_delete_p13"	value='The saved feega-ID was created on another PlayStation®2 and cannot be read.\n(P13)\n\nDelete it?' />
+	<TEXT id="msged_saveerror_illegalid_delete"	value='The saved feega-ID is not supported.\n(P07)\n\nDelete it?' />
+	<TEXT id="msged_saveerror_illegalid_delete_p14"	value='The saved feega-ID is not supported.\n(P14)\n\nDelete it?' />
+	<TEXT id="msged_confirmerr_feegaid_overwrite_ask"	value='This does not match the saved feega-ID.\n(P19)\n\nOverwrite it with the changed feega-ID?' />
+	<TEXT id="msged_confirmerr_feegaid_delete"	value='The saved feega-ID does not match the member who left.\n(P19)' />
+	<TEXT id="msged_confirmerr_anothermc_changed"	value='The memory card (8MB) (for PlayStation®2) may have been swapped.\nSelect it again.' />
+	<TEXT id="msged_buy_titlemenu_buy"	value='Purchase a Service' />
+	<TEXT id="msged_buy_titlemenu_cancellation"	value='Cancel a Service' />
+	<TEXT id="msged_buy_titlemenu_uselist_check"	value='Purchase History' />
+	<TEXT id="msged_buy_titlemenu_uselist_list"	value='Available Services' />
+	<TEXT id="msged_buy_explanation_fixed"	value='Fixed-term plan:\nBuy access for a set period. Pay by credit card or WebMoney.\n\nSubscription:\nRenews monthly at a set price until cancelled, whether or not you use the service. Credit card only.\nIf your registered card becomes invalid, the service stops.' />
+	<TEXT id="msged_buy_explanation_continuation"	value='On the next screen, Select a Service, these icons show each service type.' />
+	<TEXT id="msged_buy_explanation_icon_newbuy"	value='Available to buy' />
+	<TEXT id="msged_buy_explanation_icon_alreadybuy"	value='Purchased' />
+	<TEXT id="msged_buy_explanation_icon_addbuy"	value='Can be extended' />
+	<TEXT id="msged_buy_explanation_flatplan"	value='Fixed-term plans can be extended by buying the same service again.' />
+	<TEXT id="msged_buy_service_title"	value='Select a Service' />
+	<TEXT id="msged_buy_service_select"	value='Select a service to buy.' />
+	<TEXT id="msged_buy_service_select_dott"	value='・' />
+	<TEXT id="msged_buy_service_addbuy"	value='Extend' />
+	<TEXT id="msged_buy_service_newbuy"	value='New' />
+	<TEXT id="msged_buy_service_alreadybuy"	value='Purchased' />
+	<TEXT id="msged_buy_service_impossible"	value='Unavailable' />
+	<TEXT id="msged_buy_service_buyinfo_titlle"	value='Details' />
+	<TEXT id="msged_buy_service_buyinfo_servicename"	value='Service: %s' />
+	<TEXT id="msged_buy_service_buyinfo_status"	value='Status: %s' />
+	<TEXT id="msged_buy_service_buyinfo_presence"	value='Purchase: %s' />
+	<TEXT id="msged_buy_service_buyinfo_period"	value='Expires: %04d/%02d/%02d' />
+	<TEXT id="msged_buy_period_charge_titlle"	value='Select a Plan' />
+	<TEXT id="msged_buy_period_charge"	value='Select a plan.\nSubscriptions can only be paid by credit card.\nAll prices include tax.' />
+	<TEXT id="msged_buy_period_charge_yen"	value='%s yen' />
+	<TEXT id="msged_buy_service_agreement"	value='Service Terms' />
+	<TEXT id="msged_buy_service_agreement_ask"	value='Do you agree to the service terms?\nYou cannot buy the service without agreeing.' />
+	<TEXT id="msged_buy_payment_select_ask"	value='Pay with the credit card registered to feega?' />
+	<TEXT id="msged_buy_payment_select_titlle"	value='Payment Method' />
+	<TEXT id="msged_buy_payment_select"	value='Select a payment method.' />
+	<TEXT id="msged_buy_payment_select_creditcard_registration"	value='Registered Credit Card' />
+	<TEXT id="msged_buy_payment_select_creditcard"	value='Another Credit Card' />
+	<TEXT id="msged_buy_payment_select_webmoney"	value='WebMoney' />
+	<TEXT id="msged_buy_payment_changed_creditcard_info"	value='For subscriptions, the paying card will be registered to feega.' />
+	<TEXT id="msged_buy_input_creditcard_information"	value='Enter your credit card information.' />
+	<TEXT id="msged_buy_input_creditcard_period_info"	value='The expiration date is printed on the front of the card as month/year.' />
+	<TEXT id="msged_buy_contents_list"	value='Order Summary' />
+	<TEXT id="msged_buy_contents_service_name"	value='Service: %s' />
+	<TEXT id="msged_buy_contents_service"	value='Plan: %s' />
+	<TEXT id="msged_buy_contents_payment"	value='Payment: %s' />
+	<TEXT id="msged_buy_contents_charge"	value='Price: %s yen (tax incl.)' />
+	<TEXT id="msged_buy_contents_expire"	value='Expires: %s' />
+	<TEXT id="msged_buy_contents_notice"	value='Subscriptions cancelled partway through a month are not refunded.' />
+	<TEXT id="msged_buy_ask"	value='Purchasing the service.' />
+	<TEXT id="msged_buy_ask_buy"	value='Buy now?' />
+	<TEXT id="msged_buy_registration_creditcard"	value='Credit card registered to feega.' />
+	<TEXT id="msged_buy_registration_creditcard_ask"	value='Register this credit card to feega?' />
+	<TEXT id="msged_buy_registration_creditcard_guidance"	value='Once registered, you will not need to enter it\neach time.' />
+	<TEXT id="msged_buy_complete"	value='Purchase Complete' />
+	<TEXT id="msged_buy_service_complete"	value='Your purchase is complete.' />
+	<TEXT id="msged_buy_receipt_no"	value='Order No.: %s' />
+	<TEXT id="msged_buy_mail_confirmation"	value='A confirmation will be sent to your registered email address. If it does not arrive, contact feega Customer Support.\nYour order number and inquiry number are needed when contacting feega Customer Support. Write them down.' />
+	<TEXT id="msged_buy_scratch_input_titlle"	value='Enter Scratch Number' />
+	<TEXT id="msged_buy_scratch_input_ask"	value='Enter the scratch number.' />
+	<TEXT id="msged_buy_scratch_input_addcardno_ask"	value='Enter an additional scratch number.' />
+	<TEXT id="msged_buy_scratch_no"	value='Scratch Number' />
+	<TEXT id="msged_cancellation_service_continuation_ask"	value='Only subscriptions can be cancelled.\nStarting cancellation.' />
+	<TEXT id="msged_cancellation_service_title"	value='Select a Service to Cancel' />
+	<TEXT id="msged_cancellation_service_select"	value='Select a service to cancel.' />
+	<TEXT id="msged_cancellation_confirmation_title"	value='Confirm Cancellation' />
+	<TEXT id="msged_cancellation_confirmation"	value='The following service will be cancelled.' />
+	<TEXT id="msged_cancellation_notice"	value='The service ends as soon as cancellation is complete, even if time remains in the current period.' />
+	<TEXT id="msged_cancellation_send_information"	value='Sending the cancellation to the server.\nDo not turn off the PlayStation®2 or disconnect the network.' />
+	<TEXT id="msged_cancellation_sendto_server"	value='Send now?' />
+	<TEXT id="msged_cancellation_complete_title"	value='Cancellation Complete' />
+	<TEXT id="msged_cancellation_complete"	value='The following service has been cancelled.' />
+	<TEXT id="msged_cancellation_complete_string"	value='%s' />
+	<TEXT id="msged_history_title"	value='Purchase History' />
+	<TEXT id="msged_history_list_select"	value='Select a service to view.' />
+	<TEXT id="msged_history_string"	value='%02d/%02d/%02d  %s' />
+	<TEXT id="msged_history_detailinfo"	value='Details' />
+	<TEXT id="msged_history_orderno_string"	value='Order No.: %s' />
+	<TEXT id="msged_history_service_string"	value='Service: %s' />
+	<TEXT id="msged_history_payment_string"	value='Payment: %s' />
+	<TEXT id="msged_history_recive_string"	value='Purchased: %04d/%02d/%02d' />
+	<TEXT id="msged_history_sum_string"	value='Amount: %s yen' />
+	<TEXT id="msged_history_tax_string"	value='Tax: %s yen' />
+	<TEXT id="msged_history_sumintax_string"	value='Total (tax incl.): %s yen' />
+	<TEXT id="msged_servicelist_title"	value='Available Services' />
+	<TEXT id="msged_servicelist_service_select"	value='Select a service to view.' />
+	<TEXT id="msged_servicelist_service_detail"	value='Details' />
+	<TEXT id="msged_servicelist_servicelist"	value='Service: %s' />
+	<TEXT id="msged_servicelist_endless_period"	value='Until cancelled' />
+	<TEXT id="msged_servicelist_number_data"	value='%04d/%02d/%02d' />
+	<TEXT id="msged_servicelist_limit_string"	value='Expires: %s' />
+	<TEXT id="msged_error_leave_noservice_k01"	value='The service is currently unavailable.\n(K01)' />
+	<TEXT id="msged_error_leave_noservice_s01"	value='The service is currently unavailable.\n(S01)' />
+	<TEXT id="msged_error_leave_noservice_j03"	value='The service is currently unavailable.\n(J03)' />
+	<TEXT id="msged_error_leave_noservice_f06"	value='The service is currently unavailable.\n(F06)' />
+	<TEXT id="msged_error_leave_noservice_q01"	value='The service is currently unavailable.\n(Q01)' />
+	<TEXT id="msged_error_not_service"	value='The service is currently unavailable.' />
+	<TEXT id="msged_error_system_g01"	value='A system error occurred.\nThe service is currently unavailable.\n(G01)' />
+	<TEXT id="msged_error_system_f05"	value='A system error occurred.\nThe service is currently unavailable.\n(F05)' />
+	<TEXT id="msged_error_system_f08"	value='A system error occurred.\nThe service is currently unavailable.\n(F08)' />
+	<TEXT id="msged_error_system_h04"	value='A system error occurred.\nThe service is currently unavailable.\n(H04)' />
+	<TEXT id="msged_error_system_h05"	value='A system error occurred.\nThe service is currently unavailable.\n(H05)' />
+	<TEXT id="msged_error_system_h08"	value='A system error occurred.\nThe service is currently unavailable.\n(H08)' />
+	<TEXT id="msged_error_system_n04"	value='A system error occurred.\nThe service is currently unavailable.\n(N04)' />
+	<TEXT id="msged_error_system_n05"	value='A system error occurred.\nThe service is currently unavailable.\n(N05)' />
+	<TEXT id="msged_error_system_n08"	value='A system error occurred.\nThe service is currently unavailable.\n(N08)' />
+	<TEXT id="msged_error_system_w36"	value='A system error occurred.\nThe service is currently unavailable.\n(W36)' />
+	<TEXT id="msged_error_system_w31"	value='A system error occurred.\n(W31)' />
+	<TEXT id="msged_error_certification_fail"	value='Authentication failed.\nThe information entered is incorrect.\n(A01)' />
+	<TEXT id="msged_error_retry_over"	value='Too many errors.\nPlease start over.\n(E01)' />
+	<TEXT id="msged_error_network_disconnect"	value='A network error occurred.\nCheck that all cables are connected.\n(E03)' />
+	<TEXT id="msged_error_change_wrong_passwd"	value='This password cannot be used. Use 6 to 16 characters with both letters and numbers.\n(H02)' />
+	<TEXT id="msged_error_password"	value='This password cannot be used. Use 6 to 16 characters with both letters and numbers.\n(N02)' />
+	<TEXT id="msged_error_password_disagree"	value='The password entered is incorrect.' />
+	<TEXT id="msged_error_password_agreement"	value='The passwords do not match.' />
+	<TEXT id="msged_error_change_mailaddress_nodomain_n01"	value='The email address may be incorrect.\nUse this address anyway?\n(N01)' />
+	<TEXT id="msged_error_change_mailaddress_nodomain_h01"	value='The email address may be incorrect.\nUse this address anyway?\n(H01)' />
+	<TEXT id="msged_error_change_wrong_mailaddress"	value='The email address entered is incorrect.\n(H03)' />
+	<TEXT id="msged_error_mailaddress"	value='The email address entered is incorrect.\n(N03)' />
+	<TEXT id="msged_error_mailaddress_disagree"	value='The email address entered is incorrect.' />
+	<TEXT id="msged_error_mailaddress_agreement"	value='The email addresses do not match.' />
+	<TEXT id="msged_error_name"	value='The name entered is incorrect.\n(N04)' />
+	<TEXT id="msged_error_birthday"	value='The date of birth entered is incorrect.\n(N05)' />
+	<TEXT id="msged_error_notuse_expire_creditcard"	value='The expiration date of the registered credit card is incorrect.\n(F03)' />
+	<TEXT id="msged_error_change_creditcard_period_f03"	value='The credit card expiration date is incorrect.\n(F03)' />
+	<TEXT id="msged_error_change_creditcard_period_h07"	value='The credit card expiration date is incorrect.\n(H07)' />
+	<TEXT id="msged_error_change_creditcard_period_n07"	value='The credit card expiration date is incorrect.\n(N07)' />
+	<TEXT id="msged_error_change_postalcode_n09"	value='The postal code entered is incorrect.\n(N09)' />
+	<TEXT id="msged_error_change_postalcode_h10"	value='The postal code entered is incorrect.\n(H10)' />
+	<TEXT id="msged_error_creditcard_securitycode_f04"	value='The security code entered is incorrect.\n(F04)' />
+	<TEXT id="msged_error_creditcard_securitycode_n10"	value='The security code entered is incorrect.\n(N10)' />
+	<TEXT id="msged_error_creditcard_securitycode_h11"	value='The security code entered is incorrect.\n(H11)' />
+	<TEXT id="msged_error_notuse_creditcard"	value='This credit card cannot be used.\nContact your card issuer.\n(E02)' />
+	<TEXT id="msged_error_notuse_registration_creditcard"	value='The registered credit card cannot be used.\n(F02)' />
+	<TEXT id="msged_error_creditcard_disable_f02"	value='This credit card cannot be used.\nPlease check it.\n(F02)' />
+	<TEXT id="msged_error_creditcard_disable_j02"	value='This credit card cannot be used.\nPlease check it.\n(J02)' />
+	<TEXT id="msged_error_creditcard_disable_j03"	value='This credit card cannot be used.\nPlease check it.\n(J03)' />
+	<TEXT id="msged_error_creditcard_disable_n06"	value='This credit card cannot be used.\nPlease check it.\n(N06)' />
+	<TEXT id="msged_error_creditcard_disable_h06"	value='This credit card cannot be used.\nPlease check it.\n(H06)' />
+	<TEXT id="msged_error_creditcard_disable_c01"	value='This credit card cannot be used.\nPlease check it.\n(C01)' />
+	<TEXT id="msged_error_nocreditdata"	value='No credit card information has been entered. Subscriptions require a registered credit card.\n(H09)' />
+	<TEXT id="msged_error_buy"	value='Purchases are currently unavailable.\n(B01)' />
+	<TEXT id="msged_error_noservice_b02"	value='No services are currently available to buy.\n(B02)' />
+	<TEXT id="msged_error_noservice_b03"	value='No services are currently available to buy.\n(B03)' />
+	<TEXT id="msged_error_cancellation_noservice"	value='There are no services to cancel.\n(B04)' />
+	<TEXT id="msged_error_cancellation_connection_service"	value='This service has related services. Cancel those first.\n(B05)' />
+	<TEXT id="msged_error_no_history"	value='No purchase history.\n(B06)' />
+	<TEXT id="msged_error_history_max"	value='There are more than 50 records.\nShowing the latest 50.\n(B07)' />
+	<TEXT id="msged_error_no_enableservice_b08"	value='No services are available.\n(B08)' />
+	<TEXT id="msged_error_system_b09"	value='This service cannot be selected.\nIt is past the purchase period.\n(B09)' />
+	<TEXT id="msged_error_need_creditcard"	value='This service requires a registered credit card. Register one from View/Change feega Registration in the feega menu.\n(B10)' />
+	<TEXT id="msged_error_confusion_service"	value='The server is busy.\n(F01)\n\nTry connecting again?' />
+	<TEXT id="msged_error_registration_fail"	value='Registration failed due to a system error.\n(F09)' />
+	<TEXT id="msged_error_notbuy"	value='Purchases are currently unavailable.\n(J01)' />
+	<TEXT id="msged_error_period"	value='The purchase period is invalid.\n(J04)' />
+	<TEXT id="msged_error_noservice_webmoney"	value='WebMoney payments are currently unavailable.\n(K02)' />
+	<TEXT id="msged_error_nodelete_servicein_h12"	value='The registered credit card cannot be deleted while you have a subscription.\n(H12)' />
+	<TEXT id="msged_error_notuse_this_scratchno"	value='This scratch number cannot be used.\n(W32)' />
+	<TEXT id="msged_error_notuse_available_scratchno"	value='This scratch number is not valid.\n(W33)' />
+	<TEXT id="msged_error_nobalance_scratch"	value='Insufficient balance.\nEnter another scratch number.\n(W34)' />
+	<TEXT id="msged_error_already_buy_service_w35"	value='You have already purchased this service.\n(W35)' />
+	<TEXT id="msged_error_already_buy_service_f07"	value='You have already purchased this service.\n(F07)' />
+	<TEXT id="msged_error_addmax_w37"	value='The maximum number of cards has been exceeded.\n(W37)' />
+	<TEXT id="msged_error_freeservice"	value='This service is in a free period.' />
+	<!-- ##END## -->
+
+</RESOURCE>

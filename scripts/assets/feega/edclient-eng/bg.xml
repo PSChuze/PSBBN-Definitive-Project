@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RESOURCE screen_w="640" screen_h="480" version="1.1" xmlns="http://www.scei.co.jp/bn/2002/">
+
+	<!-- スクリプト -->
+	<SCRIPT id="main" src="bg" type="binary/small"/>
+
+	<!-- テクスチャ -->
+	<IMG id="IMG_BG" src="texture/sfi1024_640x448.tm2"/>
+
+</RESOURCE>

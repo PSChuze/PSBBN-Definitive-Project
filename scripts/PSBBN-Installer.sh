@@ -1466,6 +1466,12 @@ if [ "$LANG_UPDATE" != "no" ]; then
     fi
 fi
 
+# Feega: our CA as PSBBN's ROOT_ED.cer, and the English Feega screens for eng (after the language
+# pack, which ships its own edclient XMLs).
+if [ "$OS" = "PSBBN" ] && [ -d "${STORAGE_DIR}/__linux.4/bn" ]; then
+    sudo bash "${HELPER_DIR}/feega/psbbn-feega.sh" "${STORAGE_DIR}/__linux.4" "${lang:-}" "${ASSETS_DIR}" "${LOG_FILE}"
+fi
+
 if [ "$CHAN_UPDATE" == "yes" ]; then
     echo "Installing Game Channels..." >> "${LOG_FILE}"
     sudo tar zxpf "${CHANNELS}" -C "${STORAGE_DIR}/" >> "${LOG_FILE}" 2>&1 || {
