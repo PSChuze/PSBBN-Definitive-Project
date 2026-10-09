@@ -450,7 +450,9 @@ NOBU_INSTALL_PY="${NOBU_TOOLS}/nobuinstall.py"
 # (off; NOBU_TRACE=1 arms it, see nobu_trace_arm). Ships in the toolkit assets;
 # override with $NOBU_LOADER_OVERRIDE.
 # NO English text-input hook (2026-10-08): the file keeps its old name, but its
-# content is the console-proven no-hook build (b6da0082, boots #54/#55). The
+# content is the console-proven no-hook build (b6da0082, boots #54/#55; since
+# 2026-10-09 the same build with poltrace v4.1 and no trace check before the
+# IOP reboot, 6d29f4fe). The
 # EE VBlank hook build stopped the boot on the console right at ExecPS2 (boot
 # #56); it is kept as polbbnexec-inputpatch.kelf.hook-unproven (edb519ed) and
 # is NOT used. Until a hook build is hardware-proven, text input on a console
