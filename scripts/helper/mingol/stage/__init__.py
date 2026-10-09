@@ -57,8 +57,12 @@ from the player's disc.
              *.SYS; the loader's shim sends the game's cdrom0 FMOD loads
              there, so it needs no disc); ROOT_ED.PEM at the root, the Feega
              CA the game asks for as cdrom0:\\FRES\\ROOT_ED.PEM;1, which the
-             shim opens here instead (servers.py); and dnasload.elf, the
-             loader the browser launches.
+             shim opens here instead (servers.py); FEEGAGUI.ELF (patched to
+             run on the loader's IOP) and FRES/ (but ROOT_ED.PEM), the Feega
+             account client the game starts as cdrom0:\\FEEGAGUI.ELF;1, and
+             RELAUNCH.ELF, the filled loader as a plain ELF, which the shim
+             opens for that name and for the client's way back to the game
+             (feega.py); and dnasload.elf, the loader the browser launches.
   dnasload.elf
              the signed loader KELF the toolkit ships (DRIVERS=3, driver
              slots) filled for this disc and drive: the patched SCPS_150.49,
@@ -124,7 +128,7 @@ ENGLISH_SEALS = False
 # ones this step reads.
 TREE_SKIP = ("FMOD/", "FMOD2/", "FRES/", "ZZBIN/", "ZZENC/", "FEEGAGUI.ELF", BOOT_FILE)
 WORK_FILES = ("SYSTEM.CNF", BOOT_FILE, "ZZBIN/", "ZZENC/ZZBIN/", "FMOD/", "FMOD2/",
-              "CNF/SYS_NET.ICO", "FRES/ROOT_ED.PEM")
+              "CNF/SYS_NET.ICO", "FRES/", "FEEGAGUI.ELF")
 
 # The IOP modules the game loads from cdrom0:\FMOD\ and cdrom0:\FMOD2\ once
 # it runs (network, pad, USB, sound). With no disc the loader's shim sends
@@ -435,6 +439,13 @@ def stage(args):
         from . import servers
         servers.apply(root, tree, m, stock=servers.stock_wanted(args.stock_servers))
         _write(_path(tree, "DNAS.BIN"), bootpatch.dnas_overlay(dnas_plain))
+        # The Feega account client (feega.py): FEEGAGUI.ELF, patched to run
+        # on the loader's IOP, and FRES/, which TREE_SKIP leaves out.
+        from . import feega
+        nf = feega.stage(root, tree, note=m.note,
+                         pack_path=englishmod.USED_PACK if english else None)
+        m.note("Feega client: FEEGAGUI.ELF and %d FRES files on the partition, "
+               "started through pfs2:/%s" % (nf - 1, feega.RELAUNCH))
 
         progress("filling the loader")
         ioprp_img, ioprp_what = build_ioprp(root, m)
@@ -442,6 +453,9 @@ def stage(args):
         elf = fill_loader(root, args.kelf, ioprp_img, hddid, loader_out,
                           plain_overlays=plain)
         shutil.copyfile(loader_out, os.path.join(tree, LOADER_NAME))
+        # The same loader, plain, for the Feega client's way in and out.
+        with open(loader_out, "rb") as f:
+            _write(_path(tree, feega.RELAUNCH), feega.relaunch(f.read()))
         with open(os.path.join(out, "attr.bin"), "wb") as f:
             f.write(build_attr(root, bool(english)))
         if not bootpatch.is_known_pressing(_read(root, BOOT_FILE), dnas_plain):
