@@ -87,8 +87,8 @@ stages its boot files in its work folder with only the chosen copy, named
 | `popn/polbbnexec-popn-verbose` | f83fd58e | 497a8e05 | 1a157f01 |
 | `mingol/polbbnexec-mingol` | 5895fb0d | 535f42d9 | 15cd2733 |
 | `mingol/polbbnexec-mingol-verbose` | 23858b0f | 71d070d9 | 8062b6a1 |
-| `bomb/bootfiles/bombload` | af144da3 | 54b48e36 | bec01aa9 |
-| `bomb/bootfiles-debug/bombload` | 9cd0dffc | 3b6dd18d | 86992bcb |
+| `bomb/bootfiles/bombload` | b65ba7f2 | 247ef42f | 0777e32f |
+| `bomb/bootfiles-debug/bombload` | c9f75fd9 | 811c9606 | c487b77e |
 
 The loaders were rebuilt on 2026-10-09 without the launcher-IOP trace check
 (pop'n also moves to poltrace v4) and rig-tested from the stock HDD-OSD
