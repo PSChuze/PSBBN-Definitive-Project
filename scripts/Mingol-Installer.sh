@@ -541,6 +541,9 @@ mgosudo -m mingol.stage.write "${DEVICE}" \
     --write 2>&1 | tee -a "${LOG_FILE}" | grep -v '^   kept ' | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[GOLF_ERROR_INSTALL]}"
 mgo_accessflag
+# PSBBN's own Feega client (Join feega) needs the revival CA and, on an English PSBBN, the
+# English Feega screens (helper/feega/psbbn-feega.sh); a drive set up before that fix gets them here.
+bash "${HELPER_DIR}/feega/ensure-psbbn-feega.sh" "${DEVICE}" "${HDL_DUMP}" "${HELPER_DIR}"     "${ASSETS_DIR}" "${LOG_FILE}"
 [[ "${DEBUG_TEXT}" == 1 ]] && mgo_trace_arm
 
 # PSBBN's game list shows /res/info.sys, which a partition from the retail or

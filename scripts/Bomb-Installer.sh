@@ -302,6 +302,12 @@ else
     echo "  ${UI_TEXT[BOMB_NO_ICON]}"
 fi
 
+# PSBBN's own Feega client (Join feega) needs the revival CA and, on an English PSBBN, the English
+# Feega screens (helper/feega/psbbn-feega.sh). A drive set up before that fix gets them here.
+bomb_psbbn_feega() {
+    bash "${HELPER_DIR}/feega/ensure-psbbn-feega.sh" "${DEVICE}" "${HDL_DUMP}" "${HELPER_DIR}"         "${ASSETS_DIR}" "${LOG_FILE}"
+}
+
 # ---- installed check ----------------------------------------------------
 # Already on the drive: offer an in-place update. bombinstall --update stages
 # the game exactly as an install does, then rewrites only the files that
@@ -369,6 +375,7 @@ if sudo "${HDL_DUMP}" toc "${DEVICE}" 2>>"${LOG_FILE}" | grep -q -- "PP.SLPS-203
             "${TR_ARGS[@]}" \
             --update --write 2>&1 | tee -a "${LOG_FILE}" | grep -v '^   kept ' | sed 's/^/  /'
         [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[BOMB_UPDATE_ERROR]}"
+        bomb_psbbn_feega
         echo
         center_text "${UI_TEXT[BOMB_UPDATE_DONE]}"
         echo
@@ -417,6 +424,7 @@ bombsudo bomb.bombinstall "${DEVICE}" \
     --write 2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[BOMB_ERROR_INSTALL]}"
 bomb_accessflag
+bomb_psbbn_feega
 
 echo
 center_text "${UI_TEXT[BOMB_DONE]}"
