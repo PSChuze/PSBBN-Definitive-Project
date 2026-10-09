@@ -55,6 +55,7 @@ the partition is read back against the stage. The old two-partition layout
 is refused: reinstall it.
 """
 import argparse
+import hashlib
 import os
 import shutil
 import struct
@@ -65,7 +66,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "bomb"))
 import bombbundle  # noqa: E402  (dnasbundle engine, *.BIN filter)
-from dnasdec import ata_material  # noqa: E402
+from dnasdec import ata_material, decrypt  # noqa: E402
 
 SECTOR = 512
 ATTR_OFF = 0x1000
@@ -484,6 +485,53 @@ def update_partition(a, staged, attr_path):
     print("== done: %s on %s updated" % (GAME_PART, a.device))
 
 
+def verify_seal_serve(staged, four):
+    """The served HDD ID the staged loader reports must decrypt the staged
+    MAIN.BIN, or the console halts at 'dnas2 prep = -102' (wrong decrypt key).
+    Prints a plain result (so it lands in bomberman-installer.log and on screen)
+    and returns True on match. The MAIN.BIN decrypt is HDD-ID-keyed only (no
+    console identity), so this offline check is exactly what the console does."""
+    loader = os.path.join(staged, LOADER)
+    main_bin = os.path.join(staged, "MAIN.BIN")
+    if not (os.path.isfile(loader) and os.path.isfile(main_bin)):
+        print("== SEAL CHECK: skipped (no staged loader / MAIN.BIN)")
+        return True
+    lb = open(loader, "rb").read()
+    mg = b"Sony Computer Entertainment Inc."
+    blocks, i = set(), lb.find(mg)
+    while i >= 0:
+        blk = lb[i:i + 512]
+        if len(blk) == 512 and blk[0x20:0x24] == b"SCPH" and any(blk[0x40:0x48]):
+            blocks.add(blk)
+        i = lb.find(mg, i + 1)
+    if LOADER_ID_TAG in lb or len(blocks) != 1:
+        print("== SEAL CHECK: skipped (loader not filled, or %d served blocks)"
+              % len(blocks))
+        return True
+    blk = blocks.pop()
+    served = hashlib.sha1(blk).hexdigest()[:16]
+    ata = ata_material(blk)
+    ata32 = ata[0] if isinstance(ata, tuple) else ata
+    out = decrypt(open(main_bin, "rb").read(), ata32, four)
+    ok = [False]
+
+    def walk(x):
+        if isinstance(x, (bytes, bytearray)):
+            if bytes(x[:4]) == bytes.fromhex("c2480d08"):
+                ok[0] = True
+        elif isinstance(x, (tuple, list)):
+            for y in x:
+                walk(y)
+    walk(out)
+    print("== SEAL CHECK: served HDD ID %s  ->  MAIN.BIN decrypts: %s"
+          % (served, "YES  (seal == serve, OK)" if ok[0] else "NO  <<< MISMATCH"))
+    if not ok[0]:
+        print("== !! The served id does NOT match the id MAIN.BIN was sealed to.")
+        print("== !! This console will halt at 'dnas2 prep = -102'. The seal and the")
+        print("== !! served loader must use the SAME HDD ID. (served sha1 %s)" % served)
+    return ok[0]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("device")
@@ -597,6 +645,11 @@ def main():
             p = os.path.join(staged, name)
             if os.path.isfile(p):
                 fill_loader_text(p, a.translate)
+
+    # Guard + diagnostic: the served id must decrypt the just-sealed MAIN.BIN,
+    # or the console halts at dnas2 prep -102. Runs for both fresh and --update;
+    # printed so it lands in the installer log (and on screen).
+    verify_seal_serve(staged, four)
 
     if a.update:
         attr_path = None
