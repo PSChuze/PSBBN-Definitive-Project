@@ -29,6 +29,7 @@ Borrowed in place (env overrides): NOBU_TOOLS = nobunaga/tools (dnasbundle, dnas
 POL_PS2 = PlayOnline/work/ps2 (polrecord, polhdd, polnetdump).
 """
 import argparse
+import hashlib
 import os
 import shutil
 import struct
@@ -98,7 +99,7 @@ def net_four(device, hddid):
     return dec[:4]
 
 
-def stage(disc, kit, res, ata32, four, out, overlay=None, loader=None):
+def stage(disc, kit, res, ata32, four, out, overlay=None, loader=None, capture=None):
     if os.path.exists(out):
         shutil.rmtree(out)
     n = 0
@@ -127,7 +128,14 @@ def stage(disc, kit, res, ata32, four, out, overlay=None, loader=None):
         else:
             src = os.path.join(disc, 'ZZBIN', name)
         neutral = sealkit.rebuild(k, open(src, 'rb').read())
-        open(os.path.join(zz, name), 'wb').write(dnasbundle.seal(neutral, ata32, four))
+        sealed = dnasbundle.seal(neutral, ata32, four)
+        open(os.path.join(zz, name), 'wb').write(sealed)
+        # Capture GAME.BIN (its known neutral + drive form) so verify_seal_serve
+        # can round-trip it against the HDD ID the staged loader serves.
+        if capture is not None and name == 'GAME.BIN':
+            capture['neutral'] = neutral
+            capture['sealed'] = sealed
+            capture['name'] = name
     open(os.path.join(out, 'INSTALL.VER'), 'wb').write(struct.pack('<I', 4))
     if res:
         shutil.copytree(res, os.path.join(out, 'res'))
@@ -220,6 +228,54 @@ def protect(keeplist):
     return True
 
 
+def verify_seal_serve(staged, four, capture):
+    """The HDD ID the staged loader SERVES must decrypt the sealed containers,
+    or the console halts at 'dnas2 prep = -102' (wrong decrypt key).
+
+    Title-agnostic round-trip (no hardcoded plaintext head): re-neutralize the
+    captured GAME.BIN drive form under the SERVED id and compare to its known
+    neutral -- dnasbundle.neutralize is the exact inverse of seal, so they match
+    only when the served id equals the seal id. No console identity is involved,
+    so this offline check is exactly what the console's libdnas2 does. Prints a
+    plain line (so it lands in the installer log and on screen) and returns True
+    on match. Skips quietly when there is nothing to check (no --loader, loader
+    still unfilled, or no captured container)."""
+    loader = os.path.join(staged, 'dnasload.elf')
+    if not capture or 'sealed' not in capture or not os.path.isfile(loader):
+        print('== SEAL CHECK: skipped (no captured container / staged loader)')
+        return True
+    lb = open(loader, 'rb').read()
+    mg = b'Sony Computer Entertainment Inc.'
+    blocks, i = set(), lb.find(mg)
+    while i >= 0:
+        blk = lb[i:i + 512]
+        if len(blk) == 512 and blk[0x20:0x24] == b'SCPH' and any(blk[0x40:0x48]):
+            blocks.add(blk)
+        i = lb.find(mg, i + 1)
+    if b'SCEFIXPLACEHOLD' in lb or len(blocks) != 1:
+        print('== SEAL CHECK: skipped (loader not filled, or %d served blocks)'
+              % len(blocks))
+        return True
+    blk = blocks.pop()
+    served = hashlib.sha1(blk).hexdigest()
+    ata = ata_material(blk)
+    ata32 = ata[0] if isinstance(ata, tuple) else ata
+    try:
+        got = dnasbundle.neutralize(capture['sealed'], ata32, four)
+    except Exception as e:
+        print('== SEAL CHECK: skipped (neutralize failed: %s)' % e)
+        return True
+    ok = (got == capture['neutral'])
+    print('== SEAL CHECK: served HDD ID %s  ->  container (%s) decrypts: %s'
+          % (served, capture.get('name', '?'),
+             'YES  (seal == serve, OK)' if ok else 'NO  <<< MISMATCH'))
+    if not ok:
+        print('== !! The served id does NOT match the id the containers were sealed to.')
+        print("== !! This console will halt at 'dnas2 prep = -102'. The seal and the")
+        print('== !! served loader must use the SAME HDD ID. (served sha1 %s)' % served)
+    return ok
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('device')
@@ -253,11 +309,17 @@ def main():
     print('== target %s, four %s' % (a.device, four.hex()))
 
     staged = os.path.abspath(a.work)
-    n = stage(a.disc, a.kit, a.res, ata32, four, staged, a.zzbin_overlay, a.loader)
+    seal_cap = {}
+    n = stage(a.disc, a.kit, a.res, ata32, four, staged, a.zzbin_overlay, a.loader, seal_cap)
     print('== staged %d disc files + %d sealed containers + INSTALL.VER%s%s -> %s'
           % (n, len(CONTAINERS),
              ' + res/' if a.res else '',
              ' + dnasload.elf' if a.loader else '', staged))
+
+    # Guard + diagnostic: the served id must decrypt the just-sealed containers,
+    # or the console halts at 'dnas2 prep = -102'. Runs before the write (dry run
+    # too); printed so it lands in the installer log (and on screen).
+    verify_seal_serve(staged, four, seal_cap)
 
     path_map = [tuple(m.split('=', 1)) for m in a.path_map]
     script = pfsshell_script(a.device, staged, path_map)

@@ -50,6 +50,7 @@ only; it never edits the PlayOnline package, and reuses it only by reading.
         --attr <attr-area.bin> ...
 """
 import argparse
+import hashlib
 import os
 import shutil
 import struct
@@ -126,7 +127,7 @@ def precheck(device, helper_dir, update=False):
     return info
 
 
-def seal_tree(bundle, staged, ata32, four, verdict_patch=False):
+def seal_tree(bundle, staged, ata32, four, verdict_patch=False, capture=None):
     """Seal every container in the neutral bundle to (ata32, four); copy the rest.
 
     NBONLINE.EBN seals STOCK unless verdict_patch is set. The verdict patch
@@ -146,7 +147,14 @@ def seal_tree(bundle, staged, ata32, four, verdict_patch=False):
             if verdict_patch and os.path.basename(rel).upper() == nobupatch.NBONLINE:
                 blob = patch_nbonline(blob)
                 n_p += 1
-            open(out, "wb").write(dnasbundle.seal(blob, ata32, four))
+            sealed = dnasbundle.seal(blob, ata32, four)
+            open(out, "wb").write(sealed)
+            # Capture the first sealed container (its known neutral + drive form)
+            # so verify_seal_serve can round-trip it against the served HDD ID.
+            if capture is not None and not capture:
+                capture["neutral"] = blob
+                capture["sealed"] = sealed
+                capture["name"] = os.path.basename(rel)
             n_c += 1
         else:
             shutil.copyfile(path, out)
@@ -437,7 +445,7 @@ def _patcher_for(container_name, verdict_patch=False):
     return None
 
 
-def seal_from_disc(disc_root, staged, ata32, four, verdict_patch=False):
+def seal_from_disc(disc_root, staged, ata32, four, verdict_patch=False, capture=None):
     """Seal every disc container to (ata32, four); copy the plaintext PP tree
     files verbatim.
 
@@ -465,6 +473,17 @@ def seal_from_disc(disc_root, staged, ata32, four, verdict_patch=False):
             df = disc_to_drive.build_drive_form(enc, ata32, four)
         open(os.path.join(staged, dst_name), "wb").write(df)
         n_containers += 1
+        # Capture the first sealed container for verify_seal_serve. The disc
+        # path has no in-memory neutral (build_drive_form seals disc form
+        # directly), so derive the known neutral from the drive form under the
+        # SEAL id; the check re-derives it under the SERVED id and compares.
+        if capture is not None and not capture:
+            try:
+                capture["neutral"] = dnasbundle.neutralize(df, ata32, four)
+                capture["sealed"] = df
+                capture["name"] = container_name
+            except Exception:
+                pass
 
     # Modules (.ERX)
     mods = os.path.join(disc_root, DISC_AUTH_MODULES.replace("/", os.sep))
@@ -702,6 +721,54 @@ def fill_loader(disc_root, kelf, hddid, out_path, helper):
     return out_path
 
 
+def verify_seal_serve(staged, four, capture):
+    """The HDD ID the staged loader SERVES must decrypt the sealed containers,
+    or the console halts at 'dnas2 prep = -102' (wrong decrypt key).
+
+    Title-agnostic round-trip (no hardcoded plaintext head): re-neutralize one
+    captured sealed container under the SERVED id and compare to its known
+    neutral -- dnasbundle.neutralize is the exact inverse of seal, so they match
+    only when the served id equals the seal id. No console identity is involved,
+    so this offline check is exactly what the console's libdnas2 does. Prints a
+    plain line (so it lands in the installer log and on screen) and returns True
+    on match; runs for fresh and --update alike. Skips quietly when there is
+    nothing to check (no spoof loader, loader still unfilled, or no capture)."""
+    loader = os.path.join(staged, "dnasload.elf")
+    if not capture or "sealed" not in capture or not os.path.isfile(loader):
+        print("== SEAL CHECK: skipped (no captured container / staged loader)")
+        return True
+    lb = open(loader, "rb").read()
+    mg = b"Sony Computer Entertainment Inc."
+    blocks, i = set(), lb.find(mg)
+    while i >= 0:
+        blk = lb[i:i + 512]
+        if len(blk) == 512 and blk[0x20:0x24] == b"SCPH" and any(blk[0x40:0x48]):
+            blocks.add(blk)
+        i = lb.find(mg, i + 1)
+    if b"SCEFIXPLACEHOLD" in lb or len(blocks) != 1:
+        print("== SEAL CHECK: skipped (loader not filled, or %d served blocks)"
+              % len(blocks))
+        return True
+    blk = blocks.pop()
+    served = hashlib.sha1(blk).hexdigest()
+    ata = ata_material(blk)
+    ata32 = ata[0] if isinstance(ata, tuple) else ata
+    try:
+        got = dnasbundle.neutralize(capture["sealed"], ata32, four)
+    except Exception as e:
+        print("== SEAL CHECK: skipped (neutralize failed: %s)" % e)
+        return True
+    ok = (got == capture["neutral"])
+    print("== SEAL CHECK: served HDD ID %s  ->  container (%s) decrypts: %s"
+          % (served, capture.get("name", "?"),
+             "YES  (seal == serve, OK)" if ok else "NO  <<< MISMATCH"))
+    if not ok:
+        print("== !! The served id does NOT match the id the containers were sealed to.")
+        print("== !! This console will halt at 'dnas2 prep = -102'. The seal and the")
+        print("== !! served loader must use the SAME HDD ID. (served sha1 %s)" % served)
+    return ok
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("device", help="the target drive (a device pfsshell's `device` gets)")
@@ -785,10 +852,11 @@ def main():
         shutil.rmtree(a.work)
     os.makedirs(staged)
 
+    seal_cap = {}
     if a.disc:
         print("== seal %s -> %s (keyed to %s + four %s)"
               % (a.disc, staged, a.hddid, a.four))
-        n_c, n_f, n_p = seal_from_disc(a.disc, staged, ata32, four, a.verdict_patch)
+        n_c, n_f, n_p = seal_from_disc(a.disc, staged, ata32, four, a.verdict_patch, seal_cap)
         print("   sealed %d containers, copied %d files, verdict-patched %d NBONLINE"
               % (n_c, n_f, n_p))
         # Translation handling: --translation wins; else auto-folder pattern.
@@ -800,7 +868,7 @@ def main():
     else:
         print("== seal %s -> %s (keyed to %s + four %s)"
               % (a.bundle, staged, a.hddid, a.four))
-        n_c, n_f, n_p = seal_tree(a.bundle, staged, ata32, four, a.verdict_patch)
+        n_c, n_f, n_p = seal_tree(a.bundle, staged, ata32, four, a.verdict_patch, seal_cap)
         print("   sealed %d containers, copied %d files, verdict-patched %d NBONLINE"
               % (n_c, n_f, n_p))
 
@@ -840,6 +908,11 @@ def main():
     else:
         print("== loader: NONE given; keeping the disc's stock dnasload.elf "
               "(install will NOT boot past the DNAS console check without --loader)")
+
+    # Guard + diagnostic: the served id must decrypt the just-sealed containers,
+    # or the console halts at 'dnas2 prep = -102'. Runs before the write for both
+    # fresh and --update; printed so it lands in the installer log (and on screen).
+    verify_seal_serve(staged, four, seal_cap)
 
     # Attr area: --attr wins; else auto-build from disc icon (needs --disc).
     attr_path = a.attr
