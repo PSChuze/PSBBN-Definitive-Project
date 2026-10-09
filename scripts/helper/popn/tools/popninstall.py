@@ -798,6 +798,27 @@ def seal_guard(a):
     sys.exit(SEAL_EXIT)
 
 
+def stage_notice(a, dest_dir):
+    """res/notice.png is the caution PSBBN draws over the game art at launch. With
+    --translate it is translation/notice.en.png (same 416x196 RGBA, grey text on
+    transparent); otherwise the disc's stock BN_RES/NOTICE.PNG. Written to
+    dest_dir/notice.png. Returns True when the English one was used."""
+    english = bool(a.translate)
+    if english:
+        toolsdir = os.path.dirname(os.path.abspath(__file__))
+        src = os.path.normpath(os.path.join(toolsdir, os.pardir, "translation",
+                                            "notice.en.png"))
+        if not os.path.isfile(src):
+            print("== translation: WARNING: %s missing; keeping the Japanese launch "
+                  "notice" % src, flush=True)
+            english = False
+    if not english:
+        src = os.path.join(a.disc, "BN_RES", "NOTICE.PNG")
+    os.makedirs(dest_dir, exist_ok=True)
+    shutil.copyfile(src, os.path.join(dest_dir, "notice.png"))
+    return english
+
+
 def loader_swap(a):
     """Upgrade in place: fill the spoof loader for THIS drive and replace
     pfs:/dnasload.elf in the EXISTING PP.BLJA-00010, WITHOUT reinstalling. For
@@ -854,12 +875,18 @@ def loader_swap(a):
     for n in names:
         rms.append("rm %s" % n)
         puts.append(n)
+    # res/notice.png follows the text language the same way.
+    res_dir = os.path.join(work, "res")
+    if not stage_notice(a, res_dir):
+        print("== notice: restoring the stock (Japanese) res/notice.png")
     script = "\n".join(
         ["device %s" % a.device, "mount %s" % PARTITION]
         + reseal_lines
         + rms
         + ["lcd %s" % _quote(work.replace("\\", "/"))]
         + ["put %s" % p for p in puts]
+        + ["cd res", "rm notice.png", "lcd %s" % _quote(res_dir.replace("\\", "/")),
+           "put notice.png", "cd .."]
         + ["ls dnasload.elf", "umount", "exit", ""])
     print("== pfsshell swap script:")
     print("\n".join("   " + ln for ln in script.splitlines() if ln))
@@ -1091,6 +1118,8 @@ def main():
     # with the translated menu/logo/dialog text; the put below writes them.
     if textures_wanted(a):
         stage_images(a, staged)
+    if a.translate and stage_notice(a, os.path.join(staged, "res")):
+        print("== translation: English launch notice -> res/notice.png")
 
     script = pfsshell_script(a.device, staged, a.part_mib)
     lines = script.splitlines()
