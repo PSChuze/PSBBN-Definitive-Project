@@ -173,14 +173,20 @@ popn_retitle() {
 # Boot debug text, asked with the install or the loader swap
 # (scripts/helper/debugtext.sh): Y installs the FORK_VERBOSE twin of the
 # loader, which prints every stage on the TV and stops with the reason when one
-# fails; N the silent one. The twins are the console-proven pre-v4 build, whose
-# boot record LBA is compiled in (19264032, no fill-time slot): Y puts a tagged
-# trace.bin in the partition all the same, and the record is kept only when
-# pfs placed it at that sector.
+# fails, and arms the boot record: a POLTRACEPOPNTC1-tagged trace.bin in the
+# partition and the loader's fill-time TRACELBA slot (poltrace v4) pointed at
+# its first sector, wherever pfs placed it. N installs the silent loader with
+# the slot at 0 (off).
 source "${HELPER_DIR}/debugtext.sh"
-: "${UI_TEXT[POPN_TRACE_FIXED]:=This loader writes its boot record to one fixed drive sector, and trace.bin did not land there on this drive, so no record is kept; the text still shows.}"
-POPN_TRACE_LBA=19264032
+: "${UI_TEXT[POPN_TRACE_SAVE]:=After one boot, put the drive back in the PC and save the record with:}"
 POPN_LOADER_VERBOSE="${POPN_LOADER_VERBOSE_OVERRIDE:-${SCRIPTS_DIR}/assets/popn/polbbnexec-popn-verbose.kelf}"
+# popninstall's --work: the filled loader is left there, and the trace step
+# sets its slot. Like the other title steps it stages in a path with no space
+# in it: a toolkit under such a path (e.g. "PlayOnline Project") uses /tmp.
+POPN_STAGE="${WORK_DIR}/stage"
+if [[ "${POPN_STAGE}" =~ [[:space:]] ]]; then
+    POPN_STAGE="${TMPDIR:-/tmp}/psbbn-popn-$(id -u)"
+fi
 
 # Swaps POPN_LOADER for its verbose twin on Y (not when POPN_LOADER_OVERRIDE
 # names a loader of its own).
@@ -191,14 +197,16 @@ popn_debugtext() {
     POPN_LOADER="${DEBUG_LOADER}"
 }
 
+# $1: the filled dnasload.elf popninstall left in POPN_STAGE (the fresh
+# install stages it under PP.BLJA-00010/, the loader swap at the top). Its
+# slot is set to trace.bin's first sector and it is put again.
 popn_trace_arm() {
-    if ! debugtext_trace_arm "${DEVICE}" PP.BLJA-00010 PP.BLJA-00010 POLTRACEPOPNTC1; then
-        echo "  ${UI_TEXT[DEBUG_TEXT_TRACE_FAIL]}"
-    elif [[ "${DEBUG_TRACE_LBA}" == "${POPN_TRACE_LBA}" ]]; then
+    if debugtext_trace_arm "${DEVICE}" PP.BLJA-00010 PP.BLJA-00010 POLTRACEPOPNTC1 "$1"; then
         echo "  ${UI_TEXT[DEBUG_TEXT_TRACE_ON]} ${DEBUG_TRACE_LBA}."
+        echo "  ${UI_TEXT[POPN_TRACE_SAVE]}"
+        echo "    sudo dd if=${DEVICE} of=trace-popn.bin bs=512 skip=${DEBUG_TRACE_LBA} count=1"
     else
-        echo "trace: trace.bin at ${DEBUG_TRACE_LBA}, loader writes ${POPN_TRACE_LBA}: no record on this drive" >> "${LOG_FILE}"
-        echo "  ${UI_TEXT[POPN_TRACE_FIXED]}"
+        echo "  ${UI_TEXT[DEBUG_TEXT_TRACE_FAIL]}"
     fi
 }
 
@@ -348,14 +356,14 @@ if [[ -n "${INFO[installed]}" ]]; then
         read -r answer </dev/tty
         case "$answer" in
             [Yy]*)
-                POPN_TR_FLAG=""
+                POPN_TR_FLAG=()
                 POPN_TRANSLATE="${POPN_TRANSLATE_OVERRIDE:-${SCRIPTS_DIR}/assets/popn/elf.en.tsv}"
                 if [[ -f "${POPN_TRANSLATE}" ]]; then
                     printf "%s " "${UI_TEXT[POPN_TR_ASK]}"
                     read -r tr_answer </dev/tty
-                    case "$tr_answer" in [Yy]*) POPN_TR_FLAG="--translate ${POPN_TRANSLATE}" ;; esac
+                    case "$tr_answer" in [Yy]*) POPN_TR_FLAG=(--translate "${POPN_TRANSLATE}") ;; esac
                     # English text + menu images; POPN_NO_TEXTURES=1 keeps the Japanese images
-                    [[ -n "${POPN_TR_FLAG}" && -n "${POPN_NO_TEXTURES}" ]] && POPN_TR_FLAG+=" --no-textures"
+                    [[ -n "${POPN_TR_FLAG}" && -n "${POPN_NO_TEXTURES}" ]] && POPN_TR_FLAG+=(--no-textures)
                 fi
                 popn_debugtext
                 # Served-vs-sealed guard (plan gate 6). The loader serves ONE HDD
@@ -413,8 +421,9 @@ if [[ -n "${INFO[installed]}" ]]; then
                     --helper "${HELPER_DIR}" \
                     --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
                     --loader "${POPN_LOADER}" \
-                    ${POPN_TR_FLAG} \
+                    "${POPN_TR_FLAG[@]}" \
                     ${SEAL_FLAG} \
+                    --work "${POPN_STAGE}" \
                     --loader-swap --write \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 if [[ ${PIPESTATUS[0]} -eq 0 ]]; then
@@ -425,7 +434,7 @@ if [[ -n "${INFO[installed]}" ]]; then
                     else
                         popn_retitle japanese
                     fi
-                    [[ "${DEBUG_TEXT}" == 1 ]] && popn_trace_arm
+                    [[ "${DEBUG_TEXT}" == 1 ]] && popn_trace_arm "${POPN_STAGE}/dnasload.elf"
                     center_text "${UI_TEXT[POPN_RESWAP_DONE]}"
                 else
                     error_msg "${UI_TEXT[POPN_RESWAP_ERROR]}"
@@ -497,20 +506,20 @@ if [[ -f "${POPN_DISC}/SYSTEM.CNF" ]] && [[ -f "${POPN_DISC}/MAIN.BIN" ]] \
         case "$answer" in
             [Yy]*)
                 popn_debugtext
-                LOADER_FLAG=""
+                LOADER_FLAG=()
                 if [[ -f "${POPN_LOADER}" ]]; then
-                    LOADER_FLAG="--loader ${POPN_LOADER}"
+                    LOADER_FLAG=(--loader "${POPN_LOADER}")
                 else
                     echo "[!] spoof loader not found at ${POPN_LOADER}; installing with the disc's stock dnasload (will NOT boot disc-less past the DNAS check)." >> "${LOG_FILE}"
                 fi
-                POPN_TR_FLAG=""
+                POPN_TR_FLAG=()
                 POPN_TRANSLATE="${POPN_TRANSLATE_OVERRIDE:-${SCRIPTS_DIR}/assets/popn/elf.en.tsv}"
                 if [[ -n "${LOADER_FLAG}" ]] && [[ -f "${POPN_TRANSLATE}" ]]; then
                     printf "%s " "${UI_TEXT[POPN_TR_ASK]}"
                     read -r tr_answer </dev/tty
-                    case "$tr_answer" in [Yy]*) POPN_TR_FLAG="--translate ${POPN_TRANSLATE}" ;; esac
+                    case "$tr_answer" in [Yy]*) POPN_TR_FLAG=(--translate "${POPN_TRANSLATE}") ;; esac
                     # English text + menu images; POPN_NO_TEXTURES=1 keeps the Japanese images
-                    [[ -n "${POPN_TR_FLAG}" && -n "${POPN_NO_TEXTURES}" ]] && POPN_TR_FLAG+=" --no-textures"
+                    [[ -n "${POPN_TR_FLAG}" && -n "${POPN_NO_TEXTURES}" ]] && POPN_TR_FLAG+=(--no-textures)
                 fi
                 echo "${UI_TEXT[POPN_KIT_INSTALLING]}"
                 sudo -E env PYTHONPATH="${HELPER_DIR}" "${POPN_PY}" \
@@ -519,13 +528,15 @@ if [[ -f "${POPN_DISC}/SYSTEM.CNF" ]] && [[ -f "${POPN_DISC}/MAIN.BIN" ]] \
                     --hddid "${POL_HDDID_FILE}" \
                     --helper "${HELPER_DIR}" \
                     --pfsshell "${HELPER_DIR}/PFS Shell.elf" \
-                    ${LOADER_FLAG} \
-                    ${POPN_TR_FLAG} \
+                    "${LOADER_FLAG[@]}" \
+                    "${POPN_TR_FLAG[@]}" \
+                    --work "${POPN_STAGE}" \
                     --write \
                     2>&1 | tee -a "${LOG_FILE}" | sed 's/^/  /'
                 [[ ${PIPESTATUS[0]} -eq 0 ]] || error_msg "${UI_TEXT[POPN_KIT_ERROR]}"
                 POPN_INSTALLED_NOW=1
-                [[ "${DEBUG_TEXT}" == 1 && -n "${LOADER_FLAG}" ]] && popn_trace_arm
+                [[ "${DEBUG_TEXT}" == 1 && -n "${LOADER_FLAG}" ]] \
+                    && popn_trace_arm "${POPN_STAGE}/PP.BLJA-00010/dnasload.elf"
                 # English name only with the translation; otherwise the disc's.
                 if [[ -n "${POPN_TR_FLAG}" ]]; then
                     popn_retitle english

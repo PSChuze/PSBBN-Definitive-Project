@@ -36,12 +36,15 @@ way, so the only difference is the on-screen text. The installers ask "Show
 boot debug text on the console?" (scripts/helper/debugtext.sh): N installs the
 silent loader, Y the debug twin and, where the loader has a boot record, arms
 it (trace.bin in the game partition, the TRACELBA slot set with
-nobunaga/tools/traceslot.py). Tester notes: RELEASE-NOTES-hw-boot.md.
+nobunaga/tools/traceslot.py). Every title loader decides whether the record is
+armed after its own IOP reboot, on its own drivers, never through the
+launcher's IOP: that older check halted verbose boots on stock HDD-OSD
+consoles. Tester notes: RELEASE-NOTES-hw-boot.md.
 
 | title | silent (N) | debug (Y) |
 |---|---|---|
-| Nobunaga | `nobunaga/polbbnexec-inputpatch.kelf` (DRIVERS=4, **no input hook** since 2026-10-08 despite the name: b6da0082; the hook build is `polbbnexec-inputpatch.kelf.hook-unproven`, it stopped boot #56 on the console) | `nobunaga/polbbnexec-nobu-verbose.kelf` (FORK_VERBOSE, DRIVERS=4, no input hook) |
-| pop'n | `popn/polbbnexec-popn.kelf` | `popn/polbbnexec-popn-verbose.kelf` (FORK_VERBOSE, same pre-v4 source; record LBA baked at 19264032) |
+| Nobunaga | `nobunaga/polbbnexec-inputpatch.kelf` (DRIVERS=4, **no input hook** since 2026-10-08 despite the name: 6d29f4fe; the hook build is `polbbnexec-inputpatch.kelf.hook-unproven`, it stopped boot #56 on the console) | `nobunaga/polbbnexec-nobu-verbose.kelf` (FORK_VERBOSE, DRIVERS=4, no input hook) |
+| pop'n | `popn/polbbnexec-popn.kelf` (poltrace v4) | `popn/polbbnexec-popn-verbose.kelf` (FORK_VERBOSE, poltrace v4: the record goes wherever trace.bin lands) |
 | Minna | `mingol/polbbnexec-mingol.kelf` | `mingol/polbbnexec-mingol-verbose.kelf` (FORK_VERBOSE, ROM SYSMEM splice off) |
 | Bomberman | `bomb/bootfiles/bombload.{elf,kelf}` | `bomb/bootfiles-debug/bombload.{elf,kelf}` (SCREEN build, 5 s hold; no record slot) |
 
@@ -78,17 +81,19 @@ stages its boot files in its work folder with only the chosen copy, named
 
 | loader | jp | us | all |
 |---|---|---|---|
-| `nobunaga/polbbnexec-inputpatch` | b6da0082 | db7ff679 | 26d46572 |
-| `nobunaga/polbbnexec-nobu-verbose` | 0688ba91 | 3d407c3e | 8f01c6df |
-| `popn/polbbnexec-popn` | 99bc9bbc | 9d41c19c | c625040f |
-| `popn/polbbnexec-popn-verbose` | 04a340be | 3a76025c | 8d69532e |
-| `mingol/polbbnexec-mingol` | ab62750a | def210fc | cbb0f654 |
-| `mingol/polbbnexec-mingol-verbose` | 31ac2af8 | 72358602 | 6fd7d707 |
+| `nobunaga/polbbnexec-inputpatch` | 6d29f4fe | bff197a5 | 0c95656a |
+| `nobunaga/polbbnexec-nobu-verbose` | f1e4ff1e | 1d68a7c5 | f247c8b1 |
+| `popn/polbbnexec-popn` | 49fa2d6e | cf89d70e | b4a073b7 |
+| `popn/polbbnexec-popn-verbose` | f83fd58e | 497a8e05 | 1a157f01 |
+| `mingol/polbbnexec-mingol` | 5895fb0d | 535f42d9 | 15cd2733 |
+| `mingol/polbbnexec-mingol-verbose` | 23858b0f | 71d070d9 | 8062b6a1 |
 | `bomb/bootfiles/bombload` | af144da3 | 54b48e36 | bec01aa9 |
 | `bomb/bootfiles-debug/bombload` | 9cd0dffc | 3b6dd18d | 86992bcb |
 
-The Japanese copies are the console-proven files, unchanged. No title loader
-has yet been started from its `-us` or `-all` copy on a console; the
+The loaders were rebuilt on 2026-10-09 without the launcher-IOP trace check
+(pop'n also moves to poltrace v4) and rig-tested from the stock HDD-OSD
+browser to each title screen; these exact files are new on consoles. No title
+loader has yet been started from its `-us` or `-all` copy on a console; the
 PlayOnline loaders signed the same way have (US: `-us`; a console outside the
 US and Japan: `-all`).
 

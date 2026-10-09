@@ -127,10 +127,12 @@ text.
 - **Bomberman web pages are Japanese.** The game's messages are in English with
   the translation, but the pages it shows from its web server, and the menus
   that are drawn as pictures, stay Japanese.
-- **Pop'n boot record.** The pop'n loader writes its boot record to one fixed
-  sector, so the record only works on a drive where `trace.bin` lands on that
-  sector. Elsewhere the debug text still shows; the installer tells you when
-  no record can be kept.
+- **Pop'n loader is new on consoles.** The pop'n loader now records a boot
+  trace on any drive (it used to work only where `trace.bin` landed on one
+  fixed sector), and its debug build no longer stops early on a console that
+  only has the stock HDD-OSD browser. This build has run on our test setup but
+  not yet on a console: the first console boots (a Japanese console and a
+  non-Japanese one) are pending.
 
 ## Updates keep your saves
 
