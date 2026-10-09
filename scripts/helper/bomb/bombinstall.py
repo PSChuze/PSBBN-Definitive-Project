@@ -121,9 +121,9 @@ APA_FPWD = bytes.fromhex("02373c11a0a32358")
 # leaves the disc's file as it is.
 NAMES = {
     "english": {
-        "icon": {"title0": "Net de Bomberman",
+        "icon": {"title0": "Bomberman Online",
                  "uninstall": ("", "")},
-        "info": {"title": "Net de Bomberman",
+        "info": {"title": "Bomberman Online",
                  "genre": "Action",
                  "note": "The Bomberman battles that have won over countless "
                          "fans with their simple play are finally online."},
