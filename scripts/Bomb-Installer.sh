@@ -318,8 +318,9 @@ fi
 : "${UI_TEXT[BOMB_UPDATE_KEEP]:=Keep it as installed}"
 : "${UI_TEXT[BOMB_UPDATE_EN]:=English (the game’s messages; menus drawn as pictures stay Japanese)}"
 : "${UI_TEXT[BOMB_UPDATE_JA]:=Japanese (as on the disc)}"
-: "${UI_TEXT[BOMB_ASK_TRANSLATE]:=Apply the English translation (the game’s messages; menus drawn as pictures stay Japanese)? (y/N)}"
-# English: FILES.BIN's messages and the English name, via bombinstall --translate.
+: "${UI_TEXT[BOMB_ASK_TRANSLATE]:=Apply the English translation (messages, menus and the manual)? (y/N)}"
+# English via bombinstall --translate: FILES.BIN's messages and textures, the
+# loader's MAIN.BIN/overlay text table and the English name (assets/bomb/*.en.*).
 BOMB_TSV="${BOMB_FILES}/msg_FILES_install.en.tsv"
 TR_ARGS=()
 if sudo "${HDL_DUMP}" toc "${DEVICE}" 2>>"${LOG_FILE}" | grep -q -- "PP.SLPS-20343.NET.BOMB"; then

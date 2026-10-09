@@ -1,0 +1,11 @@
+source	id	jp	en	max	note
+dec/DATA0/CONNECT.BIN	va 0xac0588 / off 0x588	１０２４ＭＢ	1024 MB	15	
+dec/DATA0/PATCH.BIN	va 0xacc1f0 / off 0xc1f0	エラーコード: BOL-%s	Error code: BOL-%s	23	
+dec/DATA0/PATCH.BIN	va 0xacc3f8 / off 0xc3f8	%dＭＢ	%d MB	7	
+dec/DATA0/PATCH.BIN	va 0xacc438 / off 0xc438	パッチデータをダウンロードしています。	Downloading patch data.	39	
+dec/DATA0/PATCH.BIN	va 0xacc460 / off 0xc460	ダウンロードしたデータを解凍しています。	Unpacking the downloaded data.	47	
+dec/DATA0/PATCH.BIN	va 0xacc490 / off 0xc490	解凍したデータをチェックしています。	Checking the unpacked data.	39	
+dec/DATA0/PATCH.BIN	va 0xacc4b8 / off 0xc4b8	データを暗号化しています。	Encrypting data.	31	
+dec/DATA0/PATCH.BIN	va 0xacc4d8 / off 0xc4d8	データのコピー中です。	Copying data.	23	
+dec/DATA0/TITLE.BIN	va 0xac1920 / off 0x1920	Ｖｅｒ． %d.%04d	Ver. %d.%04d	23	
+dec/DATA0/TITLE.BIN	va 0xac1938 / off 0x1938	Ｓｔａｎｄ Ａｌｏｎｅ	Stand Alone	23	

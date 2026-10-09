@@ -1,0 +1,434 @@
+source	id	jp	en	max	note
+dec/MAIN.BIN	va 0x6535d0 / off 0x3535d0	０未定義です		255	
+dec/MAIN.BIN	va 0x6536d0 / off 0x3536d0	１未定義です		255	
+dec/MAIN.BIN	va 0x6537d0 / off 0x3537d0	２未定義です		255	
+dec/MAIN.BIN	va 0x6538d0 / off 0x3538d0	３未定義です		255	
+dec/MAIN.BIN	va 0x6539d0 / off 0x3539d0	４未定義です		255	
+dec/MAIN.BIN	va 0x653ad0 / off 0x353ad0	５未定義です		255	
+dec/MAIN.BIN	va 0x653bd0 / off 0x353bd0	６未定義です		255	
+dec/MAIN.BIN	va 0x653cd0 / off 0x353cd0	７未定義です		255	
+dec/MAIN.BIN	va 0x653dd0 / off 0x353dd0	８未定義です		255	
+dec/MAIN.BIN	va 0x653ed0 / off 0x353ed0	９未定義です		255	
+dec/MAIN.BIN	va 0x68d7e8 / off 0x38d7e8	特定のアイテムを手に入れたときに出現します。	Shown when you pick up certain items.	127	
+dec/MAIN.BIN	va 0x68d868 / off 0x38d868	みそボンから復活するときに出現します。	Shown when you come back from Misobon.	127	
+dec/MAIN.BIN	va 0x68d8e8 / off 0x38d8e8	勝ち残ったときに出現します。	Shown when you win.	127	
+dec/MAIN.BIN	va 0x68d968 / off 0x38d968	ボムやハードブロックにやられたときに出現します。	Shown when a bomb or hard block gets you.	127	
+dec/MAIN.BIN	va 0x68d9e8 / off 0x38d9e8	　　を上方向に押すと出現します。	Shown when you push     up.	127	
+dec/MAIN.BIN	va 0x68da68 / off 0x38da68	　　を右方向に押すと出現します。	Shown when you push     right.	127	
+dec/MAIN.BIN	va 0x68dae8 / off 0x38dae8	　　を下方向に押すと出現します。	Shown when you push     down.	127	
+dec/MAIN.BIN	va 0x68db68 / off 0x38db68	　　を左方向に押すと出現します。	Shown when you push     left.	135	
+dec/MAIN.BIN	va 0x6ebda0 / off 0x3ebda0	○１章　ゲームを始める前に	o Ch. 1  Before You Play	63	
+dec/MAIN.BIN	va 0x6ebde0 / off 0x3ebde0	　　　　オンラインとは？	        What Is Online Play?	63	
+dec/MAIN.BIN	va 0x6ebe20 / off 0x3ebe20	　　　　オンラインのマナー	        Online Manners	63	
+dec/MAIN.BIN	va 0x6ebe60 / off 0x3ebe60	　　　　ゲームのバージョンアップについて	        Game Updates	63	
+dec/MAIN.BIN	va 0x6ebea0 / off 0x3ebea0	　　　　ＩＤの取得	        Getting an ID	63	
+dec/MAIN.BIN	va 0x6ebee0 / off 0x3ebee0	○２章　ゲームの始め方・終わり方	o Ch. 2  Starting and Quitting	63	
+dec/MAIN.BIN	va 0x6ebf20 / off 0x3ebf20	　　　　ログインする	        Logging In	63	
+dec/MAIN.BIN	va 0x6ebf60 / off 0x3ebf60	　　　　ユーザーデータを作成する	        Creating User Data	63	
+dec/MAIN.BIN	va 0x6ebfa0 / off 0x3ebfa0	　　　　ロビーを選ぶ	        Choosing a Lobby	63	
+dec/MAIN.BIN	va 0x6ebfe0 / off 0x3ebfe0	　　　　安全なゲーム終了の仕方	        Quitting the Game Safely	63	
+dec/MAIN.BIN	va 0x6ec060 / off 0x3ec060	　　　　各部名称	        Controller Parts	63	
+dec/MAIN.BIN	va 0x6ec0a0 / off 0x3ec0a0	　　　　ロビー・ルーム	        Lobby / Room	63	
+dec/MAIN.BIN	va 0x6ec0e0 / off 0x3ec0e0	　　　　対戦中	        In Battle	127	
+dec/MAIN.BIN	va 0x6ec160 / off 0x3ec160	　　　　ソフトキーボード	        Soft Keyboard	63	
+dec/MAIN.BIN	va 0x6ec1a0 / off 0x3ec1a0	　　　　ソフトキーボードの操作補足	        Soft Keyboard Tips	63	
+dec/MAIN.BIN	va 0x6ec1e0 / off 0x3ec1e0	　　　　周辺機器への対応	        Supported Peripherals	191	
+dec/MAIN.BIN	va 0x6ec2a0 / off 0x3ec2a0	○４章　ロビー画面について	o Ch. 4  The Lobby Screen	63	
+dec/MAIN.BIN	va 0x6ec2e0 / off 0x3ec2e0	　　　　ロビー画面の見方	        Reading the Lobby Screen	63	
+dec/MAIN.BIN	va 0x6ec320 / off 0x3ec320	　　　　ルーム情報の見方	        Reading the Room Info	63	
+dec/MAIN.BIN	va 0x6ec360 / off 0x3ec360	　　　　チャットの見方	        Reading the Chat	127	
+dec/MAIN.BIN	va 0x6ec3e0 / off 0x3ec3e0	○５章　ルーム画面について	o Ch. 5  The Room Screen	63	
+dec/MAIN.BIN	va 0x6ec420 / off 0x3ec420	　　　　ルーム画面の見方	        Reading the Room Screen	63	
+dec/MAIN.BIN	va 0x6ec460 / off 0x3ec460	　　　　ルームマスターとは	        What Is the Room Master?	63	
+dec/MAIN.BIN	va 0x6ec4a0 / off 0x3ec4a0	　　　　各種ルール設定	        Rule Settings	63	
+dec/MAIN.BIN	va 0x6ec4e0 / off 0x3ec4e0	　　　　ＭＡＰセレクト	        MAP Select	63	
+dec/MAIN.BIN	va 0x6ec520 / off 0x3ec520	○６章　オプション画面について	o Ch. 6  The Options Screen	63	
+dec/MAIN.BIN	va 0x6ec560 / off 0x3ec560	　　　　オプション画面の見方	        Reading the Options Screen	63	
+dec/MAIN.BIN	va 0x6ec5a0 / off 0x3ec5a0	　　　　フキダシ設定	        Speech Settings	63	
+dec/MAIN.BIN	va 0x6ec5e0 / off 0x3ec5e0	　　　　キャラクターカスタマイズ	        Character Customize	63	
+dec/MAIN.BIN	va 0x6ec620 / off 0x3ec620	　　　　ＦｉｎｄとＪＵＭＰ	        Find and JUMP	63	
+dec/MAIN.BIN	va 0x6ec660 / off 0x3ec660	○７章　ゲームに関するあれこれ	o Ch. 7  About the Game	63	
+dec/MAIN.BIN	va 0x6ec6a0 / off 0x3ec6a0	　　　　対戦画面の見方	        Reading the Battle Screen	63	
+dec/MAIN.BIN	va 0x6ec6e0 / off 0x3ec6e0	　　　　ルール説明	        Rules	63	
+dec/MAIN.BIN	va 0x6ec720 / off 0x3ec720	　　　　アイテムの種類	        Items	63	
+dec/MAIN.BIN	va 0x6ec760 / off 0x3ec760	　　　　ゲーム中の途中退室	        Quitting Mid-Game	63	
+dec/MAIN.BIN	va 0x6ec7a0 / off 0x3ec7a0	○８章　クラスアップシステム	o Ch. 8  Class System	63	
+dec/MAIN.BIN	va 0x6ec7e0 / off 0x3ec7e0	　　　　ランキングとクラス	        Ranking and Class	63	
+dec/MAIN.BIN	va 0x6ec820 / off 0x3ec820	　　　　クラス名一覧表	        Class List	63	
+dec/MAIN.BIN	va 0x6ec860 / off 0x3ec860	○９章　それでもわからない時には	o Ch. 9  Still Stuck?	63	
+dec/MAIN.BIN	va 0x6ec8a0 / off 0x3ec8a0	　　　　ユーザーサポート	        User Support	63	
+dec/MAIN.BIN	va 0x6ec8e0 / off 0x3ec8e0	○１０章　おまけ	o Ch. 10 Extras	63	
+dec/MAIN.BIN	va 0x6ec920 / off 0x3ec920	　　　　スタッフリスト	        Staff	63	
+dec/MAIN.BIN	va 0x6ec960 / off 0x3ec960	　　　　商標ノーティス	        Trademarks	191	
+dec/MAIN.BIN	va 0x6ecbb0 / off 0x3ecbb0	WEBサーバーに接続中です	Connecting to the WEB server	63	
+dec/MAIN.BIN	va 0x6ecbf0 / off 0x3ecbf0	データ通信中です	Transferring data	63	
+dec/MAIN.BIN	va 0x6ecc30 / off 0x3ecc30	ニュースデータの受信中です	Receiving news data	63	
+dec/MAIN.BIN	va 0x6ecc70 / off 0x3ecc70	マニュアルデータの受信中です	Receiving manual data	63	
+dec/MAIN.BIN	va 0x6eccb0 / off 0x3eccb0	サポートデータの受信中です	Receiving support data	63	
+dec/MAIN.BIN	va 0x6eccf0 / off 0x3eccf0	メッセージの削除中です	Deleting message	63	
+dec/MAIN.BIN	va 0x6ecd30 / off 0x3ecd30	サポートデータの受信中です	Receiving support data	63	
+dec/MAIN.BIN	va 0x6ecd70 / off 0x3ecd70	メッセージの受信中です	Receiving messages	63	
+dec/MAIN.BIN	va 0x6ecdb0 / off 0x3ecdb0	メッセージの送信中です	Sending message	63	
+dec/MAIN.BIN	va 0x6ecdf0 / off 0x3ecdf0	オフィシャルからのアナウンス情報を見る事ができるよ。	Read the official announcements.	63	
+dec/MAIN.BIN	va 0x6ece30 / off 0x3ece30	不具合に関する情報を見たり、サポートへ連絡ができるよ。	Read bug info or contact Support.	63	
+dec/MAIN.BIN	va 0x6ece70 / off 0x3ece70	ゲームのマニュアル情報を見る事ができるよ。	Read the game manual.	63	
+dec/MAIN.BIN	va 0x6eceb0 / off 0x3eceb0	タイトルへ戻ります	Return to the title	63	
+dec/MAIN.BIN	va 0x6ecef0 / off 0x3ecef0	タイトルへ戻ります。	Return to the title.	63	
+dec/MAIN.BIN	va 0x6ecf30 / off 0x3ecf30	よろしいですか？	Are you sure?	63	
+dec/MAIN.BIN	va 0x6ecf70 / off 0x3ecf70	受信エラー	Receive Error	63	
+dec/MAIN.BIN	va 0x6ecfb0 / off 0x3ecfb0	ＷＥＢデータの受信が	Could not receive	63	
+dec/MAIN.BIN	va 0x6ecff0 / off 0x3ecff0	できませんでした。	the WEB data.	63	
+dec/MAIN.BIN	va 0x6ed030 / off 0x3ed030	通信中になんらかの障害が	A problem may have occurred	63	
+dec/MAIN.BIN	va 0x6ed070 / off 0x3ed070	起こった可能性があります。	during communication.	63	
+dec/MAIN.BIN	va 0x6ed0b0 / off 0x3ed0b0	時間を置いてから再度接続	Wait a while, then	63	
+dec/MAIN.BIN	va 0x6ed0f0 / off 0x3ed0f0	しなおして下さい。	connect again.	63	
+dec/MAIN.BIN	va 0x6ed130 / off 0x3ed130	読み込みエラー	Read Error	63	
+dec/MAIN.BIN	va 0x6ed170 / off 0x3ed170	メッセージを開くことが	Could not open	63	
+dec/MAIN.BIN	va 0x6ed1b0 / off 0x3ed1b0	できませんでした。	the message.	63	
+dec/MAIN.BIN	va 0x6ed1f0 / off 0x3ed1f0	時間を置いてから再度接続	Wait a while, then	63	
+dec/MAIN.BIN	va 0x6ed230 / off 0x3ed230	しなおして下さい。	connect again.	63	
+dec/MAIN.BIN	va 0x6ed270 / off 0x3ed270	それでも開けない場合は、	If it still won't open,	63	
+dec/MAIN.BIN	va 0x6ed2b0 / off 0x3ed2b0	ファイルが壊れている可能性が	the file may be damaged.	63	
+dec/MAIN.BIN	va 0x6ed2f0 / off 0x3ed2f0	ありますので、サポートへ連絡	Please contact Support.	63	
+dec/MAIN.BIN	va 0x6ed330 / off 0x3ed330	して下さい。	 	63	
+dec/MAIN.BIN	va 0x6ed370 / off 0x3ed370	ＩＤが入力されていません	No ID entered	63	
+dec/MAIN.BIN	va 0x6ed3b0 / off 0x3ed3b0	ＩＤ入力スペースに何も入力	The ID field is	63	
+dec/MAIN.BIN	va 0x6ed3f0 / off 0x3ed3f0	されていません。	empty.	63	
+dec/MAIN.BIN	va 0x6ed430 / off 0x3ed430	もう一度確認してから“送る”	Check it, then choose	63	
+dec/MAIN.BIN	va 0x6ed470 / off 0x3ed470	ボタンを選択して下さい。	the "Send" button.	63	
+dec/MAIN.BIN	va 0x6ed4b0 / off 0x3ed4b0	パスワードが入力されていません	No password entered	63	
+dec/MAIN.BIN	va 0x6ed4f0 / off 0x3ed4f0	パスワード入力スペースに何も	The password field is	63	
+dec/MAIN.BIN	va 0x6ed530 / off 0x3ed530	入力されていません。	empty.	63	
+dec/MAIN.BIN	va 0x6ed570 / off 0x3ed570	もう一度確認してから“送る”	Check it, then choose	63	
+dec/MAIN.BIN	va 0x6ed5b0 / off 0x3ed5b0	ボタンを選択して下さい。	the "Send" button.	63	
+dec/MAIN.BIN	va 0x6ed5f0 / off 0x3ed5f0	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6ed630 / off 0x3ed630	サーバーが混みあっている可能	The server may be	63	
+dec/MAIN.BIN	va 0x6ed670 / off 0x3ed670	性があります。	busy.	63	
+dec/MAIN.BIN	va 0x6ed6b0 / off 0x3ed6b0	もう一度時間をおいてから登録	Wait a while, then	63	
+dec/MAIN.BIN	va 0x6ed6f0 / off 0x3ed6f0	しなおしてみて下さい。	try registering again.	63	
+dec/MAIN.BIN	va 0x6ed730 / off 0x3ed730	そのＩＤは登録されていません	That ID is not registered	63	
+dec/MAIN.BIN	va 0x6ed770 / off 0x3ed770	もう一度入力したＩＤを	Check the ID you entered,	63	
+dec/MAIN.BIN	va 0x6ed7b0 / off 0x3ed7b0	確認してから“送る”	then choose	63	
+dec/MAIN.BIN	va 0x6ed7f0 / off 0x3ed7f0	ボタンを選択して下さい。	the "Send" button.	63	
+dec/MAIN.BIN	va 0x6ed830 / off 0x3ed830	パスワードが間違っています	Wrong password	63	
+dec/MAIN.BIN	va 0x6ed870 / off 0x3ed870	もう一度入力しなおしてから	Enter it again, then	63	
+dec/MAIN.BIN	va 0x6ed8b0 / off 0x3ed8b0	“送る”ボタンを選択して	choose the "Send"	63	
+dec/MAIN.BIN	va 0x6ed8f0 / off 0x3ed8f0	下さい。	button.	63	
+dec/MAIN.BIN	va 0x6ed930 / off 0x3ed930	皆から多く寄せられる質問の	Answers to the questions	63	
+dec/MAIN.BIN	va 0x6ed970 / off 0x3ed970	回答集だよ。	asked most often.	63	
+dec/MAIN.BIN	va 0x6ed9b0 / off 0x3ed9b0	サポートに質問のメッセージ	Read these before sending	63	
+dec/MAIN.BIN	va 0x6ed9f0 / off 0x3ed9f0	を送る前に読んでみてね。	Support a question.	63	
+dec/MAIN.BIN	va 0x6eda30 / off 0x3eda30	サポートに送ったメッセージ	When Support answers a	63	
+dec/MAIN.BIN	va 0x6eda70 / off 0x3eda70	に返信があった時は、ここで	message you sent, you can	63	
+dec/MAIN.BIN	va 0x6edab0 / off 0x3edab0	読む事ができるよ。	read the reply here.	63	
+dec/MAIN.BIN	va 0x6edaf0 / off 0x3edaf0	困った事があったら、ここから	Having trouble? Send	63	
+dec/MAIN.BIN	va 0x6edb30 / off 0x3edb30	サポートへメッセージを	Support a message	63	
+dec/MAIN.BIN	va 0x6edb70 / off 0x3edb70	送れるよ。	from here.	63	
+dec/MAIN.BIN	va 0x6edbb0 / off 0x3edbb0	メッセージの受信	Receive Messages	63	
+dec/MAIN.BIN	va 0x6edbf0 / off 0x3edbf0	新しいメッセージを受信	New messages	63	
+dec/MAIN.BIN	va 0x6edc30 / off 0x3edc30	しました。	received.	63	
+dec/MAIN.BIN	va 0x6edc70 / off 0x3edc70	メッセージの受信	Receive Messages	63	
+dec/MAIN.BIN	va 0x6edcb0 / off 0x3edcb0	新しいメッセージはありません	No new messages.	63	
+dec/MAIN.BIN	va 0x6edcf0 / off 0x3edcf0	でした。	 	63	
+dec/MAIN.BIN	va 0x6edd30 / off 0x3edd30	メッセージを受信できませんでした	Could not receive messages	63	
+dec/MAIN.BIN	va 0x6edd70 / off 0x3edd70	メッセージの件数が20件を	You have more than	63	
+dec/MAIN.BIN	va 0x6eddb0 / off 0x3eddb0	超えています。	20 messages.	63	
+dec/MAIN.BIN	va 0x6eddf0 / off 0x3eddf0	いらないメッセージを削除して	Delete messages you don't	63	
+dec/MAIN.BIN	va 0x6ede30 / off 0x3ede30	から、もう一度受信ボタンを	need, then choose Receive	63	
+dec/MAIN.BIN	va 0x6ede70 / off 0x3ede70	選択して下さい。	again.	63	
+dec/MAIN.BIN	va 0x6edeb0 / off 0x3edeb0	メッセージを開く事ができませんでした	Could not open the message	63	
+dec/MAIN.BIN	va 0x6edef0 / off 0x3edef0	メッセージを開くことが	Could not open	63	
+dec/MAIN.BIN	va 0x6edf30 / off 0x3edf30	できませんでした。	the message.	63	
+dec/MAIN.BIN	va 0x6edf70 / off 0x3edf70	もう一度選択し直して下さい。	Please choose it again.	63	
+dec/MAIN.BIN	va 0x6edfb0 / off 0x3edfb0	それでも開けない場合は、	If it still won't open,	63	
+dec/MAIN.BIN	va 0x6edff0 / off 0x3edff0	メッセージファイルが壊れて	the message file may	63	
+dec/MAIN.BIN	va 0x6ee030 / off 0x3ee030	いる可能性があります。	be damaged.	63	
+dec/MAIN.BIN	va 0x6ee070 / off 0x3ee070	メッセージを削除しました	Message deleted	63	
+dec/MAIN.BIN	va 0x6ee0b0 / off 0x3ee0b0	メッセージの削除が	The message was	63	
+dec/MAIN.BIN	va 0x6ee0f0 / off 0x3ee0f0	完了しました。	deleted.	63	
+dec/MAIN.BIN	va 0x6ee130 / off 0x3ee130	メッセージを削除できませんでした	Could not delete the message	63	
+dec/MAIN.BIN	va 0x6ee170 / off 0x3ee170	メッセージを削除できません	Could not delete	63	
+dec/MAIN.BIN	va 0x6ee1b0 / off 0x3ee1b0	でした。	the message.	63	
+dec/MAIN.BIN	va 0x6ee1f0 / off 0x3ee1f0	もう一度削除し直して下さい。	Please delete it again.	63	
+dec/MAIN.BIN	va 0x6ee230 / off 0x3ee230	それでも削除できない場合は、	If it still won't delete,	63	
+dec/MAIN.BIN	va 0x6ee270 / off 0x3ee270	メッセージファイルが壊れて	the message file may	63	
+dec/MAIN.BIN	va 0x6ee2b0 / off 0x3ee2b0	いる可能性があります。	be damaged.	63	
+dec/MAIN.BIN	va 0x6ee2f0 / off 0x3ee2f0	メッセージを送る前に…	Before You Write...	63	
+dec/MAIN.BIN	va 0x6ee330 / off 0x3ee330	サポートへメッセージを送る前に、サポートから	Before writing to Support, choose FAQ	63	
+dec/MAIN.BIN	va 0x6ee370 / off 0x3ee370	よくある質問を選択し、自分と似たような質問が	under Support and check for a question	63	
+dec/MAIN.BIN	va 0x6ee3b0 / off 0x3ee3b0	無いか確認してみて下さい。	like yours.	63	
+dec/MAIN.BIN	va 0x6ee3f0 / off 0x3ee3f0	サポートへ質問する場合は、できるだけ自分が	When asking Support, please give the	63	
+dec/MAIN.BIN	va 0x6ee430 / off 0x3ee430	契約しているプロバイダー名と、使用している	name of your internet provider and the	63	
+dec/MAIN.BIN	va 0x6ee470 / off 0x3ee470	"PlayStation 2"本体の型番を明記して下さい。	model of your "PlayStation 2".	63	
+dec/MAIN.BIN	va 0x6ee4b0 / off 0x3ee4b0	メッセージは最大４００文字（５１２ＫＢ）	Messages can be up to 400 characters	63	
+dec/MAIN.BIN	va 0x6ee4f0 / off 0x3ee4f0	までしか送る事ができません。	(512 KB).	63	
+dec/MAIN.BIN	va 0x6ee530 / off 0x3ee530	メッセージの編集を終了します	Stop Editing	63	
+dec/MAIN.BIN	va 0x6ee570 / off 0x3ee570	メッセージの編集を終了して、	Stop editing and return	63	
+dec/MAIN.BIN	va 0x6ee5b0 / off 0x3ee5b0	サポート選択画面へ戻ります。	to the Support menu.	63	
+dec/MAIN.BIN	va 0x6ee5f0 / off 0x3ee5f0	現在編集中の文章は全て破棄	Everything you have written	63	
+dec/MAIN.BIN	va 0x6ee630 / off 0x3ee630	されてしまいますが	will be lost.	63	
+dec/MAIN.BIN	va 0x6ee670 / off 0x3ee670	宜しいですか？	Are you sure?	63	
+dec/MAIN.BIN	va 0x6ee6b0 / off 0x3ee6b0	注意	Notice	63	
+dec/MAIN.BIN	va 0x6ee6f0 / off 0x3ee6f0	題名が入力されていません。	No subject entered.	63	
+dec/MAIN.BIN	va 0x6ee730 / off 0x3ee730	もう一度確認してから“送る”	Check it, then choose	63	
+dec/MAIN.BIN	va 0x6ee770 / off 0x3ee770	ボタンを選択して下さい。	the "Send" button.	63	
+dec/MAIN.BIN	va 0x6ee7b0 / off 0x3ee7b0	注意	Notice	63	
+dec/MAIN.BIN	va 0x6ee7f0 / off 0x3ee7f0	メッセージ本文が入力されて	The message has no	63	
+dec/MAIN.BIN	va 0x6ee830 / off 0x3ee830	いません。	text.	63	
+dec/MAIN.BIN	va 0x6ee870 / off 0x3ee870	もう一度確認してから“送る”	Check it, then choose	63	
+dec/MAIN.BIN	va 0x6ee8b0 / off 0x3ee8b0	ボタンを選択して下さい。	the "Send" button.	63	
+dec/MAIN.BIN	va 0x6ee8f0 / off 0x3ee8f0	注意	Notice	63	
+dec/MAIN.BIN	va 0x6ee930 / off 0x3ee930	メッセージの文字数が制限を	The message is over the	63	
+dec/MAIN.BIN	va 0x6ee970 / off 0x3ee970	超えています。	character limit.	63	
+dec/MAIN.BIN	va 0x6ee9b0 / off 0x3ee9b0	もう一度確認してから“送る”	Check it, then choose	63	
+dec/MAIN.BIN	va 0x6ee9f0 / off 0x3ee9f0	ボタンを選択して下さい。	the "Send" button.	63	
+dec/MAIN.BIN	va 0x6eea30 / off 0x3eea30	メッセージを送信します	Send Message	63	
+dec/MAIN.BIN	va 0x6eea70 / off 0x3eea70	ここで“はい”を選択すると、	Choosing "Yes" sends the	63	
+dec/MAIN.BIN	va 0x6eeab0 / off 0x3eeab0	現在編集中のメッセージが	message you are writing	63	
+dec/MAIN.BIN	va 0x6eeaf0 / off 0x3eeaf0	サポートへ送信されます。	to Support.	127	
+dec/MAIN.BIN	va 0x6eeb70 / off 0x3eeb70	本当に送信しても	Send it now?	63	
+dec/MAIN.BIN	va 0x6eebb0 / off 0x3eebb0	宜しいですか？	 	63	
+dec/MAIN.BIN	va 0x6eebf0 / off 0x3eebf0	メッセージの送信を完了しました	Message sent	63	
+dec/MAIN.BIN	va 0x6eec30 / off 0x3eec30	現在編集中のメッセージを	Your message was sent	63	
+dec/MAIN.BIN	va 0x6eec70 / off 0x3eec70	サポートへ送信できました。	to Support.	63	
+dec/MAIN.BIN	va 0x6eecb0 / off 0x3eecb0	後日、必要に応じてサポート	Support may reply later	63	
+dec/MAIN.BIN	va 0x6eecf0 / off 0x3eecf0	からの返事が送られて来る場合	if needed, so please	63	
+dec/MAIN.BIN	va 0x6eed30 / off 0x3eed30	がありますので、	check back.	63	
+dec/MAIN.BIN	va 0x6eed70 / off 0x3eed70	お待ちください。	 	63	
+dec/MAIN.BIN	va 0x6eedb0 / off 0x3eedb0	メッセージを送信できませんでした	Could not send the message	63	
+dec/MAIN.BIN	va 0x6eedf0 / off 0x3eedf0	送信に失敗しました。	Sending failed.	63	
+dec/MAIN.BIN	va 0x6eee30 / off 0x3eee30	時間を置いてから	Wait a while and send	63	
+dec/MAIN.BIN	va 0x6eee70 / off 0x3eee70	もう一度送信し直すか、	again, or check that	63	
+dec/MAIN.BIN	va 0x6eeeb0 / off 0x3eeeb0	ネットワークの設定が正しく	your network settings	63	
+dec/MAIN.BIN	va 0x6eeef0 / off 0x3eeef0	行われているかどうかを	are correct.	63	
+dec/MAIN.BIN	va 0x6eef30 / off 0x3eef30	確認してみて下さい。	 	63	
+dec/MAIN.BIN	va 0x6eef70 / off 0x3eef70	メッセージの編集を終了します	Stop Editing	63	
+dec/MAIN.BIN	va 0x6eefb0 / off 0x3eefb0	メッセージの編集を終了して、	Stop editing and return	63	
+dec/MAIN.BIN	va 0x6eeff0 / off 0x3eeff0	タイトルへ戻ります。	to the title.	63	
+dec/MAIN.BIN	va 0x6ef030 / off 0x3ef030	現在編集中の文章は全て破棄	Everything you have written	63	
+dec/MAIN.BIN	va 0x6ef070 / off 0x3ef070	されてしまいますが	will be lost.	63	
+dec/MAIN.BIN	va 0x6ef0b0 / off 0x3ef0b0	宜しいですか？	Are you sure?	63	
+dec/MAIN.BIN	va 0x6ef0f0 / off 0x3ef0f0	編集中の文章が行数制限をこえました。	The text is over the line limit.	63	
+dec/MAIN.BIN	va 0x6ef130 / off 0x3ef130	編集できるメッセージの	A message can have	63	
+dec/MAIN.BIN	va 0x6ef170 / off 0x3ef170	最大行数は５１２行までです。	at most 512 lines.	63	
+dec/MAIN.BIN	va 0x6ef1b0 / off 0x3ef1b0	ＩＤが入力されていません	No ID entered	63	
+dec/MAIN.BIN	va 0x6ef1f0 / off 0x3ef1f0	ＩＤ入力スペースに何も入力さ	The ID field is	63	
+dec/MAIN.BIN	va 0x6ef230 / off 0x3ef230	れていません。	empty.	63	
+dec/MAIN.BIN	va 0x6ef270 / off 0x3ef270	もう一度確認してから“決定”	Check it, then choose	63	
+dec/MAIN.BIN	va 0x6ef2b0 / off 0x3ef2b0	ボタンを選択して下さい。	the "OK" button.	63	
+dec/MAIN.BIN	va 0x6ef2f0 / off 0x3ef2f0	パスワードが入力されていません	No password entered	63	
+dec/MAIN.BIN	va 0x6ef330 / off 0x3ef330	パスワード入力スペースに何も	The password field is	63	
+dec/MAIN.BIN	va 0x6ef370 / off 0x3ef370	入力されていません。	empty.	63	
+dec/MAIN.BIN	va 0x6ef3b0 / off 0x3ef3b0	もう一度確認してから“決定”	Check it, then choose	63	
+dec/MAIN.BIN	va 0x6ef3f0 / off 0x3ef3f0	ボタンを選択して下さい。	the "OK" button.	63	
+dec/MAIN.BIN	va 0x6ef430 / off 0x3ef430	パスワードが短すぎます	Password too short	63	
+dec/MAIN.BIN	va 0x6ef470 / off 0x3ef470	パスワードは最低６文字以上の	A password must be at	63	
+dec/MAIN.BIN	va 0x6ef4b0 / off 0x3ef4b0	長さがないと、登録できません。	least 6 characters long.	63	
+dec/MAIN.BIN	va 0x6ef4f0 / off 0x3ef4f0	ニックネームが入力されていません	No nickname entered	63	
+dec/MAIN.BIN	va 0x6ef530 / off 0x3ef530	ニックネーム入力スペースに何	The nickname field is	63	
+dec/MAIN.BIN	va 0x6ef570 / off 0x3ef570	も入力されていません。	empty.	63	
+dec/MAIN.BIN	va 0x6ef5b0 / off 0x3ef5b0	もう一度確認してから“決定”	Check it, then choose	63	
+dec/MAIN.BIN	va 0x6ef5f0 / off 0x3ef5f0	ボタンを選択して下さい。	the "OK" button.	63	
+dec/MAIN.BIN	va 0x6ef630 / off 0x3ef630	登録済ＩＤです	ID already taken	63	
+dec/MAIN.BIN	va 0x6ef670 / off 0x3ef670	そのＩＤは既に登録されていま	That ID is already	63	
+dec/MAIN.BIN	va 0x6ef6b0 / off 0x3ef6b0	す。	taken.	63	
+dec/MAIN.BIN	va 0x6ef6f0 / off 0x3ef6f0	もう一度違うＩＤで登録し直し	Please register with a	63	
+dec/MAIN.BIN	va 0x6ef730 / off 0x3ef730	て下さい。	different ID.	63	
+dec/MAIN.BIN	va 0x6ef770 / off 0x3ef770	登録済ニックネームです	Nickname already taken	63	
+dec/MAIN.BIN	va 0x6ef7b0 / off 0x3ef7b0	そのニックネームは既に登録さ	That nickname is already	63	
+dec/MAIN.BIN	va 0x6ef7f0 / off 0x3ef7f0	れています。	taken.	63	
+dec/MAIN.BIN	va 0x6ef830 / off 0x3ef830	もう一度違うニックネームで登	Please register with a	63	
+dec/MAIN.BIN	va 0x6ef870 / off 0x3ef870	録しなおして下さい。	different nickname.	63	
+dec/MAIN.BIN	va 0x6ef8b0 / off 0x3ef8b0	ＩＤの登録ができませんでした	Could not register the ID	63	
+dec/MAIN.BIN	va 0x6ef8f0 / off 0x3ef8f0	サーバーが混みあっている可能	The server may be	63	
+dec/MAIN.BIN	va 0x6ef930 / off 0x3ef930	性があります。	busy.	63	
+dec/MAIN.BIN	va 0x6ef970 / off 0x3ef970	もう一度時間をおいてから登録	Wait a while, then	63	
+dec/MAIN.BIN	va 0x6ef9b0 / off 0x3ef9b0	しなおしてみて下さい。	try registering again.	63	
+dec/MAIN.BIN	va 0x6ef9f0 / off 0x3ef9f0	最大保存件数２０件	Up to 20 messages saved	63	
+dec/MAIN.BIN	va 0x6efa30 / off 0x3efa30	メッセージの削除	Delete Message	63	
+dec/MAIN.BIN	va 0x6efa70 / off 0x3efa70	“はい”を選ぶとこのメッセー	Choosing "Yes" deletes	63	
+dec/MAIN.BIN	va 0x6efab0 / off 0x3efab0	ジは失われます。	this message.	63	
+dec/MAIN.BIN	va 0x6efaf0 / off 0x3efaf0	本当にこのメッセージを削除し	Really delete this	63	
+dec/MAIN.BIN	va 0x6efb30 / off 0x3efb30	ても宜しいですか？	message?	63	
+dec/MAIN.BIN	va 0x6efb70 / off 0x3efb70	ネットワークが繋がりません	Cannot connect to the network	63	
+dec/MAIN.BIN	va 0x6efbb0 / off 0x3efbb0	もう一度ネットワークの設定と	Check the network settings	63	
+dec/MAIN.BIN	va 0x6efbf0 / off 0x3efbf0	"PlayStation BB Unit"と	and that the BB Unit and	63	
+dec/MAIN.BIN	va 0x6efc30 / off 0x3efc30	ネットワークケーブルが正しく	network cable are	63	
+dec/MAIN.BIN	va 0x6efc70 / off 0x3efc70	接続されているか確認して	connected properly.	63	
+dec/MAIN.BIN	va 0x6efcb0 / off 0x3efcb0	ください。	 	63	
+dec/MAIN.BIN	va 0x6efcf0 / off 0x3efcf0	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6efd30 / off 0x3efd30	もう一度ネットワークの設定と	Check the network settings	63	
+dec/MAIN.BIN	va 0x6efd70 / off 0x3efd70	"PlayStation BB Unit"と	and that the BB Unit and	63	
+dec/MAIN.BIN	va 0x6efdb0 / off 0x3efdb0	ネットワークケーブルが正しく	network cable are	63	
+dec/MAIN.BIN	va 0x6efdf0 / off 0x3efdf0	接続されているか確認して	connected properly.	63	
+dec/MAIN.BIN	va 0x6efe30 / off 0x3efe30	ください。	 	63	
+dec/MAIN.BIN	va 0x6efe70 / off 0x3efe70	読込みに失敗しました	Load failed	63	
+dec/MAIN.BIN	va 0x6efeb0 / off 0x3efeb0	feega情報の読込みに失敗	Could not load the feega	63	
+dec/MAIN.BIN	va 0x6efef0 / off 0x3efef0	しました。	information.	63	
+dec/MAIN.BIN	va 0x6eff30 / off 0x3eff30	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6eff70 / off 0x3eff70	初期化に失敗しました。	Initialization failed.	63	
+dec/MAIN.BIN	va 0x6effb0 / off 0x3effb0	エラーコード: BB-E401	Error code: BB-E401	63	
+dec/MAIN.BIN	va 0x6efff0 / off 0x3efff0	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f0030 / off 0x3f0030	システムエラーが	A system error	63	
+dec/MAIN.BIN	va 0x6f0070 / off 0x3f0070	発生しました。	occurred.	63	
+dec/MAIN.BIN	va 0x6f00b0 / off 0x3f00b0	現在feegaサービスのご利用は	The feega service is	63	
+dec/MAIN.BIN	va 0x6f00f0 / off 0x3f00f0	できません。	not available now.	63	
+dec/MAIN.BIN	va 0x6f0130 / off 0x3f0130	エラーコード: BB-E402	Error code: BB-E402	63	
+dec/MAIN.BIN	va 0x6f0170 / off 0x3f0170	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f01b0 / off 0x3f01b0	現在feegaサービスのご利用は	The feega service is	63	
+dec/MAIN.BIN	va 0x6f01f0 / off 0x3f01f0	できません。	not available now.	63	
+dec/MAIN.BIN	va 0x6f0230 / off 0x3f0230	エラーコード: BB-E403	Error code: BB-E403	63	
+dec/MAIN.BIN	va 0x6f0270 / off 0x3f0270	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f02b0 / off 0x3f02b0	現在feegaサービスのご利用は	The feega service is	63	
+dec/MAIN.BIN	va 0x6f02f0 / off 0x3f02f0	できません。	not available now.	63	
+dec/MAIN.BIN	va 0x6f0330 / off 0x3f0330	エラーコード: BB-E404	Error code: BB-E404	63	
+dec/MAIN.BIN	va 0x6f0370 / off 0x3f0370	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f03b0 / off 0x3f03b0	現在feegaサービスのご利用は	The feega service is	63	
+dec/MAIN.BIN	va 0x6f03f0 / off 0x3f03f0	できません。	not available now.	63	
+dec/MAIN.BIN	va 0x6f0430 / off 0x3f0430	エラーコード: BB-E405	Error code: BB-E405	63	
+dec/MAIN.BIN	va 0x6f0470 / off 0x3f0470	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f04b0 / off 0x3f04b0	IDとパスワードが正しく	Check that your ID and	63	
+dec/MAIN.BIN	va 0x6f04f0 / off 0x3f04f0	入力されているかどうかを	password are entered	63	
+dec/MAIN.BIN	va 0x6f0530 / off 0x3f0530	確認してください。	correctly.	63	
+dec/MAIN.BIN	va 0x6f0570 / off 0x3f0570	エラーコード: BB-E406	Error code: BB-E406	63	
+dec/MAIN.BIN	va 0x6f05b0 / off 0x3f05b0	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f05f0 / off 0x3f05f0	IDとパスワードが正しく	Check that your ID and	63	
+dec/MAIN.BIN	va 0x6f0630 / off 0x3f0630	入力されているかどうかを	password are entered	63	
+dec/MAIN.BIN	va 0x6f0670 / off 0x3f0670	確認してください。	correctly.	63	
+dec/MAIN.BIN	va 0x6f06b0 / off 0x3f06b0	エラーコード: BB-E407	Error code: BB-E407	63	
+dec/MAIN.BIN	va 0x6f06f0 / off 0x3f06f0	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f0730 / off 0x3f0730	IDとパスワードが正しく	Check that your ID and	63	
+dec/MAIN.BIN	va 0x6f0770 / off 0x3f0770	入力されているかどうかを	password are entered	63	
+dec/MAIN.BIN	va 0x6f07b0 / off 0x3f07b0	確認してください。	correctly.	63	
+dec/MAIN.BIN	va 0x6f07f0 / off 0x3f07f0	エラーコード: BB-E408	Error code: BB-E408	63	
+dec/MAIN.BIN	va 0x6f0830 / off 0x3f0830	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f0870 / off 0x3f0870	IDとパスワードが正しく	Check that your ID and	63	
+dec/MAIN.BIN	va 0x6f08b0 / off 0x3f08b0	入力されているかどうかを	password are entered	63	
+dec/MAIN.BIN	va 0x6f08f0 / off 0x3f08f0	確認してください。	correctly.	63	
+dec/MAIN.BIN	va 0x6f0930 / off 0x3f0930	エラーコード: BB-E409	Error code: BB-E409	63	
+dec/MAIN.BIN	va 0x6f0970 / off 0x3f0970	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f09b0 / off 0x3f09b0	ディスクトレイが	The disc tray	63	
+dec/MAIN.BIN	va 0x6f09f0 / off 0x3f09f0	開いています。	is open.	63	
+dec/MAIN.BIN	va 0x6f0a30 / off 0x3f0a30	「ネットでボンバーマン」の	Put in the Net de Bomberman	63	
+dec/MAIN.BIN	va 0x6f0a70 / off 0x3f0a70	ディスクを載せてディスクトレ	disc and close the disc	63	
+dec/MAIN.BIN	va 0x6f0ab0 / off 0x3f0ab0	イを閉じてください。	tray.	63	
+dec/MAIN.BIN	va 0x6f0af0 / off 0x3f0af0	エラーコード: BB-E409	Error code: BB-E409	63	
+dec/MAIN.BIN	va 0x6f0b30 / off 0x3f0b30	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f0b70 / off 0x3f0b70	IDとパスワードが正しく	Check that your ID and	63	
+dec/MAIN.BIN	va 0x6f0bb0 / off 0x3f0bb0	入力されているかどうかを	password are entered	63	
+dec/MAIN.BIN	va 0x6f0bf0 / off 0x3f0bf0	確認してください。	correctly.	63	
+dec/MAIN.BIN	va 0x6f0c30 / off 0x3f0c30	エラーコード: BB-E410	Error code: BB-E410	63	
+dec/MAIN.BIN	va 0x6f0c70 / off 0x3f0c70	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f0cb0 / off 0x3f0cb0	IDとパスワードが正しく	Check that your ID and	63	
+dec/MAIN.BIN	va 0x6f0cf0 / off 0x3f0cf0	入力されているかどうかを	password are entered	63	
+dec/MAIN.BIN	va 0x6f0d30 / off 0x3f0d30	確認してください。	correctly.	63	
+dec/MAIN.BIN	va 0x6f0d70 / off 0x3f0d70	エラーコード: BB-E411	Error code: BB-E411	63	
+dec/MAIN.BIN	va 0x6f0db0 / off 0x3f0db0	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f0df0 / off 0x3f0df0	IDとパスワードが正しく	Check that your ID and	63	
+dec/MAIN.BIN	va 0x6f0e30 / off 0x3f0e30	入力されているかどうかを	password are entered	63	
+dec/MAIN.BIN	va 0x6f0e70 / off 0x3f0e70	確認してください。	correctly.	63	
+dec/MAIN.BIN	va 0x6f0eb0 / off 0x3f0eb0	エラーコード: BB-E412	Error code: BB-E412	63	
+dec/MAIN.BIN	va 0x6f0ef0 / off 0x3f0ef0	feega-IDの認証に失敗しました	feega-ID sign-in failed	63	
+dec/MAIN.BIN	va 0x6f0f30 / off 0x3f0f30	IDとパスワードが正しく	Check that your ID and	63	
+dec/MAIN.BIN	va 0x6f0f70 / off 0x3f0f70	入力されているかどうかを	password are entered	63	
+dec/MAIN.BIN	va 0x6f0fb0 / off 0x3f0fb0	確認してください。	correctly.	63	
+dec/MAIN.BIN	va 0x6f0ff0 / off 0x3f0ff0	エラーコード: BB-E413	Error code: BB-E413	1795	
+dec/MAIN.BIN	va 0x744c98 / off 0x444c98	日本語入力機能の初期化に失敗しました。\nもう一度"PlayStation 2"本体と"PlayStation BB Unit"が\n正しく接続されているか確認してから"PlayStation 2"\n本体を再起動しなおして下さい。	Text input could not start.\nCheck that the "PlayStation 2" and the\n"PlayStation BB Unit" are connected properly,\nthen restart the "PlayStation 2".	175	
+dec/MAIN.BIN	va 0x745b98 / off 0x445b98	エラーコード: BB-E413	Error code: BB-E413	23	
+dec/MAIN.BIN	va 0x745bb0 / off 0x445bb0	エラーコード: BB-E412	Error code: BB-E412	23	
+dec/MAIN.BIN	va 0x745bc8 / off 0x445bc8	エラーコード: BB-E411	Error code: BB-E411	23	
+dec/MAIN.BIN	va 0x745be0 / off 0x445be0	エラーコード: BB-E410	Error code: BB-E410	23	
+dec/MAIN.BIN	va 0x745bf8 / off 0x445bf8	ディスクトレイが開いています。\n 「ネットでボンバーマン」のディスクを載せて\n ディスクトレイを閉じてください。\nエラーコード: BB-E409	The disc tray is open.\nPut in the Net de Bomberman disc\nand close the disc tray.\nError code: BB-E409	135	
+dec/MAIN.BIN	va 0x745c80 / off 0x445c80	feega-IDの認証に失敗しました。\nIDとパスワードが正しく入力されているか\nどうかを確認してから、再度Loginボタンを\n選択して下さい。\nエラーコード: BB-E409	feega-ID sign-in failed.\nCheck that your ID and password are\nentered correctly, then choose Login\nagain.\nError code: BB-E409	151	
+dec/MAIN.BIN	va 0x745d18 / off 0x445d18	feega-IDの認証に失敗しました。\nIDとパスワードが正しく入力されているか\nどうかを確認してから、再度Loginボタンを\n選択して下さい。\nエラーコード: BB-E408	feega-ID sign-in failed.\nCheck that your ID and password are\nentered correctly, then choose Login\nagain.\nError code: BB-E408	151	
+dec/MAIN.BIN	va 0x745db0 / off 0x445db0	feega-IDの認証に失敗しました。\nIDとパスワードが正しく入力されているか\nどうかを確認してから、再度Loginボタンを\n選択して下さい。\nエラーコード: BB-E407	feega-ID sign-in failed.\nCheck that your ID and password are\nentered correctly, then choose Login\nagain.\nError code: BB-E407	151	
+dec/MAIN.BIN	va 0x745e48 / off 0x445e48	feega-IDの認証に失敗しました。\nIDとパスワードが正しく入力されているか\nどうかを確認してから、再度Loginボタンを\n選択して下さい。\nエラーコード: BB-E406	feega-ID sign-in failed.\nCheck that your ID and password are\nentered correctly, then choose Login\nagain.\nError code: BB-E406	151	
+dec/MAIN.BIN	va 0x745ee0 / off 0x445ee0	現在、サービスの購入をすることはできません。\nエラーコード: BB-E405	Service purchase is not available now.\nError code: BB-E405	71	
+dec/MAIN.BIN	va 0x745f28 / off 0x445f28	現在feegaサービスのご利用はできません。\nエラーコード: BB-E404	The feega service is not available now.\nError code: BB-E404	63	
+dec/MAIN.BIN	va 0x745f68 / off 0x445f68	現在feegaサービスのご利用はできません。\nエラーコード: BB-E403	The feega service is not available now.\nError code: BB-E403	63	
+dec/MAIN.BIN	va 0x745fa8 / off 0x445fa8	システムエラーが発生しました。\n現在feegaサービスのご利用はできません。\nエラーコード: BB-E402	A system error occurred.\nThe feega service is not available now.\nError code: BB-E402	95	
+dec/MAIN.BIN	va 0x746008 / off 0x446008	初期化に失敗しました。\nエラーコード: BB-E401	Initialization failed.\nError code: BB-E401	47	
+dec/MAIN.BIN	va 0x7465f0 / off 0x4465f0	ユーザー		15	
+dec/MAIN.BIN	va 0x746608 / off 0x446608	１０２４ＭＢ	1024 MB	20	
+dec/MAIN.BIN	va 0x747d20 / off 0x447d20	対戦相手募集中	Need players	15	
+dec/MAIN.BIN	va 0x747db8 / off 0x447db8	サーバーの応答を待っています	Waiting for the server	31	
+dec/MAIN.BIN	va 0x747dd8 / off 0x447dd8	予期せぬエラーが発生しました。	An unexpected error occurred.	39	
+dec/MAIN.BIN	va 0x747e88 / off 0x447e88	feegaサーバーに接続中です	Connecting to feega	31	
+dec/MAIN.BIN	va 0x747ea8 / off 0x447ea8	ログインサーバーに接続中です	Connecting to login server	31	
+dec/MAIN.BIN	va 0x747ec8 / off 0x447ec8	ロビーサーバーに接続中です	Connecting to lobby server	39	
+dec/MAIN.BIN	va 0x7480c8 / off 0x4480c8	  スタン  	 Standard 	15	
+dec/MAIN.BIN	va 0x7480d8 / off 0x4480d8	  ダード  	          	15	
+dec/MAIN.BIN	va 0x7480e8 / off 0x4480e8	   トイ   	   Toy    	15	
+dec/MAIN.BIN	va 0x7480f8 / off 0x4480f8	 ワールド 	  World   	15	
+dec/MAIN.BIN	va 0x748108 / off 0x448108	 カラクリ 	 Karakuri 	15	
+dec/MAIN.BIN	va 0x748118 / off 0x448118	 テイエン 	  Garden  	15	
+dec/MAIN.BIN	va 0x748128 / off 0x448128	 ワンダー 	  Wonder  	15	
+dec/MAIN.BIN	va 0x748138 / off 0x448138	  パーク  	   Park   	15	
+dec/MAIN.BIN	va 0x748148 / off 0x448148	  アイス  	   Ice    	15	
+dec/MAIN.BIN	va 0x748158 / off 0x448158	キャッスル	  Castle  	15	
+dec/MAIN.BIN	va 0x748168 / off 0x448168	 ゴースト 	  Ghost   	15	
+dec/MAIN.BIN	va 0x748178 / off 0x448178	  エリア  	   Area   	15	
+dec/MAIN.BIN	va 0x748188 / off 0x448188	  スター  	   Star   	15	
+dec/MAIN.BIN	va 0x748198 / off 0x448198	フィールド	  Field   	15	
+dec/MAIN.BIN	va 0x7481a8 / off 0x4481a8	 メルヘン 	Fairy Tale	15	
+dec/MAIN.BIN	va 0x7481b8 / off 0x4481b8	 ゴーゴー 	  Go-Go   	15	
+dec/MAIN.BIN	va 0x7481c8 / off 0x4481c8	  コース  	  Course  	15	
+dec/MAIN.BIN	va 0x7481d8 / off 0x4481d8	  ジュラ  	   Jura   	15	
+dec/MAIN.BIN	va 0x748330 / off 0x448330	予期せぬエラーが発生しました。	An unexpected error occurred.	31	
+dec/MAIN.BIN	va 0x748610 / off 0x448610	ユーザー情報を登録中です	Registering user info	31	
+dec/MAIN.BIN	va 0x748ac8 / off 0x448ac8	ＥＲＲ　Ｎｏ．：%d	ERR No.: %d	23	
+dec/MAIN.BIN	va 0x748ae0 / off 0x448ae0	”ＤＮＡＳ”認証中です	Checking "DNAS"	23	
+dec/MAIN.BIN	va 0x748ca8 / off 0x448ca8	サーバーの応答を待っています	Waiting for the server	39	
+dec/MAIN.BIN	va 0x748d18 / off 0x448d18	いただき	Mine!	15	
+dec/MAIN.BIN	va 0x748d28 / off 0x448d28	やった	Yes!	7	
+dec/MAIN.BIN	va 0x748d30 / off 0x448d30	勝った！	I won!	15	
+dec/MAIN.BIN	va 0x748d40 / off 0x448d40	やられた	Got me	15	
+dec/MAIN.BIN	va 0x748d50 / off 0x448d50	ラッキー	Lucky!	15	
+dec/MAIN.BIN	va 0x748d60 / off 0x448d60	がんばれ	Go go!	15	
+dec/MAIN.BIN	va 0x748d70 / off 0x448d70	しまった！	Oops!	15	
+dec/MAIN.BIN	va 0x748d80 / off 0x448d80	ざんねん	Too bad	15	
+dec/MAIN.BIN	va 0x748dc0 / off 0x448dc0	検索するニックネームを入力して、	Enter a nickname to search	39	
+dec/MAIN.BIN	va 0x748de8 / off 0x448de8	Ｆｉｎｄボタンを押してください。	for and press Find.	39	
+dec/MAIN.BIN	va 0x748e10 / off 0x448e10	登録されていないニックネームです。	That nickname isn't registered.	39	
+dec/MAIN.BIN	va 0x748e38 / off 0x448e38	%sさんは接続していません。	%s is not online.	31	
+dec/MAIN.BIN	va 0x748e58 / off 0x448e58	%sさんは\n%03d番ルームにいます。	%s is\nin room %03d.	31	
+dec/MAIN.BIN	va 0x748e78 / off 0x448e78	%sさんは\nロビーにいます。	%s is\nin the lobby.	31	
+dec/MAIN.BIN	va 0x748e98 / off 0x448e98	%sさんは\n%sロビーにいます。	%s is in\nthe %s lobby.	39	
+dec/MAIN.BIN	va 0x748ee8 / off 0x448ee8	検索するニックネームを入力して、	Enter a nickname to search	39	
+dec/MAIN.BIN	va 0x748f10 / off 0x448f10	Ｆｉｎｄボタンを押してください。	for and press Find.	44	
+dec/MAIN.BIN	va 0x748f50 / off 0x448f50	該当ユーザーが見つかりません。	No matching user found.	31	
+dec/MAIN.BIN	va 0x748f70 / off 0x448f70	累計Pointが0のユーザーは	Users with 0 total points	31	
+dec/MAIN.BIN	va 0x748f90 / off 0x448f90	ランキングに登録されません。	are not ranked.	31	
+dec/MAIN.BIN	va 0x749418 / off 0x449418	ボンバマンボ		15	
+dec/MAIN.BIN	va 0x749b88 / off 0x449b88	１０２４ＭＢ	1024 MB	15	
+dec/MAIN.BIN	va 0x749c20 / off 0x449c20	ううううう		15	
+dec/MAIN.BIN	va 0x749c30 / off 0x449c30	いいいいい		15	
+dec/MAIN.BIN	va 0x749c40 / off 0x449c40	あああああ		15	
+dec/MAIN.BIN	va 0x749c50 / off 0x449c50	うううう		15	
+dec/MAIN.BIN	va 0x749c60 / off 0x449c60	いいいい		15	
+dec/MAIN.BIN	va 0x749c70 / off 0x449c70	ああああ		15	
+dec/MAIN.BIN	va 0x749c80 / off 0x449c80	ううう		7	
+dec/MAIN.BIN	va 0x749c88 / off 0x449c88	いいい		7	
+dec/MAIN.BIN	va 0x749c90 / off 0x449c90	あああ		7	
+dec/MAIN.BIN	va 0x749c98 / off 0x449c98	うう		7	
+dec/MAIN.BIN	va 0x749ca0 / off 0x449ca0	いい		7	
+dec/MAIN.BIN	va 0x749ca8 / off 0x449ca8	ああ		7	
+dec/MAIN.BIN	va 0x749d68 / off 0x449d68	サーバーの応答を待っています	Waiting for the server	31	
+dec/MAIN.BIN	va 0x749f30 / off 0x449f30	エラーコード：%d - %d	Error code: %d - %d	31	
+dec/MAIN.BIN	va 0x749f90 / off 0x449f90	feegaサーバーに接続中です	Connecting to feega	39	
+dec/MAIN.BIN	va 0x74a238 / off 0x44a238	ＷＥＢサーバーに接続中です	Connecting to WEB server	31	
+dec/MAIN.BIN	va 0x74a258 / off 0x44a258	データの取得中です	Getting data	23	
+dec/MAIN.BIN	va 0x74a270 / off 0x44a270	メッセージ送信中です	Sending message	23	
+dec/MAIN.BIN	va 0x74a288 / off 0x44a288	メッセージデータの保存中です	Saving message data	31	
+dec/MAIN.BIN	va 0x74a2a8 / off 0x44a2a8	メッセージデータの取得中です	Getting message data	31	
+dec/MAIN.BIN	va 0x74a2c8 / off 0x44a2c8	メッセージ削除中です	Deleting message	23	
+dec/MAIN.BIN	va 0x74a2e0 / off 0x44a2e0	新規メッセージの取得中です	Getting new messages	31	
+dec/MAIN.BIN	va 0x74a440 / off 0x44a440	日	Sun	7	
+dec/MAIN.BIN	va 0x74a448 / off 0x44a448	月	Mon	7	
+dec/MAIN.BIN	va 0x74a450 / off 0x44a450	火	Tue	7	
+dec/MAIN.BIN	va 0x74a458 / off 0x44a458	水	Wed	7	
+dec/MAIN.BIN	va 0x74a460 / off 0x44a460	木	Thu	7	
+dec/MAIN.BIN	va 0x74a468 / off 0x44a468	金	Fri	7	
+dec/MAIN.BIN	va 0x74a470 / off 0x44a470	土	Sat	7	
+dec/MAIN.BIN	va 0x74a4b8 / off 0x44a4b8	%s/%sページ	Page %s/%s	19	
+dec/MAIN.BIN	va 0x74a6f0 / off 0x44a6f0	てすとてすと		15	

@@ -167,6 +167,19 @@ def translate_tree(staged, tsv):
         raise SystemExit("FILES.BIN translation failed")
     os.replace(tmp, files_bin)
     print("   FILES.BIN messages <- %s" % tsv)
+    # The English UI textures (menus, buttons, the manual pages), a byte patch
+    # against the stock FILES.BIN shipped next to the TSV (bombtex).
+    btp = os.path.join(os.path.dirname(tsv), "images.en.btp")
+    if os.path.isfile(btp):
+        import bombtex
+        with open(files_bin, "rb") as f:
+            data = f.read()
+        with open(btp, "rb") as f:
+            data = bombtex.apply_patch(data, f.read())
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, files_bin)
+        print("   FILES.BIN textures <- %s" % btp)
     info = os.path.join(staged, "res", "info.sys")
     if os.path.isfile(info):
         text = open(info, "rb").read().decode("utf-8")
@@ -230,6 +243,25 @@ def real_hddid(device, out_path):
 # overwrites the whole block with the target drive's served ID.
 LOADER_ID_TAG = b"SCEFIXPLACEHOLD"
 LOADER_ID_TAG_OFF = 0x20            # tag sits at block + 0x20 (the model field)
+
+
+def fill_loader_text(loader_path, tsv):
+    """English for MAIN.BIN and the DATA0 overlays, which stay sealed on the
+    drive: the loader writes this table into memory (its BOMBTEXTSLOT0001
+    slot, bombmaintext). Built from the TSVs shipped next to the message TSV.
+    A loader without the slot (an older build) is left as it is."""
+    import bombmaintext
+    d = os.path.dirname(tsv)
+    tsvs = [os.path.join(d, n) for n in ("main_direct.en.tsv", "overlays_install.en.tsv")]
+    tsvs = [t for t in tsvs if os.path.isfile(t)]
+    if not tsvs:
+        return
+    if bombmaintext.TAG not in open(loader_path, "rb").read():
+        print("   [!] %s has no text slot: MAIN.BIN text stays Japanese" % loader_path)
+        return
+    table, n = bombmaintext.build(tsvs)
+    bombmaintext.fill(loader_path, table)
+    print("   loader text table: %d strings -> %s" % (n, os.path.basename(loader_path)))
 
 
 def patch_loader_hddid(loader_path, hddid):
@@ -479,8 +511,9 @@ def main():
                          "keeping the game's own files")
     ap.add_argument("--translate", metavar="TSV",
                     help="the English translation (msg_FILES_install.en.tsv): "
-                         "FILES.BIN's messages in English and the English name "
-                         "in the browser and PSBBN's list. Without it the game "
+                         "FILES.BIN's messages and textures in English, the "
+                         "loader's MAIN.BIN/overlay text table, and the English "
+                         "name in the browser and PSBBN's list. Without it the game "
                          "and its name stay Japanese, as on the disc.")
     ap.add_argument("--check-only", action="store_true")
     ap.add_argument("--write", action="store_true")
@@ -558,6 +591,11 @@ def main():
         p = os.path.join(staged, extra)
         if extra != LOADER and os.path.isfile(p):
             patch_loader_hddid(p, hddid_blk)
+    if a.translate:
+        for name in (LOADER, "bombload.elf"):
+            p = os.path.join(staged, name)
+            if os.path.isfile(p):
+                fill_loader_text(p, a.translate)
 
     if a.update:
         attr_path = None
