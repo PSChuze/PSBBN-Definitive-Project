@@ -247,12 +247,13 @@ LOADER_ID_TAG_OFF = 0x20            # tag sits at block + 0x20 (the model field)
 
 def fill_loader_text(loader_path, tsv):
     """English for MAIN.BIN and the DATA0 overlays, which stay sealed on the
-    drive: the loader writes this table into memory (its BOMBTEXTSLOT0001
+    drive, and the US button layout (Cross confirms, main_patches.en.tsv):
+    the loader writes this table into memory (its BOMBTEXTSLOT0001
     slot, bombmaintext). Built from the TSVs shipped next to the message TSV.
     A loader without the slot (an older build) is left as it is."""
     import bombmaintext
     d = os.path.dirname(tsv)
-    tsvs = [os.path.join(d, n) for n in ("main_direct.en.tsv", "overlays_install.en.tsv")]
+    tsvs = [os.path.join(d, n) for n in ("main_direct.en.tsv", "overlays_install.en.tsv", "main_patches.en.tsv")]
     tsvs = [t for t in tsvs if os.path.isfile(t)]
     if not tsvs:
         return

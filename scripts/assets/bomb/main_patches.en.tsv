@@ -1,0 +1,3 @@
+va	guard	data	note
+0x2d0200		0200a69742480600002029314050060000404a31ff9fc6302530c9000800e0032530ca00	Circle/Cross swap routine (in the always-zero 0x1c842c..0x2ff000 range): load the raw button word, swap bits 13 (Circle) and 14 (Cross)
+0x3ad130	0200a697	80400b0c	pad update 0x3ad0f0 (the only scePadRead caller): lhu a2,2(sp) -> jal 0x2d0200

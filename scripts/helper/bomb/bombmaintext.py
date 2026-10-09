@@ -12,6 +12,9 @@ whole original string. An entry is only written while its original bytes are in 
 
 Slot in the loader: [0:16] "BOMBTEXTSLOT0001" | [16:20] u32 table bytes | [32:] table (64 KB).
 
+Besides text, a TSV whose header is `va  guard  data  note` adds raw guarded byte patches (hex,
+guard may be empty = always written), e.g. main_patches.en.tsv: the Circle/Cross swap.
+
 Usage:
     python bombmaintext.py build <out.bin> [main_direct.en.tsv overlays_install.en.tsv] [--main MAIN.BIN]
     python bombmaintext.py fill  <loader.elf|.kelf> [table.bin | TSVs...]   # in place
@@ -48,8 +51,24 @@ def unesc(s):
     return "".join(out)
 
 
+def patch_rows(path):
+    """(va, guard, data) from a patch TSV (header `va guard data note`), else None."""
+    lines = open(path, encoding="utf-8").read().replace("\r", "").split("\n")
+    if not lines or lines[0].split("\t")[:3] != ["va", "guard", "data"]:
+        return None
+    out = []
+    for l in lines[1:]:
+        f = l.split("\t")
+        if len(f) < 3 or not f[0]:
+            continue
+        out.append((int(f[0], 16), bytes.fromhex(f[1]), bytes.fromhex(f[2])))
+    return out
+
+
 def rows(tsvs):
     for path in tsvs:
+        if patch_rows(path) is not None:
+            continue
         lines = open(path, encoding="utf-8").read().split("\n")
         for l in lines[1:]:
             f = l.split("\t")
@@ -79,6 +98,14 @@ def build(tsvs, main_bin=None):
         ent += b"\0" * (-len(ent) % 4)
         out += ent
         n += 1
+    for path in tsvs:
+        for va, guard, data in patch_rows(path) or ():
+            if len(guard) > GUARD_MAX:
+                raise SystemExit("0x%x: guard over %d bytes" % (va, GUARD_MAX))
+            ent = struct.pack("<IHH", va, len(data), len(guard)) + guard + data
+            ent += b"\0" * (-len(ent) % 4)
+            out += ent
+            n += 1
     out += b"\0" * 4
     if len(out) > SLOT_SIZE - 32:
         raise SystemExit("table is %d bytes, the slot holds %d" % (len(out), SLOT_SIZE - 32))
