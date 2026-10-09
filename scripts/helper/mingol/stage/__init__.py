@@ -350,15 +350,24 @@ def build_attr(root, english):
 
 # ---- the stage step --------------------------------------------------------
 
-def stage_plain_overlays(root, tree, english):
+def stage_plain_overlays(root, tree, english, note=print):
     """Every overlay in the disc's ZZBIN/ but DNAS.BIN (already there,
     patched), as a plain file at the partition root under the upper-case
     name the loader's plain path asks for: English where the pack has it,
-    the disc's plaintext otherwise. Returns the number written."""
+    the disc's plaintext otherwise. SYSTEM.BIN also gets Circle and Cross
+    swapped (bootpatch.button_swap: X confirms, as on US releases); this
+    path is the English install only. Returns the number written."""
+    from . import bootpatch
     names = sorted(n for n in os.listdir(os.path.join(root, "ZZBIN"))
                    if n.upper().endswith(".BIN") and n.upper() != "DNAS.BIN")
     for name in names:
         data = english.get(name.upper()) or _read(root, "ZZBIN/" + name)
+        if name.upper() == "SYSTEM.BIN":
+            try:
+                data = bootpatch.button_swap(data)
+                note("--translate: Circle and Cross swapped (X confirms, O cancels)")
+            except bootpatch.PatchError as e:
+                note("--translate: buttons left as on the disc (O confirms): %s" % e)
         _write(_path(tree, name.upper()), data)
     return len(names)
 
@@ -419,7 +428,7 @@ def stage(args):
                        % len(changed or {}))
         sealed = seal(root, tree, hddid, four, english if ENGLISH_SEALS else {})
         if plain:
-            n = stage_plain_overlays(root, tree, english)
+            n = stage_plain_overlays(root, tree, english, note=m.note)
             m.note("--translate: %d overlays installed as plain files, %d of them "
                    "in English" % (n, len(english)))
         _write(_path(tree, "INSTALL.VER"), struct.pack("<I", 4))

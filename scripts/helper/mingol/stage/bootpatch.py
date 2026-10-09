@@ -166,6 +166,53 @@ def boot_elf(data, plain_overlays=False):
     return out
 
 
+# Circle/Cross swap for the English install (US convention: X confirms, O
+# cancels). SYSTEM.BIN builds the game's one pad word in 0x1f41c0, right after
+# scePadRead: ~((buf[2] << 8) | buf[3]) at 0x1f43c0..0x1f43d8, SCE layout, so
+# Circle is bit 0x20 and Cross 0x40 of buf[3]. Every menu, dialog, the soft
+# keyboard and the round read that word, so swapping the two bits there swaps
+# them everywhere. The DualShock 2 pressure bytes (the game turns pressure mode
+# on) are swapped to match: Circle +0xb, Cross +0xc of the pad record.
+#
+#   0x1f43c8  addiu v0,zero,0x41  -> j 0x291bc0 (the delay slot is the stock
+#             sll t0,t0,8); the cave redoes the addiu, exchanges bits 5 and 6
+#             of a3 (= buf[3]) and returns to the or at 0x1f43d0.
+#   0x1f4438  lh v1,(s3)          -> j 0x291be0 (delay slot: the stock
+#             addiu v0,zero,0xff); the cave swaps the two pressure bytes, runs
+#             the displaced lh in its own delay slot and returns to 0x1f4440.
+#   0x291bc0  the cave: 14 words in the zero padding at the end of SYSTEM's
+#             text (.data starts at 0x291c00; nothing refers to the padding).
+#
+# Each site is one word, so a live write is atomic (that is how it was tested,
+# over PINE, 2026-10-08). SYSTEM.BIN loads at 0x162c80 (VA = offset + 0x162c80).
+# The translation pack carries the same three edits in its "patches", so an
+# installer older than this still swaps when it applies a pack that names them;
+# button_swap() accepts a SYSTEM.BIN that already has them.
+BUTTON_SWAP_PATCHES = (
+    (0x091748, "41000224", "f0460a08"),                     # 0x1f43c8
+    (0x0917b8, "00006386", "f8460a08"),                     # 0x1f4438
+    (0x12ef40, "00" * 56,
+     "41000224420807002608270020002130"     # addiu v0,zero,0x41; srl at,a3,1
+                                              # xor at,at,a3; andi at,at,0x20
+     "2638e10040080100f4d007082638e100"     # xor a3,a3,at; sll at,at,1
+                                              # j 0x1f43d0; xor a3,a3,at
+     "0b00c1900c00c8900c00c1a00b00c8a0"     # lbu at,0xb(a2); lbu t0,0xc(a2)
+                                              # sb at,0xc(a2); sb t0,0xb(a2)
+     "10d1070800006386"),                   # j 0x1f4440; lh v1,(s3)
+)
+SYSTEM_STOCK = "45658ec858f25f9eb4b12e9b7882a05e2768c937"
+SYSTEM_SWAPPED = "683020eef9f36f9f014adc19263792434aaa169f"
+
+
+def button_swap(data):
+    """SYSTEM.BIN (stock or already English) with Circle and Cross swapped.
+    Returned as it is when the swap is already in."""
+    if all(data[off:off + len(new) // 2] == bytes.fromhex(new)
+           for off, _old, new in BUTTON_SWAP_PATCHES):
+        return data
+    return _apply("SYSTEM.BIN", data, BUTTON_SWAP_PATCHES, SYSTEM_STOCK, SYSTEM_SWAPPED)
+
+
 def dnas_overlay(data):
     """ZZBIN/DNAS.BIN with the online-gate skip."""
     return _apply("DNAS.BIN", data, DNAS_PATCHES, DNAS_STOCK, DNAS_PROVEN)
