@@ -143,14 +143,7 @@ def populate(f, lba, length, sources, write):
             polfill.add_tree(part, item.path, zone, part.root, stats, write, extra)
         else:
             size = item.stat().st_size
-            n = (size + part.zone_size - 1) // part.zone_size
-            r = part.alloc(n) if size else None
-            if write:
-                with open(item.path, "rb") as fh:
-                    data = fh.read()
-                if size:
-                    part.write_zones(r, data + b"\0" * (n * part.zone_size - size))
-                part.write_inode(zone, polfill.FILE_MODE, size, (r, n) if size else None)
+            polfill.write_file(part, item.path, zone, size, write)
             stats["files"] += 1
             stats["bytes"] += size
 

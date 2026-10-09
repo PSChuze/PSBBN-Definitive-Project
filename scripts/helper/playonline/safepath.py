@@ -40,11 +40,19 @@ def safe_join(root, path):
 
 
 def write(root, path, blob):
-    """Write `blob` at `path` under `root`, making the directories."""
+    """Write `blob` at `path` under `root`, making the directories.
+
+    `blob` is bytes, or an object with `chunks()` (`discs.DiscFile`) for a
+    file too large to hold in memory.
+    """
     dst = safe_join(root, path)
     parent = os.path.dirname(dst)
     if parent:
         os.makedirs(parent, exist_ok=True)
     with open(dst, "wb") as f:
-        f.write(blob)
+        if hasattr(blob, "chunks"):
+            for chunk in blob.chunks():
+                f.write(chunk)
+        else:
+            f.write(blob)
     return dst

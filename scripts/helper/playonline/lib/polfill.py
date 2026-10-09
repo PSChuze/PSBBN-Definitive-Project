@@ -64,6 +64,12 @@ FILE_MODE = FIO_S_IFREG | 0x1FF
 PFS_UID = 0xFFFF
 PFS_GID = 0xFFFF
 DENTRY_CHUNK = 512
+# A data[] run's zone count is a u16. At 8 KiB zones one run holds 512 MiB,
+# so a larger file (Dirge's movie containers are up to 1.4 GiB) takes
+# several consecutive runs.
+MAX_RUN = 0xFFFF
+# How much of a file is held in memory at once while it is written or checked.
+COPY_CHUNK = 64 << 20
 
 # Partition id -> [(source tree, destination subdirectory)]. The POLVIEWER
 # partition is not a straight copy: the Viewer opens pfs2:/V/polapp.pex.enc,
@@ -173,7 +179,7 @@ class Partition(object):
         self.f.write(data)
 
     def write_inode(self, zone, mode, size, content=None, uid=PFS_UID, gid=PFS_GID):
-        """content = (first_zone, count) or None for an empty object."""
+        """content = (first_zone, count), a list of them, or None for an empty object."""
         b = bytearray(META)
         struct.pack_into("<I", b, 0x004, PFS_SEGD_MAGIC)
         b[0x008:0x010] = blockinfo(zone, 0, 1)          # inode_block
@@ -181,10 +187,14 @@ class Partition(object):
         b[0x028:0x030] = blockinfo(zone, 0, 1)          # data[0] = self
         ndata, nblocks = 1, 1
         if content:
-            first, count = content
-            assert count <= 0xFFFF and ndata < PFS_INODE_MAX_BLOCKS
-            b[0x030:0x038] = blockinfo(first, 0, count)  # data[1] = content
-            ndata, nblocks = 2, 1 + count
+            runs = [content] if isinstance(content, tuple) else list(content)
+            if len(runs) >= PFS_INODE_MAX_BLOCKS:
+                raise ValueError("%d runs do not fit one inode" % len(runs))
+            for first, count in runs:                   # data[1..] = content
+                assert 0 < count <= MAX_RUN
+                b[0x028 + ndata * 8:0x030 + ndata * 8] = blockinfo(first, 0, count)
+                ndata += 1
+                nblocks += count
         off = 0x028 + PFS_INODE_MAX_BLOCKS * 8
         attr = 0xA0 if (mode & 0xF000) == FIO_S_IFDIR else 0
         struct.pack_into("<HHHH", b, off, mode, attr, uid, gid)
@@ -199,6 +209,64 @@ class Partition(object):
     def flush_bitmap(self):
         self.f.seek((self.lba + self.bm_start) * SECTOR)
         self.f.write(bytes(self.bitmap))
+
+
+def split_runs(first, n):
+    """[(zone, count)] covering `n` consecutive zones from `first`, each at most MAX_RUN."""
+    runs = []
+    while n:
+        count = min(n, MAX_RUN)
+        runs.append((first, count))
+        first += count
+        n -= count
+    return runs
+
+
+def write_file(part, src, zone, size, write=True):
+    """Allocate and write the host file `src` as the file whose inode is at `zone`.
+
+    The content is copied a chunk at a time, so a file larger than memory
+    comfortably holds is never read whole.
+    """
+    if not size:
+        if write:
+            part.write_inode(zone, FILE_MODE, 0, None)
+        return
+    n = (size + part.zone_size - 1) // part.zone_size
+    first = part.alloc(n)
+    if not write:
+        return
+    step = max(COPY_CHUNK // part.zone_size, 1)
+    with open(src, "rb") as fh:
+        at = 0
+        while at < n:
+            data = fh.read(step * part.zone_size)
+            zones = (len(data) + part.zone_size - 1) // part.zone_size
+            if not zones:
+                raise ValueError("%s ended at %d B, expected %d" % (src, at * part.zone_size, size))
+            part.write_zones(first + at, data + b"\0" * (zones * part.zone_size - len(data)))
+            at += zones
+    part.write_inode(zone, FILE_MODE, size, split_runs(first, n))
+
+
+def content_matches(part, ino, src):
+    """True when the file at inode `ino` holds exactly the bytes of host file `src`."""
+    left = ino["size"]
+    with open(src, "rb") as fh:
+        for number, sub, count in ino["runs_full"]:
+            base = part.zone_sector(number, sub) * SECTOR
+            run_bytes = min(count * part.zone_size, left)
+            done = 0
+            while done < run_bytes:
+                k = min(COPY_CHUNK, run_bytes - done)
+                part.f.seek(base + done)
+                if part.f.read(k) != fh.read(k):
+                    return False
+                done += k
+            left -= run_bytes
+            if not left:
+                break
+        return left == 0 and fh.read(1) == b""
 
 
 def add_tree(part, src, inode_zone, parent_zone, stats, write=True, extra=None):
@@ -251,16 +319,7 @@ def add_tree(part, src, inode_zone, parent_zone, stats, write=True, extra=None):
             add_tree(part, e.path, zone, inode_zone, stats, write)
         else:
             size = e.stat().st_size
-            if size:
-                n = (size + part.zone_size - 1) // part.zone_size
-                run = part.alloc(n)
-                if write:
-                    with open(e.path, "rb") as fh:
-                        data = fh.read()
-                    part.write_zones(run, data + b"\0" * (n * part.zone_size - size))
-                    part.write_inode(zone, FILE_MODE, size, (run, n))
-            elif write:
-                part.write_inode(zone, FILE_MODE, 0, None)
+            write_file(part, e.path, zone, size, write)
             stats["files"] += 1
             stats["bytes"] += size
 
@@ -368,14 +427,13 @@ def verify_tree(part, zone, src, errs, counts, path="/", ignore=(), sub=0):
                         path + name.decode() + "/", sub=csub)
         else:
             cino = read_inode(part, czone, csub)
-            with open(e.path, "rb") as fh:
-                want_bytes = fh.read()
+            want_size = e.stat().st_size
             if not cino["ok"]:
                 errs.append("%s%s: inode checksum" % (path, name.decode()))
-            elif cino["size"] != len(want_bytes):
+            elif cino["size"] != want_size:
                 errs.append("%s%s: size %d != %d" % (path, name.decode(),
-                                                     cino["size"], len(want_bytes)))
-            elif read_content(part, cino) != want_bytes:
+                                                     cino["size"], want_size))
+            elif not content_matches(part, cino, e.path):
                 errs.append("%s%s: content mismatch" % (path, name.decode()))
             counts["files"] += 1
     counts["dirs"] += 1
@@ -475,14 +533,7 @@ def main():
                     add_tree(part, item.path, zone, part.root, stats, args.write)
                 else:
                     size = item.stat().st_size
-                    n = (size + part.zone_size - 1) // part.zone_size
-                    r = part.alloc(n) if size else None
-                    if args.write:
-                        with open(item.path, "rb") as fh:
-                            data = fh.read()
-                        if size:
-                            part.write_zones(r, data + b"\0" * (n * part.zone_size - size))
-                        part.write_inode(zone, FILE_MODE, size, (r, n) if size else None)
+                    write_file(part, item.path, zone, size, args.write)
                     stats["files"] += 1
                     stats["bytes"] += size
 

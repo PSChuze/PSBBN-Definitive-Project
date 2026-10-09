@@ -166,6 +166,65 @@ def locate(image, path):
     return None
 
 
+def list_dir(image, path):
+    """[(name, lba, size, is_dir)] for one directory, by `/`-separated path, or None."""
+    parts = [p for p in path.replace("\\", "/").split("/") if p]
+    pvd = image.read_sector(PVD_SECTOR)
+    if pvd[1:6] != b"CD001":
+        raise NotADisc("%s has no ISO9660 volume descriptor" % image.path)
+    lba = struct.unpack_from("<I", pvd, 158)[0]
+    size = struct.unpack_from("<I", pvd, 166)[0]
+    for want in parts:
+        sectors = (size + USER_DATA - 1) // USER_DATA
+        for name, l, s, is_dir in _dir_records(image.read_sector(lba, sectors)):
+            if is_dir and name.upper() == want.upper():
+                lba, size = l, s
+                break
+        else:
+            return None
+    sectors = (size + USER_DATA - 1) // USER_DATA
+    return [r for r in _dir_records(image.read_sector(lba, sectors))
+            if r[0] not in (".", "..")]
+
+
+class DiscFile(object):
+    """A file on the disc too large to hold in memory, read a chunk at a time.
+
+    A container reader yields one of these in place of the bytes of a file
+    that is copied verbatim, such as Dirge's movie containers.
+    """
+    CHUNK_SECTORS = 16384                    # 32 MiB
+
+    def __init__(self, image, lba, size):
+        self.image, self.lba, self.size = image, lba, size
+
+    def __len__(self):
+        return self.size
+
+    def chunks(self):
+        left = self.size
+        lba = self.lba
+        with open(self.image.path, "rb") as f:
+            while left > 0:
+                n = min(self.CHUNK_SECTORS, (left + USER_DATA - 1) // USER_DATA)
+                if self.image.sector_size == USER_DATA:
+                    f.seek(lba * USER_DATA)
+                    data = f.read(n * USER_DATA)
+                else:
+                    parts = []
+                    for i in range(n):
+                        f.seek((lba + i) * self.image.sector_size + self.image.offset)
+                        parts.append(f.read(USER_DATA))
+                    data = b"".join(parts)
+                data = data[:left]
+                if not data:
+                    raise ValueError("%s ends inside a file at sector %d"
+                                     % (self.image.path, lba))
+                yield data
+                left -= len(data)
+                lba += n
+
+
 def read_path(image, path):
     """The bytes of one file in the ISO9660 tree, or None. See `locate`.
 

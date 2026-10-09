@@ -200,7 +200,11 @@ def verify(disc, title, out_dir):
             missing += 1
             continue
         with open(dst, "rb") as f:
-            same += 1 if f.read() == data else 0
+            if hasattr(data, "chunks"):
+                ok = all(f.read(len(c)) == c for c in data.chunks()) and not f.read(1)
+            else:
+                ok = f.read() == data
+            same += 1 if ok else 0
         if os.path.getsize(dst) != len(data):
             differ += 1
     return same, differ, missing

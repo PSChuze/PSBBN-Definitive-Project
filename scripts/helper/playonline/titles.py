@@ -246,8 +246,9 @@ _add("fmo-jp", "fmo-jp", "PP.SLPM-65981.0004.FMO", se_mib=1024, subs_mib=8192,
      status="tested", container=FMO_IMAGE, layout=[("", "")],
      note="staged from the disc's DVDIMAGE.DAT (fmodata.py)")
 
-# Dirge. The disc's own container (dirgedata.py) yields 1.71 GiB, so the tree
-# takes a 4096 MiB main where Square Enix used 1024 plus eight subs. Its
+# Dirge. The disc's own container (dirgedata.py) yields 1.71 GiB and the two
+# movie containers beside it another 2.39 GiB (JP) or 2.34 GiB (US), so the
+# tree takes an 8192 MiB main where Square Enix used 1024 plus eight subs. Its
 # browser entry is assembled from the disc's install/ pieces (icon.sys and
 # the two kel_hdd icons, which match the sizes in Square Enix's area), behind
 # a disc-boot block: HDD-OSD launches Dirge from its disc and the Viewer
@@ -255,7 +256,7 @@ _add("fmo-jp", "fmo-jp", "PP.SLPM-65981.0004.FMO", se_mib=1024, subs_mib=8192,
 # are not on the disc and are written by their installer or the patch
 # service, notably memown.pol, which the title waits for.
 _add("dirge-jp", "dirge-jp", "PP.SLPM-66271.0010.CERBERUS", se_mib=1024,
-     subs_mib=8192, need_mib=4096, needs_subs=True, title0="DIRGE of CERBERUS",
+     subs_mib=8192, need_mib=8192, needs_subs=True, title0="DIRGE of CERBERUS",
      encoding="utf-8", status="installs", container=DIRGE_KEL, layout=[("", "")],
      boot="DISC",
      note="installs from the disc's KEL container; launch waits on "

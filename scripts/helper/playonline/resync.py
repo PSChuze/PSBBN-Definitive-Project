@@ -116,9 +116,8 @@ def plan(image, title, src_dir):
             if ino["size"] != os.path.getsize(host):
                 changed.append((path, "size %d -> %d" % (ino["size"], os.path.getsize(host))))
                 continue
-            with open(host, "rb") as h:
-                if polfill.read_content(part, ino) != h.read():
-                    changed.append((path, "content"))
+            if not polfill.content_matches(part, ino, host):
+                changed.append((path, "content"))
     new_dirs = sorted(d for d in want_dirs if d not in have_dirs)
     report = ["%d file(s) and %d dir(s) staged, %d file(s) on the partition"
               % (len(want_files), len(want_dirs), len(have_files))]

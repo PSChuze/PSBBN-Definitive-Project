@@ -45,6 +45,14 @@ newer `file.txt` and `filelist.bin`, two hash-named download blobs and
 synthesises `config.sys`, the one root file the title needs and the disc
 does not name, from the disc's `config.hdd`.
 
+The pre-rendered movies are in neither KEL.DAT nor the inventory. They are
+two more containers beside KEL.DAT in `E419C51B/` (`D8F7BC60.45` and
+`7570F45E.F7` on the Japanese disc, `23CFDD41.F7` and `B08ED50C.AA` on the
+US one), which Square Enix's installer copies to the partition root under
+lower-case names. Without them the title skips every movie, starting with the
+opening, and says nothing. They are copied verbatim, as `discs.DiscFile`
+objects rather than bytes, because each is over 1 GB.
+
     python3 -m playonline.dirgedata DISC --list
     python3 -m playonline.dirgedata DISC --out DIR
 """
@@ -60,6 +68,11 @@ from . import discs
 
 KEL = "E419C51B/KEL.DAT"
 FILELIST = "FILELIST.BIN"
+KEL_DIR = "E419C51B"
+# The files in KEL_DIR that are not installed as they are: KEL.DAT is
+# unpacked, HASH.INF lists the disc's own checksums and IOPRP.IMG is not in
+# Square Enix's installed partition.
+NOT_COPIED = ("KEL.DAT", "HASH.INF", "IOPRP.IMG")
 
 # base64(MD5) under PlayOnline's alphabet, the same hash FFXI's manifest
 # uses. This repeats ffxidata.sehash so that each reader stands alone.
@@ -157,8 +170,18 @@ class Reader(object):
             self._load_inventory()
         return [q for sz, q in self.inventory.get(polhash(data), []) if sz == len(data)]
 
+    def containers(self):
+        """[(partition name, lba, size)] for the movie containers beside KEL.DAT."""
+        out = []
+        for name, lba, size, is_dir in discs.list_dir(self.image, KEL_DIR) or []:
+            if not is_dir and name.upper() not in NOT_COPIED:
+                out.append((name.lower(), lba, size))
+        return out
+
     def tree(self):
         """Yield (path, bytes) for every file the disc carries, resolving names.
+
+        The movie containers come as `discs.DiscFile` objects, not bytes.
 
         `config.sys` is synthesised at the end from the disc's `config.hdd`
         when the inventory names one, else from the 33 bytes Square Enix's
@@ -180,6 +203,8 @@ class Reader(object):
                     seen_config_hdd = data
                 yield q, data
         self.unresolved = unresolved
+        for name, lba, size in self.containers():
+            yield name, discs.DiscFile(self.image, lba, size)
         yield "filelist.bin", discs.read_path(self.image, FILELIST)
         if seen_config_hdd is not None:
             cfg = seen_config_hdd.replace(b"\r\n", b"\n")
