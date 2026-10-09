@@ -5,3 +5,5 @@
 # Game data the console reads byte for byte (BOMBREG.PEM must stay CRLF).
 scripts/assets/bomb/BOMBREG.PEM -text
 scripts/assets/mingol/ROOT_ED.PEM -text
+# PSBBN's Feega screens, installed onto __linux.4 byte for byte (Sony's mixed CRLF/LF kept).
+scripts/assets/feega/** -text
