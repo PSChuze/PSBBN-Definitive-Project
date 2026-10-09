@@ -195,13 +195,27 @@ nobu_accessflag() {
 # NOBU_TRACE=1 still arms the record with the silent loader. Read the sector
 # back after a boot with work/loader/trace-read.sh + trace-decode.py.
 source "${HELPER_DIR}/debugtext.sh"
-NOBU_LOADER_VERBOSE="${NOBU_LOADER_VERBOSE_OVERRIDE:-${SCRIPTS_DIR}/assets/nobunaga/polbbnexec-nobu-verbose.kelf}"
 
-# Swaps NOBU_LOADER for its verbose twin on Y (not when NOBU_LOADER_OVERRIDE
-# names a loader of its own).
+# Picks the loader pair for the install's language, then swaps NOBU_LOADER for
+# its verbose twin on Y; debugtext_pick then takes the console region's copy.
+# English installs get the input-patch loader (polbbnexec-inputpatch.kelf, its
+# verbose twin polbbnexec-nobu-verbose.kelf); Japanese installs get the plain
+# loader (polbbnexec-nobu-ja.kelf, twin polbbnexec-nobu-ja-verbose.kelf).
+# NOBU_LOADER_OVERRIDE names a loader of its own and is installed as is;
+# NOBU_LOADER_VERBOSE_OVERRIDE replaces the verbose twin whatever the language.
+#   nobu_debugtext english|japanese
 nobu_debugtext() {
+    local assets="${SCRIPTS_DIR}/assets/nobunaga"
     debugtext_ask
     [[ -n "${NOBU_LOADER_OVERRIDE}" ]] && return 0
+    if [[ "$1" == english ]]; then
+        NOBU_LOADER="${assets}/polbbnexec-inputpatch.kelf"
+        NOBU_LOADER_VERBOSE="${NOBU_LOADER_VERBOSE_OVERRIDE:-${assets}/polbbnexec-nobu-verbose.kelf}"
+    else
+        NOBU_LOADER="${assets}/polbbnexec-nobu-ja.kelf"
+        NOBU_LOADER_VERBOSE="${NOBU_LOADER_VERBOSE_OVERRIDE:-${assets}/polbbnexec-nobu-ja-verbose.kelf}"
+    fi
+    echo "loader for a $1 install: ${NOBU_LOADER}" >> "${LOG_FILE}"
     debugtext_pick "${NOBU_LOADER}" "${NOBU_LOADER_VERBOSE}"
     NOBU_LOADER="${DEBUG_LOADER}"
 }
@@ -449,15 +463,20 @@ NOBU_INSTALL_PY="${NOBU_TOOLS}/nobuinstall.py"
 # never passed that gate on hardware), silent, with the v4 trace slot left at 0
 # (off; NOBU_TRACE=1 arms it, see nobu_trace_arm). Ships in the toolkit assets;
 # override with $NOBU_LOADER_OVERRIDE.
-# NO English text-input hook (2026-10-08): the file keeps its old name, but its
-# content is the console-proven no-hook build (b6da0082, boots #54/#55; since
-# 2026-10-09 the same build with poltrace v4.1 and no trace check before the
-# IOP reboot, 6d29f4fe). The
-# EE VBlank hook build stopped the boot on the console right at ExecPS2 (boot
-# #56); it is kept as polbbnexec-inputpatch.kelf.hook-unproven (edb519ed) and
-# is NOT used. Until a hook build is hardware-proven, text input on a console
-# install starts in Japanese (hiragana), as on the retail game. The PCSX2 path
-# (HippaulInstaller) keeps the hook, which works there.
+# The loader follows the install's language (nobu_debugtext, on the fresh
+# install and the update alike):
+#   English   polbbnexec-inputpatch.kelf, the console-proven d3x build (boot
+#             #58, 2026-10-09): after the game's program unpacks, the loader's
+#             IOP shim writes the English input patch into EE memory by SIF DMA
+#             (no EE-resident hook): Cross confirms and Circle cancels, the
+#             name fields take letters, and every keyboard opens half-width.
+#             The translation pack's swapped button prompts assume this loader.
+#   Japanese  polbbnexec-nobu-ja.kelf, the plain no-hook build (6d29f4fe,
+#             boots #54/#55): text input and buttons as on the retail game.
+# The EE VBlank hook build stopped the boot on the console right at ExecPS2
+# (boot #56); it is kept as polbbnexec-inputpatch.kelf.hook-unproven (edb519ed)
+# and is NOT used. The PCSX2 path (HippaulInstaller) keeps the VBlank hook,
+# which works there, with the same patch table.
 NOBU_LOADER="${NOBU_LOADER_OVERRIDE:-${SCRIPTS_DIR}/assets/nobunaga/polbbnexec-inputpatch.kelf}"
 NOBU_INSTALLED_NOW=0
 
@@ -553,7 +572,11 @@ if [[ -n "${NOBU_DISC_OK}" ]]; then
                             ;;
                     esac
                 fi
-                nobu_debugtext
+                if [[ "${TR_ARGS[0]}" != --no-translation ]]; then
+                    nobu_debugtext english
+                else
+                    nobu_debugtext japanese
+                fi
                 LOADER_FLAG=""
                 if [[ -f "${NOBU_LOADER}" ]]; then
                     LOADER_FLAG="--loader ${NOBU_LOADER}"

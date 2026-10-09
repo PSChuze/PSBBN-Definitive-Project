@@ -39,7 +39,10 @@
 #                                   in the variant for the console's region
 #                                   (region.sh: region_pick; asks the console
 #                                   region once per run when the drive does
-#                                   not say it)
+#                                   not say it). Nobunaga passes the pair
+#                                   for the install's language (English: the
+#                                   input-patch loader, Japanese: the -ja
+#                                   plain loader; nobu_debugtext)
 #   debugtext_trace_arm DEVICE PARTITION MOUNT TAG [LOADER]
 #                                   puts trace.bin, sets DEBUG_TRACE_LBA; with
 #                                   LOADER (the staged dnasload.elf) also sets

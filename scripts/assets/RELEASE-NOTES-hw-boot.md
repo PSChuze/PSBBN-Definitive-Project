@@ -18,6 +18,12 @@ game does not start.
   ATA driver as pop'n (the "DRIVERS=4" build). The old one checked for a
   genuine Sony hard drive and never got past that check on a console; the new
   one works on any drive PSBBN works on, including SSDs and non-Sony drives.
+- **Nobunaga in English: US buttons and English typing.** An English install
+  now gets a loader that adjusts the game's controls as it starts (proven on
+  a real console): Cross confirms and Circle cancels, as on US games, every
+  on-screen keyboard opens in half-width (English) mode, and the name fields
+  take letters, up to 8 per part (family and given name). A Japanese install
+  gets the plain loader and plays exactly like the retail game.
 - **Bomberman: console ID split.** The Bomberman loader (scefix 1.2) now gives
   the game's DNAS check the console ID its boot record was made for, and gives
   your network settings your console's real ID, so both work. The browser
@@ -118,12 +124,6 @@ text.
   European and other consoles are signed the same way as the PlayOnline
   loaders that start on those consoles, but no title has been started from
   them on a console yet. Reports from US and European testers are the test.
-
-- **Nobunaga text input stays Japanese by default.** The game's text is in
-  English with the translation, but typing still starts in Japanese input
-  mode. The fix for this changes the game while it runs, and it stopped the
-  game from starting on a real console, so it is held back until it is
-  reworked.
 - **Bomberman web pages are Japanese.** The game's messages are in English with
   the translation, but the pages it shows from its web server, and the menus
   that are drawn as pictures, stay Japanese.

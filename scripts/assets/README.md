@@ -43,10 +43,20 @@ consoles. Tester notes: RELEASE-NOTES-hw-boot.md.
 
 | title | silent (N) | debug (Y) |
 |---|---|---|
-| Nobunaga | `nobunaga/polbbnexec-inputpatch.kelf` (DRIVERS=4, **no input hook** since 2026-10-08 despite the name: 6d29f4fe; the hook build is `polbbnexec-inputpatch.kelf.hook-unproven`, it stopped boot #56 on the console) | `nobunaga/polbbnexec-nobu-verbose.kelf` (FORK_VERBOSE, DRIVERS=4, no input hook) |
+| Nobunaga, English install | `nobunaga/polbbnexec-inputpatch.kelf` (DRIVERS=4, d3x: IOP-side input patch, console-proven boot #58) | `nobunaga/polbbnexec-nobu-verbose.kelf` (FORK_VERBOSE, the same d3x build) |
+| Nobunaga, Japanese install | `nobunaga/polbbnexec-nobu-ja.kelf` (DRIVERS=4, plain loader, no input patch) | `nobunaga/polbbnexec-nobu-ja-verbose.kelf` (FORK_VERBOSE, no input patch) |
 | pop'n | `popn/polbbnexec-popn.kelf` (poltrace v4) | `popn/polbbnexec-popn-verbose.kelf` (FORK_VERBOSE, poltrace v4: the record goes wherever trace.bin lands) |
 | Minna | `mingol/polbbnexec-mingol.kelf` | `mingol/polbbnexec-mingol-verbose.kelf` (FORK_VERBOSE, ROM SYSMEM splice off) |
 | Bomberman | `bomb/bootfiles/bombload.{elf,kelf}` | `bomb/bootfiles-debug/bombload.{elf,kelf}` (SCREEN build, 5 s hold; no record slot) |
+
+Nobunaga's loader follows the install's language. The English loader applies
+runtime patches over IOP DMA after the program unpacks: its IOP shim
+(atadpatch, `IOP_INPUT_PATCH=1`) writes the input patch table into EE memory by
+SIF DMA once the game's program is in place, with no EE-resident hook (Cross
+confirms and Circle cancels, letters in the name fields, every keyboard opens
+half-width). Japanese installs get the plain loader, which patches nothing.
+The EE VBlank hook build (`polbbnexec-inputpatch.kelf.hook-unproven`) stopped
+boot #56 on the console and is not used.
 
 Bomberman's debug pair keeps the on-partition name `bombload.kelf` (the name
 the browser entry boots): the installer stages `bootfiles/` with the
@@ -81,8 +91,10 @@ stages its boot files in its work folder with only the chosen copy, named
 
 | loader | jp | us | all |
 |---|---|---|---|
-| `nobunaga/polbbnexec-inputpatch` | 6d29f4fe | bff197a5 | 0c95656a |
-| `nobunaga/polbbnexec-nobu-verbose` | f1e4ff1e | 1d68a7c5 | f247c8b1 |
+| `nobunaga/polbbnexec-inputpatch` | d29caf31 | 36e92551 | 3dcc117e |
+| `nobunaga/polbbnexec-nobu-verbose` | 36ba9afc | d9634b0d | 39af4737 |
+| `nobunaga/polbbnexec-nobu-ja` | 6d29f4fe | bff197a5 | 0c95656a |
+| `nobunaga/polbbnexec-nobu-ja-verbose` | f1e4ff1e | 1d68a7c5 | f247c8b1 |
 | `popn/polbbnexec-popn` | 49fa2d6e | cf89d70e | b4a073b7 |
 | `popn/polbbnexec-popn-verbose` | f83fd58e | 497a8e05 | 1a157f01 |
 | `mingol/polbbnexec-mingol` | 5895fb0d | 535f42d9 | 15cd2733 |

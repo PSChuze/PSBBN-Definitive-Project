@@ -45,6 +45,8 @@ import polkelf  # noqa: E402
 LOADERS = [
     "nobunaga/polbbnexec-inputpatch.kelf",
     "nobunaga/polbbnexec-nobu-verbose.kelf",
+    "nobunaga/polbbnexec-nobu-ja.kelf",
+    "nobunaga/polbbnexec-nobu-ja-verbose.kelf",
     "popn/polbbnexec-popn.kelf",
     "popn/polbbnexec-popn-verbose.kelf",
     "mingol/polbbnexec-mingol.kelf",

@@ -22,6 +22,12 @@ Minna, the ROM SYSMEM splice state.
 
 Exit status 1 when any rule fails (PLAN-hw-boot-all-titles section 2):
   - Nobunaga, pop'n: not DRIVERS=4 (ps2sdk atad, no genuine-drive gate)
+  - Nobunaga, by language (Nobunaga-Installer.sh nobu_debugtext): the English
+    pair (polbbnexec-inputpatch, polbbnexec-nobu-verbose) must carry the IOP
+    input patch (the O/X swap and name-field quadwords its atadpatch writes
+    by SIF DMA), the Japanese pair (polbbnexec-nobu-ja, -ja-verbose) must
+    carry neither; each of the four must ship (with its -us and -all copies,
+    checked by the region rule below)
   - Bomberman: scefix older than 1.2, or no sceCdRI spoof
   - Minna: the BIOS-ROM SYSMEM splice enabled (it hung on real hardware on
     2026-10-08). Detected by the "splice DISABLED" string: a ROM_SYSMEM=0
@@ -69,6 +75,16 @@ REGIONS = {"jp": 0x01, "us": 0x02, "all": 0xFF}
 ZONE_NAMES = {0x01: "jp", 0x02: "us", 0xFF: "all"}
 SPLICE_OFF = b"splice DISABLED"
 SPLICE_ON = b"walking ROMDIR"
+# Nobunaga loaders by install language, and two quadwords of the IOP input
+# patch table (work/loader/src/inputpatch_qw.h) that only an input-patch build
+# carries: the pad thread's O/X swap (EE 0x17d040) and the name-field opening
+# on the A tab (EE 0x35d9e0).
+NOBU_ENGLISH = ("polbbnexec-inputpatch", "polbbnexec-nobu-verbose")
+NOBU_JAPANESE = ("polbbnexec-nobu-ja", "polbbnexec-nobu-ja-verbose")
+NOBU_INPUT_QW = {
+    "O/X swap": struct.pack("<4I", 0x00822026, 0x30840020, 0x00441026, 0x00042040),
+    "name field on A": struct.pack("<4I", 0x10000005, 0x36520003, 0x24110000, 0x24100087),
+}
 
 
 def assets():
@@ -197,6 +213,23 @@ def check(title, path, a, blob):
 
     if title in ("nobunaga", "popn") and drv != "4":
         fails.append("DRIVERS=%s, must be 4 (ps2sdk atad; gate 4)" % drv)
+    if title == "nobunaga":
+        _r, jp = region_of(path)
+        name = os.path.splitext(os.path.basename(jp))[0]
+        have = [k for k, q in NOBU_INPUT_QW.items() if blob.count(q) == 1]
+        if name in NOBU_ENGLISH:
+            row["input"] = "English (input patch)"
+            missing = [k for k in NOBU_INPUT_QW if k not in have]
+            if missing:
+                fails.append("English loader without the input patch (%s missing)"
+                             % ", ".join(missing))
+        elif name in NOBU_JAPANESE:
+            row["input"] = "Japanese (plain)"
+            if have:
+                fails.append("Japanese loader carries the input patch (%s)" % ", ".join(have))
+        else:
+            fails.append("not a Nobunaga loader the installer picks (%s)" % ", ".join(
+                NOBU_ENGLISH + NOBU_JAPANESE))
     if title == "bomb":
         if not scev or tuple(int(x) for x in scev.split(".")) < (1, 2):
             fails.append("scefix %s, must be >= 1.2 (console-ID split)" % (scev or "missing"))
@@ -233,6 +266,12 @@ def main(argv=None):
     keys = first([a.keys] + KEYS_CANDIDATES, "keys")
     rows, bad = [], 0
     siblings = {}
+    for name in NOBU_ENGLISH + NOBU_JAPANESE:
+        if not os.path.isfile(os.path.join(ASSETS, "nobunaga", name + ".kelf")):
+            print("FAIL nobunaga missing nobunaga/%s.kelf (Nobunaga-Installer.sh picks it)"
+                  % name)
+            if "nobunaga" not in a.report_only:
+                bad += 1
     for title, path in assets():
         blob = open(path, "rb").read()
         siblings[path] = blob
@@ -254,7 +293,8 @@ def main(argv=None):
         print("       %s %s | DRIVERS %s | IOPRP %s | spoof %s | scefix %s | trace %s%s"
               % (row["form"], row["family"], row["drivers"], row["ioprp"], row["spoof"],
                  row["scefix"], row["trace"],
-                 " | rom sysmem %s" % row["rom_sysmem"] if "rom_sysmem" in row else ""))
+                 " | rom sysmem %s" % row["rom_sysmem"] if "rom_sysmem" in row else "")
+              + (" | %s" % row["input"] if "input" in row else ""))
         for f in fails:
             print("       - %s" % f)
         if fails and title not in a.report_only:
