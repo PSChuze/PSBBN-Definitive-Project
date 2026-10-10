@@ -300,26 +300,16 @@ option_five() {
     rc=$?
 
     if [ $rc -ne 0 ]; then
-        # Could not recover it: ask the user for the console i.Link.
-        echo "${UI_TEXT[HDD_GAMES_FIXNET_PROMPT]}"
+        # No readable config on the drive. Don't ask for the raw i.Link (no one
+        # can produce it): tell them to create a config on the console once, then
+        # re-run. That also re-keys a drive moved from another PlayStation 2.
         echo
-        read -rp "" ilink </dev/tty
-        ilink=$(echo "$ilink" | tr -d ' :-' | tr 'A-F' 'a-f')
-        if [[ ! "$ilink" =~ ^[0-9a-f]{16}$ ]]; then
-            error_msg "${UI_TEXT[HDD_GAMES_FIXNET_BADID]}"
-            clean_up
-            return 1
-        fi
+        center_text "${UI_TEXT[HDD_GAMES_FIXNET_NOCFG]}"
+        clean_up
         echo
-        center_text "${UI_TEXT[HDD_GAMES_FIXNET_USING]} $ilink"
-        echo
-        if python3 "$FIX_TOOL" --device "$DEVICE" --pfsshell "$PFS_SHELL" --work "$WORK" --ilink "$ilink" --apply >>"${LOG_FILE}" 2>&1; then
-            center_title "[✓] ${UI_TEXT[HDD_GAMES_FIXNET_DONE]}"
-        else
-            error_msg "${UI_TEXT[HDD_GAMES_FIXNET_FAIL]}"
-            clean_up
-            return 1
-        fi
+        center_text "${UI_TEXT[CONTINUE]}"
+        read -n 1 -s -r -p "" </dev/tty
+        return 0
     else
         # Recovered it: confirm, then write the DHCP config for that console.
         center_text "${UI_TEXT[HDD_GAMES_FIXNET_FOUND]} $ilink"

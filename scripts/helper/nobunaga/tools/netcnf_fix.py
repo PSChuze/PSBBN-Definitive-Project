@@ -32,11 +32,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import netcnf  # noqa: E402  (sibling module, same directory)
 
 
+USE_SUDO = True  # a real /dev/sdX is a block device: pfsshell needs root for it
+
+
 def run_pfsshell(pfsshell, cwd, lines):
     """Feed one command script to PFS Shell; raise on its error marker."""
     script = "\n".join(lines + ["exit", ""])
+    cmd = (["sudo"] if USE_SUDO else []) + [pfsshell]
     proc = subprocess.run(
-        [pfsshell], input=script, text=True, cwd=cwd,
+        cmd, input=script, text=True, cwd=cwd,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out = proc.stdout or ""
     if "Exit code is" in out or proc.returncode != 0:
@@ -68,7 +72,13 @@ def main():
     ap.add_argument("--work", required=True, help="scratch dir (must be space-free)")
     ap.add_argument("--ilink", help="console i.Link (16 hex digits); skips recovery")
     ap.add_argument("--apply", action="store_true", help="actually write to the drive")
+    ap.add_argument("--no-sudo", action="store_true",
+                    help="do not run PFS Shell under sudo (for testing on an image file)")
     a = ap.parse_args()
+
+    global USE_SUDO
+    if a.no_sudo:
+        USE_SUDO = False
 
     if " " in a.work:
         raise SystemExit("--work must be a space-free path (PFS Shell splits on whitespace)")

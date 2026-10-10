@@ -339,6 +339,7 @@ HDD_GAMES_FIXNET_USING=Using i.Link:
 HDD_GAMES_FIXNET_BADID=That is not a valid i.Link (expected 16 hex digits).
 HDD_GAMES_FIXNET_DONE=Network settings updated. Restart the game to reconnect.
 HDD_GAMES_FIXNET_FAIL=Could not update the network settings. See the log for details.
+HDD_GAMES_FIXNET_NOCFG=No network config on the drive. On the PS2, run Network Configuration once, then run this again.
 MEDIA_LOCATION_1=Carpeta actual de multimedia:
 MEDIA_LOCATION_2=Introduce la nueva ruta para la carpeta de multimedia:
 MEDIA_LOCATION_3=Ruta inválida. Por favor, inténtalo de nuevo.
