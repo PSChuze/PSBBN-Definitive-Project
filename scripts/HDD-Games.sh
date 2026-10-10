@@ -275,13 +275,12 @@ option_four() {
     bash "${SCRIPTS_DIR}/Popn-Installer.sh" "$LANG_FILE" "${path_arg:-}" "$DEVICE"
 }
 
-# Fix network settings: re-key the console's netcnf000.dat to a DHCP config so
-# the games stop reporting "connected to another PlayStation 2". The console's
-# i.Link is recovered from the config it already wrote; if that is not possible
-# the user is asked for it.
+# Fix network settings: write a DHCP netcnf000.dat keyed to the psbb spoof the
+# loaders serve to NETCNF on every console, so the games stop reporting
+# "connected to another PlayStation 2 / redo network settings". Console-agnostic
+# (no per-console i.Link); needs the matching loader (scefix >= 1.4).
 option_five() {
     local WORK="${SCRIPTS_DIR}/tmp/ncfix"
-    local ilink rc
 
     HDD_GAMES_SPLASH
     center_title "${UI_TEXT[HDD_GAMES_FIXNET_TITLE]}"
@@ -292,47 +291,26 @@ option_five() {
         return 1
     fi
 
+    center_text "${UI_TEXT[HDD_GAMES_FIXNET_INFO]}"
+    echo
+    center_text "${UI_TEXT[CONTINUE_PROMPT]}"
+    echo
+    read -n 1 -s -r -p "" key </dev/tty
+    echo
+    case "$key" in
+        [yY]) ;;
+        *) return 0 ;;
+    esac
+
     sudo rm -rf "$WORK"   # prior runs leave root-owned files (pfsshell runs under sudo)
     mkdir -p "$WORK"
 
-    # Pass 1: try to recover the console i.Link from the existing config (no write).
-    ilink=$(python3 "$FIX_TOOL" --device "$DEVICE" --pfsshell "$PFS_SHELL" --work "$WORK" 2>>"${LOG_FILE}")
-    rc=$?
-
-    if [ $rc -ne 0 ]; then
-        # No readable config on the drive. Don't ask for the raw i.Link (no one
-        # can produce it): tell them to create a config on the console once, then
-        # re-run. That also re-keys a drive moved from another PlayStation 2.
-        echo
-        center_text "${UI_TEXT[HDD_GAMES_FIXNET_NOCFG]}"
-        clean_up
-        echo
-        center_text "${UI_TEXT[CONTINUE]}"
-        read -n 1 -s -r -p "" </dev/tty
-        return 0
+    if python3 "$FIX_TOOL" --device "$DEVICE" --pfsshell "$PFS_SHELL" --work "$WORK" --apply >>"${LOG_FILE}" 2>&1; then
+        center_title "[✓] ${UI_TEXT[HDD_GAMES_FIXNET_DONE]}"
     else
-        # Recovered it: confirm, then write the DHCP config for that console.
-        center_text "${UI_TEXT[HDD_GAMES_FIXNET_FOUND]} $ilink"
-        echo
-        center_text "${UI_TEXT[CONTINUE_PROMPT]}"
-        echo
-        read -n 1 -s -r -p "" key </dev/tty
-        echo
-        case "$key" in
-            [yY])
-                if python3 "$FIX_TOOL" --device "$DEVICE" --pfsshell "$PFS_SHELL" --work "$WORK" --apply >>"${LOG_FILE}" 2>&1; then
-                    center_title "[✓] ${UI_TEXT[HDD_GAMES_FIXNET_DONE]}"
-                else
-                    error_msg "${UI_TEXT[HDD_GAMES_FIXNET_FAIL]}"
-                    clean_up
-                    return 1
-                fi
-                ;;
-            *)
-                clean_up
-                return 0
-                ;;
-        esac
+        error_msg "${UI_TEXT[HDD_GAMES_FIXNET_FAIL]}"
+        clean_up
+        return 1
     fi
 
     clean_up

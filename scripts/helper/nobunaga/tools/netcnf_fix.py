@@ -4,33 +4,39 @@ the "PlayStation BB Unit may have been connected to another PlayStation 2 / redo
 network settings" screen.
 
 The config (__sysconf/etc/bnnetwork/netcnf000.dat) is scrambled with a key
-derived from the console's i.Link ID; the games refuse it when the recorded ID
-does not match the console. We read the config the console already wrote,
-recover its i.Link from the fixed SCE header (netcnf.recover), and write back a
-plain DHCP-over-Ethernet config scrambled for that SAME i.Link. Nothing about
-the console changes -- the config is simply re-keyed to a known-good DHCP body.
+derived from an i.Link ID, and the games decode it with the i.Link the loader
+serves to the NETCNF module. Our loaders (scefix >= 1.4 and the other titles'
+equivalents) serve the FIXED psbb spoof i.Link to NETCNF on every console -- the
+same spoof the DNAS binding check already uses -- so a netcnf keyed to that
+spoof decodes on any console. We simply write such a netcnf: a plain
+DHCP-over-Ethernet config scrambled for the psbb spoof ID.
 
-If no config exists yet, or it is too damaged to recover, pass --ilink with the
-console's i.Link (16 hex digits) and a DHCP config is built for it directly.
+This is console-agnostic: no per-console i.Link is needed. (Earlier revisions
+tried to recover the console's own i.Link from the existing file and re-key to
+it; that was the wrong model -- the file is keyed to whoever BUILT the drive,
+not the console it runs on, so it broke the moment a drive moved between
+consoles. The loader change is what makes the fixed-spoof key correct.)
 
-The drive is touched only with --apply; without it the plan is printed. The
-original config is copied to <work>/netcnf000.dat.bak before it is replaced.
+Pass --ilink to key the config to a specific i.Link instead of the spoof (for a
+loader that still serves a real/other ID to NETCNF). The drive is touched only
+with --apply; without it the plan is printed. The existing config, if any, is
+backed up to <work>/netcnf000.dat.bak first.
 
   python netcnf_fix.py --device /dev/sdX --pfsshell "<PFS Shell.elf>" \
       --work /tmp/ncfix [--ilink 0700001ad5910c10] [--apply]
-
-Exit codes: 0 ok, 3 config present but i.Link unrecoverable, 4 no config on the
-drive (both mean: ask the user for --ilink).
 """
 import argparse
 import os
-import shutil
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import netcnf  # noqa: E402  (sibling module, same directory)
 
+# The psbb console i.Link the loaders serve to NETCNF on every console. Must
+# match scefix's SPOOF_ID (work/launcher/scefix/scefix.c) and the equivalent in
+# the other titles' loaders.
+SPOOF_ID = bytes.fromhex("0700001ad5910c10")
 
 USE_SUDO = True  # a real /dev/sdX is a block device: pfsshell needs root for it
 
@@ -52,7 +58,8 @@ def cd_lines(device, partition, remote_dir, local_dir):
     # This PFS Shell build writes get/reads put from the dir set by `lcd`, not
     # the process cwd (see popninstall.py), so set it explicitly. Then cd into
     # the remote directory one level at a time (the proven idiom in
-    # bombinstall.py's pfsshell_jobs).
+    # bombinstall.py's pfsshell_jobs). Quoted lcd handles spaces, so a toolkit
+    # under ".../PlayOnline Project/..." is fine.
     lines = ["device %s" % device, "mount %s" % partition,
              'lcd "%s"' % local_dir.replace("\\", "/")]
     for part in remote_dir.split("/"):
@@ -69,8 +76,9 @@ def main():
     ap.add_argument("--partition", default="__sysconf")
     ap.add_argument("--remote-dir", default="etc/bnnetwork")
     ap.add_argument("--name", default="netcnf000.dat")
-    ap.add_argument("--work", required=True, help="scratch dir (must be space-free)")
-    ap.add_argument("--ilink", help="console i.Link (16 hex digits); skips recovery")
+    ap.add_argument("--work", required=True, help="scratch dir")
+    ap.add_argument("--ilink", help="key the config to this i.Link (16 hex) instead "
+                    "of the psbb spoof")
     ap.add_argument("--apply", action="store_true", help="actually write to the drive")
     ap.add_argument("--no-sudo", action="store_true",
                     help="do not run PFS Shell under sudo (for testing on an image file)")
@@ -80,60 +88,43 @@ def main():
     if a.no_sudo:
         USE_SUDO = False
 
-    # Keep the fetched config and the staged config in separate dirs. PFS Shell
-    # runs under sudo, so the file it `get`s is owned by root; building the new
-    # config into the same path would fail with EACCES. Separate dirs also let
-    # both keep the basename `put` requires without colliding. Quoted lcd handles
-    # spaces, so a toolkit under ".../PlayOnline Project/..." is fine.
-    orig_dir = os.path.join(a.work, "orig")
-    stage_dir = os.path.join(a.work, "stage")
-    os.makedirs(orig_dir, exist_ok=True)
-    os.makedirs(stage_dir, exist_ok=True)
-    fetched = os.path.join(orig_dir, a.name)
-    staged = os.path.join(stage_dir, a.name)
-
-    ilink = None
+    ilink = SPOOF_ID
     if a.ilink:
         ilink = bytes.fromhex(a.ilink)
         if len(ilink) != 8:
             raise SystemExit("--ilink must be 16 hex digits (8 bytes)")
 
-    # 1) Pull the config the console wrote (unless an i.Link was supplied).
-    if ilink is None:
-        try:
-            run_pfsshell(a.pfsshell, orig_dir,
-                         cd_lines(a.device, a.partition, a.remote_dir, orig_dir) +
-                         ["get %s" % a.name, "umount"])
-        except RuntimeError as e:
-            print(e, file=sys.stderr)
-            print("could not read %s from %s on %s" % (a.name, a.remote_dir, a.partition),
-                  file=sys.stderr)
-            raise SystemExit(4)
-        if not os.path.exists(fetched) or os.path.getsize(fetched) == 0:
-            print("no %s on the drive" % a.name, file=sys.stderr)
-            raise SystemExit(4)
-        shutil.copyfile(fetched, os.path.join(a.work, a.name + ".bak"))
-        ilink = netcnf.recover(open(fetched, "rb").read())
-        if ilink is None:
-            print("found %s but could not recover the console i.Link from it" % a.name,
-                  file=sys.stderr)
-            raise SystemExit(3)
+    # The fetched backup and the staged file live in separate dirs: PFS Shell
+    # runs under sudo, so a file it `get`s is root-owned and building over it
+    # would EACCES; separate dirs also keep the basename `put` needs without a
+    # collision.
+    orig_dir = os.path.join(a.work, "orig")
+    stage_dir = os.path.join(a.work, "stage")
+    os.makedirs(orig_dir, exist_ok=True)
+    os.makedirs(stage_dir, exist_ok=True)
+    staged = os.path.join(stage_dir, a.name)
 
-    print(ilink.hex())  # the recovered/accepted i.Link, for the caller to show
+    # Best-effort backup of whatever is on the drive now (never fatal).
+    try:
+        run_pfsshell(a.pfsshell, orig_dir,
+                     cd_lines(a.device, a.partition, a.remote_dir, orig_dir) +
+                     ["get %s" % a.name, "umount"])
+    except RuntimeError:
+        pass
 
-    # 2) Build a DHCP config keyed to that console and stage it (owned by us).
+    # Build a DHCP config keyed to the serve-time i.Link and stage it.
     with open(staged, "wb") as f:
         f.write(netcnf.build(ilink))
-    # sanity: it must decode back to the known-good DHCP body on that console
     assert netcnf.decode(open(staged, "rb").read(), ilink) == netcnf.DHCP_PROFILE
+    print(ilink.hex())
 
     if not a.apply:
         print("DRY RUN: staged %s (DHCP, i.Link %s). Re-run with --apply to write it."
               % (staged, ilink.hex()), file=sys.stderr)
         return
 
-    # 3) Write it back, replacing the old file in place. The rm is best-effort:
-    # on the --ilink path there may be no file to remove, and put then creates it.
+    # Write it back, replacing any existing file. The rm is best-effort (there
+    # may be none to remove; put then creates it).
     try:
         run_pfsshell(a.pfsshell, stage_dir,
                      cd_lines(a.device, a.partition, a.remote_dir, stage_dir) + ["rm %s" % a.name, "umount"])
