@@ -302,10 +302,23 @@ option_five() {
         *) return 0 ;;
     esac
 
+    # DNS: default to the revival's public server so the games resolve the
+    # service hostnames to our servers; the player can enter a different one.
+    local DEFAULT_DNS="82.221.100.125"
+    local dns
+    echo
+    center_text "${UI_TEXT[HDD_GAMES_FIXNET_DNS]} [$DEFAULT_DNS]"
+    read -rp "" dns </dev/tty
+    dns="${dns:-$DEFAULT_DNS}"
+    if [[ ! "$dns" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        error_msg "${UI_TEXT[HDD_GAMES_FIXNET_BADDNS]}"
+        return 1
+    fi
+
     sudo rm -rf "$WORK"   # prior runs leave root-owned files (pfsshell runs under sudo)
     mkdir -p "$WORK"
 
-    if python3 "$FIX_TOOL" --device "$DEVICE" --pfsshell "$PFS_SHELL" --work "$WORK" --apply >>"${LOG_FILE}" 2>&1; then
+    if python3 "$FIX_TOOL" --device "$DEVICE" --pfsshell "$PFS_SHELL" --work "$WORK" --dns "$dns" --apply >>"${LOG_FILE}" 2>&1; then
         center_title "[✓] ${UI_TEXT[HDD_GAMES_FIXNET_DONE]}"
     else
         error_msg "${UI_TEXT[HDD_GAMES_FIXNET_FAIL]}"

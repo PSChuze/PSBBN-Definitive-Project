@@ -79,6 +79,8 @@ def main():
     ap.add_argument("--work", required=True, help="scratch dir")
     ap.add_argument("--ilink", help="key the config to this i.Link (16 hex) instead "
                     "of the psbb spoof")
+    ap.add_argument("--dns", help="static DNS server (dotted-quad) to point the games "
+                    "at our DNS; omit for auto DNS (DHCP)")
     ap.add_argument("--apply", action="store_true", help="actually write to the drive")
     ap.add_argument("--no-sudo", action="store_true",
                     help="do not run PFS Shell under sudo (for testing on an image file)")
@@ -112,10 +114,12 @@ def main():
     except RuntimeError:
         pass
 
-    # Build a DHCP config keyed to the serve-time i.Link and stage it.
+    # Build a DHCP config keyed to the serve-time i.Link and stage it. With
+    # --dns, it uses that static DNS server (points the games at our DNS so
+    # they resolve the service hostnames to our servers); build() verifies the
+    # round-trip internally.
     with open(staged, "wb") as f:
-        f.write(netcnf.build(ilink))
-    assert netcnf.decode(open(staged, "rb").read(), ilink) == netcnf.DHCP_PROFILE
+        f.write(netcnf.build(ilink, dns=a.dns))
     print(ilink.hex())
 
     if not a.apply:

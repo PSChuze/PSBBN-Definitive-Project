@@ -89,10 +89,31 @@ def encode(plain, ilink):
     return bytes(out)
 
 
-def build(ilink):
-    """A DHCP netcnf000.dat scrambled for the given console i.Link."""
-    ct = encode(DHCP_PROFILE, ilink)
-    assert decode(ct, ilink) == DHCP_PROFILE
+def dns_profile(dns):
+    """A DHCP-over-Ethernet profile that takes its IP from the router but uses a
+    STATIC DNS server (`nameserver add <dns>`). Pointing DNS at the revival's
+    own server is what lets the games resolve the service hostnames to our
+    servers; with the default auto DNS the console asks the router (its ISP) and
+    reaches the dead original services. `dns` is a dotted-quad string."""
+    text = ("# <Sony Computer Entertainment Inc.>\n\n"
+            "[device]\n"
+            "type nic\n"
+            "vendor \"SCE\"\n"
+            "product \"Ethernet (Network Adaptor)\"\n\n"
+            "[network]\n"
+            "type nic\n"
+            "dhcp\n"
+            "nameserver add %s\n" % dns)
+    return text.encode("ascii")
+
+
+def build(ilink, dns=None):
+    """A DHCP netcnf000.dat scrambled for the given console i.Link. With `dns`
+    set (a dotted-quad), the config uses that static DNS server instead of the
+    router's; otherwise DNS is auto-negotiated (DHCP_PROFILE)."""
+    plain = dns_profile(dns) if dns else DHCP_PROFILE
+    ct = encode(plain, ilink)
+    assert decode(ct, ilink) == plain
     return ct
 
 
