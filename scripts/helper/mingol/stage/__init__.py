@@ -128,7 +128,7 @@ ENGLISH_SEALS = False
 # ones this step reads.
 TREE_SKIP = ("FMOD/", "FMOD2/", "FRES/", "ZZBIN/", "ZZENC/", "FEEGAGUI.ELF", BOOT_FILE)
 WORK_FILES = ("SYSTEM.CNF", BOOT_FILE, "ZZBIN/", "ZZENC/ZZBIN/", "FMOD/", "FMOD2/",
-              "CNF/SYS_NET.ICO", "FRES/", "FEEGAGUI.ELF")
+              "CNF/SYS_NET.ICO", "INSTALL/ICON.XB", "MENU/ICON.XB", "FRES/", "FEEGAGUI.ELF")
 
 # The IOP modules the game loads from cdrom0:\FMOD\ and cdrom0:\FMOD2\ once
 # it runs (network, pad, USB, sound). With no disc the loader's shim sends
@@ -167,6 +167,17 @@ ICON_LOOK = (u"bgcola = 64\r\n"
              u"lightcol2   = 18, 18, 49\r\n")
 # A retail install's icons sit 0x800 into the area.
 ICON_OFFSET = 0x800
+
+# The game's real HDD-OSD 3D icon is not a loose file on the disc. The two
+# loose SYS_NET.ICO (CNF/, FMOD/) are the shared "network settings" save icon
+# (byte for byte pop'n's SYS_NET.ICO), not Minna's. The retail installer takes
+# the browser icon from the disc's INSTALL/ICON.XB (an "xe" container,
+# xbcodec): data/menu/suzuki00.ico is the normal icon it writes to the
+# attribute area, suzuki01.ico the copy icon, and data/install/icon.sys the
+# slot-1 PS2X text (byte for byte the TITLE0/TITLE1/ICON_LOOK/UNINSTALL above).
+# MENU/ICON.XB holds the same two icons and is the fallback. (2026-10-10.)
+ICON_CONTAINERS = ("INSTALL/ICON.XB", "MENU/ICON.XB")
+ICON_ENTRY = b"suzuki00.ico"          # matched by basename inside the container
 
 # The Nobunaga disc that can supply SYSMEM.
 
@@ -337,6 +348,31 @@ def fill_loader(root, kelf_path, ioprp_img, hddid, out_path, plain_overlays=Fals
     return elf
 
 
+def disc_icon(root):
+    """The game's HDD-OSD 3D icon (data/menu/suzuki00.ico) out of the disc's
+    INSTALL/ICON.XB, or MENU/ICON.XB as a fallback. A valid PS2 3D icon begins
+    with the u32 file version 0x00010000 (bytes 00 00 01 00). Raises when
+    neither container holds it, so a damaged dump stops the install here rather
+    than writing the network-settings icon."""
+    from . import xbcodec
+    for rel in ICON_CONTAINERS:
+        p = _path(root, rel)
+        if not os.path.isfile(p):
+            continue
+        with open(p, "rb") as f:
+            blob = f.read()
+        try:
+            items = xbcodec.decode_all(blob)
+        except Exception:                             # noqa: BLE001 - try the next container
+            continue
+        for path, data in items:
+            name = path.replace(b"\\", b"/").split(b"/")[-1].lower()
+            if name == ICON_ENTRY and data[:4] == b"\x00\x00\x01\x00" and len(data) > 0x100:
+                return data
+    raise SystemExit("no %s in the disc's %s; is it a complete dump?"
+                     % (ICON_ENTRY.decode(), " or ".join(ICON_CONTAINERS)))
+
+
 def build_attr(root, english):
     """The attribute area for partition + 0x1000 (English title with English text)."""
     if english:
@@ -354,7 +390,7 @@ def build_attr(root, english):
     for i, text in enumerate(uninstall):
         body += u"uninstallmes%d = %s\r\n" % (i, text)
     return attrarea.build_area(BOOT_BLOCK, body.encode(enc),
-                               _read(root, "CNF/SYS_NET.ICO"), icon_off=ICON_OFFSET)
+                               disc_icon(root), icon_off=ICON_OFFSET)
 
 
 # ---- the stage step --------------------------------------------------------
