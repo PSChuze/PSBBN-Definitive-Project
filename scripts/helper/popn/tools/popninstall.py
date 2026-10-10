@@ -70,7 +70,9 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, "..", "..", "nobunaga", "tools"))
 import disc_to_drive                              # noqa: E402
+import netcnf_install                             # noqa: E402  (shared network-config fix)
 from dnasdec import ata_material                   # noqa: E402
 
 SECTOR = 512
@@ -1145,6 +1147,7 @@ def main():
     print("   attr written and read back (%d B)" % len(area))
     pwd = write_passwords(a.device, lba, a.helper)
     print("   passwords set: POPNPUZZ (%s)" % pwd.hex())
+    netcnf_install.netcnf_step(a.device, a.pfsshell, a.work)
     print("== done: pop'n installed to %s on %s" % (PARTITION, a.device))
 
 

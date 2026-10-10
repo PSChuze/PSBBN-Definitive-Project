@@ -46,10 +46,14 @@ POL_PS2 = os.environ.get('POL_PS2',
     else 'E:/Code/PlayOnline Project/PlayOnline/work/ps2')
 sys.path.insert(0, HERE)
 sys.path.insert(1, NOBU_TOOLS)
+# The shared network-config fix lives in the TOOLKIT's nobunaga/tools (NOBU_TOOLS
+# may point at the dev repo), so add that explicitly.
+sys.path.insert(1, os.path.join(HERE, '..', '..', 'nobunaga', 'tools'))
 sys.path.append(POL_PS2)             # appended: its dis.py must not shadow the stdlib
 
 import sealkit                       # noqa: E402
 import dnasbundle                    # noqa: E402
+import netcnf_install                # noqa: E402  (shared network-config fix)
 from dnasdec import ata_material     # noqa: E402
 
 SECTOR = 512
@@ -342,6 +346,7 @@ def main():
     print('== APA journal cleared (sectors 0-15 backed up to %s)' % jb)
     write_attr(a.device, part[0], a.attr)
     print('== attr written at LBA %d + 0x1000' % part[0])
+    netcnf_install.netcnf_step(a.device, a.pfsshell, staged)
     if a.keeplist:
         print('== keep-list: %s' % ('added' if protect(a.keeplist) else 'already listed'))
     else:
