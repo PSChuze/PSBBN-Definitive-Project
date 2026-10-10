@@ -15,15 +15,23 @@ with 8 the whole file decodes to clean text.
 Decoded text starts with "# <Sony Computer Entertainment Inc.>".
 
 Usage:
-  python netcnf.py decode <file.dat> <ilink-id-hex16>
-  python netcnf.py encode <plain.txt> <ilink-id-hex16> <out.dat>
-  python netcnf.py build  <ilink-id-hex16> <out.dat>   # DHCP profile for a console
+  python netcnf.py decode  <file.dat> <ilink-id-hex16>
+  python netcnf.py encode  <plain.txt> <ilink-id-hex16> <out.dat>
+  python netcnf.py build   <ilink-id-hex16> <out.dat>   # DHCP profile for a console
+  python netcnf.py recover <existing.dat>               # print the console i.Link
+  python netcnf.py fix     <existing.dat> <out.dat>      # DHCP config for the same console
 """
 import base64
 import struct
 import sys
 
 MAGIC = b"# <Sony Computer Entertainment Inc.>"
+
+# Every SCE netcnf begins with the magic comment, a blank line, then a [device]
+# section, so the first 48 bytes of plaintext are fixed. 48 bytes = 24 16-bit
+# words = the 24 key slots that cover all 8 i.Link bytes, which lets us recover
+# a console's i.Link from a config it wrote -- no on-console lookup needed.
+KNOWN = MAGIC + b"\n\n[device]\nt"
 
 # A known-good DHCP-over-Ethernet profile (auto IP + auto DNS negotiation),
 # decoded from a real PSBBN netcnf. `build` re-scrambles it for a target
@@ -88,6 +96,46 @@ def build(ilink):
     return ct
 
 
+def _clean(bs):
+    return all(32 <= x < 127 or x in (9, 10, 13) for x in bs)
+
+
+def recover(cipher):
+    """Recover the console i.Link from a netcnf000.dat it wrote, or None.
+
+    Each i.Link byte b owns the key triplet ((b>>5)+1, ((b>>2)&7)+1, (b&3)+1),
+    which scrambles three consecutive words. The first 48 bytes of plaintext are
+    the fixed KNOWN prefix, so each byte is pinned by matching its triplet
+    against those words; we then decode the whole file and require clean text,
+    which rejects anything that is not actually that console's config.
+    """
+    if len(cipher) < len(KNOWN):
+        return None
+    found = []
+    for i in range(8):
+        cands = []
+        for b in range(256):
+            triplet = ((b >> 5) + 1, ((b >> 2) & 7) + 1, (b & 3) + 1)
+            ok = True
+            for j, kv in enumerate(triplet):
+                wi = 3 * i + j
+                c, = struct.unpack_from("<H", cipher, wi * 2)
+                p, = struct.unpack_from("<H", KNOWN, wi * 2)
+                if _rot16(c ^ 0xFFFF, kv, True) != p:
+                    ok = False
+                    break
+            if ok:
+                cands.append(b)
+        if len(cands) != 1:
+            return None
+        found.append(cands[0])
+    ilink = bytes(found)
+    pt = decode(cipher, ilink)
+    if pt.startswith(MAGIC) and _clean(pt):
+        return ilink
+    return None
+
+
 def main():
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
@@ -100,6 +148,31 @@ def main():
             raise SystemExit("i.Link ID must be 16 hex digits (8 bytes)")
         open(sys.argv[3], "wb").write(build(ilink))
         print(f"wrote {sys.argv[3]} (DHCP netcnf for i.Link {sys.argv[2]})", file=sys.stderr)
+        return
+    if cmd == "recover":
+        # Print the console i.Link a netcnf000.dat was written for. Exit 3 if it
+        # cannot be recovered (not a valid SCE config / truncated).
+        if len(sys.argv) < 3:
+            raise SystemExit("usage: netcnf.py recover <existing.dat>")
+        ilink = recover(open(sys.argv[2], "rb").read())
+        if ilink is None:
+            print("could not recover i.Link from this file", file=sys.stderr)
+            raise SystemExit(3)
+        print(ilink.hex())
+        return
+    if cmd == "fix":
+        # Replace an existing netcnf with a DHCP config keyed to the SAME console
+        # (its i.Link recovered from the old file), clearing the game's "connected
+        # to another PlayStation 2" screen without the on-console setup tool.
+        if len(sys.argv) < 4:
+            raise SystemExit("usage: netcnf.py fix <existing.dat> <out.dat>")
+        ilink = recover(open(sys.argv[2], "rb").read())
+        if ilink is None:
+            print("could not recover i.Link from this file", file=sys.stderr)
+            raise SystemExit(3)
+        open(sys.argv[3], "wb").write(build(ilink))
+        print(ilink.hex())
+        print(f"wrote {sys.argv[3]} (DHCP netcnf for i.Link {ilink.hex()})", file=sys.stderr)
         return
     if len(sys.argv) < 4:
         raise SystemExit(__doc__)

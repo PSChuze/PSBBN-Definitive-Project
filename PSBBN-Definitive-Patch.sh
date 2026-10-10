@@ -187,6 +187,7 @@ center_menu() {
         MAIN_MENU_OPTION_5
         MAIN_MENU_OPTION_6
         MAIN_MENU_OPTION_7
+        MAIN_MENU_OPTION_8
     )
 
     for key in "${MENU_KEYS[@]}"; do
@@ -785,6 +786,10 @@ option_seven() {
     "${SCRIPTS_DIR}/PlayOnline-Installer.sh" "$LANG_FILE" "$path_arg"
 }
 
+option_eight() {
+    "${SCRIPTS_DIR}/HDD-Games.sh" "$LANG_FILE" "$path_arg"
+}
+
 SPLASH() {
     clear
     cat << "EOF"
@@ -813,6 +818,7 @@ display_menu() {
     printf "%*s%s\n\n" "$padding" "5) " "${UI_TEXT[MAIN_MENU_OPTION_5]}"
     printf "%*s%s\n\n" "$padding" "6) " "${UI_TEXT[MAIN_MENU_OPTION_6]}"
     printf "%*s%s\n\n" "$padding" "7) " "${UI_TEXT[MAIN_MENU_OPTION_7]}"
+    printf "%*s%s\n\n" "$padding" "8) " "${UI_TEXT[MAIN_MENU_OPTION_8]}"
     printf "%*s%s\n\n" "$padding" "q) " "${UI_TEXT[MENU_QUIT]}"
     printf "%*s%s " "$((padding - 3))" "" "${UI_TEXT[MENU_PROMPT]}"
 }
@@ -1013,6 +1019,7 @@ while true; do
             5) option_five; display_menu ;;
             6) option_six; display_menu ;;
             7) option_seven; display_menu ;;
+            8) option_eight; display_menu ;;
             q|Q) clear; break ;;
             *) printf "%*s%s " "$((padding - 3))" "" "${UI_TEXT[MENU_INVALID]}"
                sleep 2
