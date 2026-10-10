@@ -37,8 +37,15 @@ The first save on a drive is kept as `BEFORE` and never overwritten, so a
 later run cannot replace the pre-install record with a post-install one.
 
     python3 -m nobunaga.record DRIVE --save DIR
-    python3 -m nobunaga.record DRIVE --compare DIR      exit 0 same, 3 changed
+    python3 -m nobunaga.record DRIVE --compare DIR [--hddid FILE]   exit 0 ok, 3 broken
     python3 -m nobunaga.record DRIVE --restore DIR --write
+
+--compare exits 0 (no action needed) when the record is byte-identical to the
+BEFORE snapshot, or when it changed but still decodes under an HDD ID the drive
+is served (the loaders', or the given --hddid): a record that still decodes is
+healthy and the keyed PlayOnline titles still start, whatever the bytes are. It
+exits 3 only when the record changed and decodes under none of those IDs, which
+is the case that can keep FFXI from starting; the record can then be restored.
 """
 import argparse
 import hashlib
@@ -98,17 +105,73 @@ def load_before(folder):
     return entry["net_lba"], bytes.fromhex(entry["record"])
 
 
-def compare(path, folder):
-    """(same, text)."""
+def served_ids(path, hddid_file=None):
+    """[(label, 512-byte block)] HDD IDs to test the record against: the given
+    file, and every ID a loader on the drive serves. Strictly read-only."""
+    blocks = []
+    if hddid_file and os.path.exists(hddid_file):
+        try:
+            with open(hddid_file, "rb") as f:
+                blk = f.read(512)
+            if len(blk) == 512:
+                blocks.append(("playonline.hddid", blk))
+        except OSError:
+            pass
+    try:
+        from playonline.hddid import served_on_drive
+        for name, blk in served_on_drive(path):
+            blocks.append(("the loader in %s" % name, blk))
+    except Exception:                               # noqa: BLE001 - diagnostics only
+        pass
+    return blocks
+
+
+def decodes_under_served(path, hddid_file=None):
+    """(ok, label, four_hex): does the current record decode under any HDD ID
+    the drive is served? A record that decodes is one keyed PlayOnline titles
+    can still read, so it is healthy whatever its bytes are."""
+    cur = read(path)
+    if cur is None:
+        return False, None, None
+    rec = cur[1]
+    if not any(rec[:32]):
+        return False, None, None
+    from playonline.lib import polrecord
+    for label, blk in served_ids(path, hddid_file):
+        dec = bytes(polrecord.decode(rec[:32], polrecord.derive_key(blk[0x50:0x60])))
+        if not any(dec[12:20]):                     # a good decode has zeros here
+            return True, label, dec[:4].hex()
+    return False, None, None
+
+
+def compare(path, folder, hddid_file=None):
+    """(state, text): state is 'same', 'healthy' or 'broken'.
+
+    'same'     the record is byte-identical to the BEFORE snapshot.
+    'healthy'  the record changed but still decodes under an ID the drive is
+               served, so keyed PlayOnline titles still start: no action needed.
+    'broken'   the record changed and decodes under none of the served IDs (or
+               none is known), the case that can keep FFXI from starting.
+    """
     lba, want = load_before(folder)
     cur = read(path)
     if cur is None:
-        return False, "__net is gone"
+        return "broken", "__net is gone"
     if cur[0] != lba:
-        return False, "__net has moved (LBA %d, was %d)" % (cur[0], lba)
+        return "broken", "__net has moved (LBA %d, was %d)" % (cur[0], lba)
     if cur[1] == want:
-        return True, "the __net record is unchanged"
-    return False, "the __net record has changed since %s was saved" % BEFORE
+        return "same", "the __net record is unchanged"
+    ok, label, four = decodes_under_served(path, hddid_file)
+    if ok:
+        return "healthy", ("the __net record changed since %s but still decodes under the "
+                           "drive's served ID (%s, four %s): keyed PlayOnline titles still "
+                           "start, so no action is needed" % (BEFORE, label, four))
+    if not served_ids(path, hddid_file):
+        return "broken", ("the __net record has changed since %s and no served HDD ID is "
+                          "known here to check whether it still decodes" % BEFORE)
+    return "broken", ("the __net record has changed since %s and decodes under none of the "
+                      "HDD IDs the drive is served: keyed PlayOnline titles (FFXI among "
+                      "them) may no longer start" % BEFORE)
 
 
 def restore(path, folder, write=False):
@@ -137,15 +200,17 @@ def main():
     g.add_argument("--save", metavar="DIR")
     g.add_argument("--compare", metavar="DIR")
     g.add_argument("--restore", metavar="DIR")
+    ap.add_argument("--hddid", help="with --compare: an HDD ID file to also test "
+                                    "the record against (the loaders' IDs are always tried)")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args()
 
     if args.save:
         print(save(args.drive, args.save))
     elif args.compare:
-        same, text = compare(args.drive, args.compare)
+        state, text = compare(args.drive, args.compare, args.hddid)
         print(text)
-        sys.exit(0 if same else 3)
+        sys.exit(0 if state in ("same", "healthy") else 3)
     else:
         print(restore(args.drive, args.restore, args.write))
 

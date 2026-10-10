@@ -344,7 +344,7 @@ if [[ -n "${INFO[installed]}" ]]; then
     echo
     if [[ ! -f "${BACKUP_DIR}/net-record-before-nobunaga.json" ]]; then
         echo "  ${UI_TEXT[NOBU_RECORD_NO_BACKUP]}"
-    elif nobusudo nobunaga.record "${DEVICE}" --compare "${BACKUP_DIR}" >> "${LOG_FILE}" 2>&1; then
+    elif nobusudo nobunaga.record "${DEVICE}" --compare "${BACKUP_DIR}" --hddid "${POL_HDDID_FILE}" >> "${LOG_FILE}" 2>&1; then
         echo "  ${UI_TEXT[NOBU_RECORD_SAME]}"
     else
         echo "  ${UI_TEXT[NOBU_RECORD_CHANGED]}"

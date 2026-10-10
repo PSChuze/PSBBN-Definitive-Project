@@ -64,7 +64,10 @@ japanese (from the browser title).
 
 prints, read-only, what the shared __net record decodes to under the given HDD
 ID, under every ID a loader on the drive serves and under the zero ID: the
-four, and whether the PlayOnline step minted it or a console wrote it.
+four, and whether the PlayOnline step minted it or a console wrote it. It also
+reports, per PlayOnline title partition on the drive (the Viewer, FFXI, Tetra
+Master, ...), which HDD ID and four that title's keyed containers decrypt
+under, so a title sealed to a different id than the record is easy to spot.
 
     python -m mingol.stage.write DEVICE --repair-record --hddid FILE --backup OUT [--write]
 
@@ -72,6 +75,14 @@ replaces a record that decodes under none of those IDs with the record the
 PlayOnline step mints for FILE (the only write this module makes to __net, and
 only on request: the installer runs it when MINGOL_REPAIR_RECORD=1). A record
 that decodes under any known ID is refused.
+
+The __net record is shared by every PlayOnline title on the drive, so before it
+is replaced the keyed containers of every PlayOnline title present (FFXI and the
+Viewer among them) are checked, read-only, against the id and four the new
+record will carry. If any is sealed to a different id or four, replacing the
+record would stop that title decrypting, so the repair is refused: the record,
+the loaders and every record-keyed title must agree on one id. --force replaces
+it anyway (this strands the titles sealed to another id).
 
     python -m mingol.stage.write DEVICE --stage DIR --hddid FILE \
         --reinstall --saves BACKUP_DIR [--write]
@@ -189,14 +200,17 @@ def record_info(device, hddid):
                                        "EMPTY" if not any(rec) else "present"),
              "playonline.hddid sha1 %s, key material %s"
              % (hashlib.sha1(hddid).hexdigest()[:8], (hddid[0x40:0x48] + hddid[0x50:0x60]).hex())]
-    if not any(rec):
-        return lines
-    for label, blk in record_candidates(device, hddid):
-        dec = decode_record(rec, blk)
-        lines.append("  %-52s %s" % (
-            "%s (key %s)" % (label, blk[0x50:0x58].hex()),
-            "decodes: four %s, %s" % (dec[:4].hex(), record_writer(dec, hddid))
-            if dec else "does not decode"))
+    if any(rec):
+        for label, blk in record_candidates(device, hddid):
+            dec = decode_record(rec, blk)
+            lines.append("  %-52s %s" % (
+                "%s (key %s)" % (label, blk[0x50:0x58].hex()),
+                "decodes: four %s, %s" % (dec[:4].hex(), record_writer(dec, hddid))
+                if dec else "does not decode"))
+    try:
+        lines += keyed_info_lines(device, hddid)
+    except BaseException as exc:                    # noqa: BLE001 - diagnostics only
+        lines.append("keyed PlayOnline containers: could not check (%s)" % exc)
     return lines
 
 
@@ -204,6 +218,153 @@ REPORT_HINT = ("Nothing was written. Please send logs/mingol-installer.log: the 
                "installer adds a read-only dump of the record to it (the same as "
                "`python3 -m mingol.stage.write DRIVE --record-info --hddid "
                "games/POL/playonline.hddid`).")
+
+# A keyed PlayOnline container (a *.pex.enc / *.enc in installed form) is at
+# most a few hundred KiB; FFXI's multi-GiB DATA/ROM*.DAT files are not keyed
+# through this record, so a cap keeps the read-only scan cheap and skips them.
+KEYED_CONTAINER_CAP = 16 * 1024 * 1024
+
+
+def playonline_titles_present(device):
+    """[(key, partition)] for every PlayOnline title whose partition is on the
+    drive. Their modules are all keyed through the one shared __net record, so
+    changing the record touches all of them at once."""
+    try:
+        from playonline.titles import TITLES as POL_TITLES
+    except Exception:                               # noqa: BLE001 - diagnostics only
+        return []
+    names = {pname for _s, _l, _t, pname in partitions(device)}
+    return [(t.key, t.partition) for t in POL_TITLES.values() if t.partition in names]
+
+
+def keyed_containers(device):
+    """([(partition, rel, blob)], [(partition, error)]): every keyed PlayOnline
+    container on the drive (the installed-form *.pex.enc / *.enc up to the size
+    cap), and any title partition that could not be read. Strictly read-only."""
+    from playonline.lib import pfsupdate
+    out, errs = [], []
+    for _key, partition in playonline_titles_present(device):
+        try:
+            with pfsupdate.Installed(device, partition) as inst:
+                for rel in sorted(inst.files):
+                    low = rel.lower()
+                    if not (low.endswith(".pex.enc") or low.endswith(".enc")):
+                        continue
+                    if inst.files[rel]["size"] > KEYED_CONTAINER_CAP:
+                        continue
+                    blob = inst.read(rel)
+                    if blob is not None:
+                        out.append((partition, rel, blob))
+        except BaseException as exc:                # noqa: BLE001 - SystemExit from mount etc.
+            errs.append((partition, str(exc) or exc.__class__.__name__))
+    return out, errs
+
+
+def _bulk_tags(check_result):
+    """The bulk-tag booleans in a ci_transcrypt.check() result. A non-empty list
+    means the blob IS an installed container (its section table verified under
+    SE's public keys, which does not depend on the HDD ID); each bool is whether
+    that section's bulk decrypts under the id and four checked."""
+    return [ok for lab, ok, _d in check_result if lab.endswith("bulk tag")]
+
+
+def _se_keys():
+    """Square Enix's public keys for reading containers, or None when they are
+    not available. They are derived from a PlayOnline/FFXI disc boot ELF, which
+    the Minna rig does not carry; set $PLAYONLINE_DISC_ELF (to SLPS_202.00,
+    SLUS_217.04, ...) to supply one. Without them a container cannot be read, so
+    the caller cannot verify a keyed title and must err on the safe side."""
+    try:
+        from playonline.lib import ci_universal
+        return ci_universal._keys()
+    except Exception:                               # noqa: BLE001 - no disc ELF, etc.
+        return None
+
+
+def keyed_stranding(device, hddid, four):
+    """(stranded, unreadable) or None when the SE keys are not available.
+
+    stranded   = [(partition, rel)] keyed containers that do NOT decrypt under
+                 (hddid, four): sealed to another id/four, so stranded if the
+                 shared record is set to `four` under `hddid`.
+    unreadable = [(partition, error)] title partitions that could not be read.
+    None       = the SE keys to read containers with are not available here, so
+                 nothing could be checked. Read-only throughout."""
+    from playonline.lib import ci_transcrypt
+    keys = _se_keys()
+    if keys is None:
+        return None
+    conts, errs = keyed_containers(device)
+    stranded = []
+    for partition, rel, blob in conts:
+        tags = _bulk_tags(ci_transcrypt.check(blob, hddid, four, keys))
+        if tags and not all(tags):
+            stranded.append((partition, rel))
+    return stranded, errs
+
+
+def keyed_info_lines(device, hddid):
+    """Read-only report lines: for each keyed PlayOnline container on the drive,
+    which candidate HDD ID and four decrypt it. Shows when FFXI or the Viewer is
+    sealed to a different id or four than the shared record carries."""
+    from playonline.lib import ci_transcrypt
+    present = playonline_titles_present(device)
+    if not present:
+        return ["keyed PlayOnline titles: none on this drive"]
+    keys = _se_keys()
+    if keys is None:
+        lines = ["keyed PlayOnline titles present (cannot decode-probe without the "
+                 "PlayOnline disc keys; set PLAYONLINE_DISC_ELF to SLPS_202.00 / "
+                 "SLUS_217.04 to see what each is keyed to):"]
+        return lines + ["  %s (%s)" % (partition, key) for key, partition in present]
+    cands = record_candidates(device, hddid)
+    _lba, rec = read_record(device)
+    fours = [("record-mint four %s" % ci_transcrypt.DEFAULT_FOUR.hex(), ci_transcrypt.DEFAULT_FOUR)]
+    seen = {ci_transcrypt.DEFAULT_FOUR}
+    if any(rec[:32]):
+        for label, blk in cands:
+            dec = decode_record(rec, blk)
+            if dec and dec[:4] not in seen:
+                seen.add(dec[:4])
+                fours.append(("four %s (record under %s)" % (dec[:4].hex(), label), dec[:4]))
+    conts, errs = keyed_containers(device)
+    errmap = dict(errs)
+    bypart = {}
+    for partition, rel, blob in conts:
+        bypart.setdefault(partition, []).append((rel, blob))
+    lines = ["keyed PlayOnline containers (read-only):"]
+    for key, partition in present:
+        lines.append("  %s (%s)" % (partition, key))
+        if partition in errmap:
+            lines.append("    could not read: %s" % errmap[partition])
+            continue
+        items = bypart.get(partition, [])
+        reported = False
+        for rel, blob in items:
+            hit, is_container = None, False
+            for idlabel, blk in cands:
+                pcsx2 = not any(blk[0x40:0x48]) and not any(blk[0x50:0x60])
+                for flabel, four in fours:
+                    tags = _bulk_tags(ci_transcrypt.check(blob, blk, four, keys, pcsx2))
+                    if not tags:
+                        continue
+                    is_container = True
+                    if all(tags):
+                        hit = (idlabel, flabel)
+                        break
+                if hit:
+                    break
+            if not is_container:
+                continue
+            reported = True
+            if hit:
+                lines.append("    %-32s decrypts under %s, %s" % (rel, hit[0], hit[1]))
+            else:
+                lines.append("    %-32s KEYED but no candidate id/four on this drive "
+                             "decrypts it (sealed elsewhere)" % rel)
+        if not reported:
+            lines.append("    no keyed container found (not record-dependent for boot)")
+    return lines
 
 
 def net_four(device, hddid):
@@ -257,7 +418,7 @@ def net_four(device, hddid):
         % (hddid[0x40:0x48].hex(), why, REPORT_HINT))
 
 
-def repair_record(device, hddid, backup, write=False):
+def repair_record(device, hddid, backup, write=False, force=False):
     """Put back the record the PlayOnline step mints (route.mint_record: four
     ci_transcrypt.DEFAULT_FOUR, identity from the HDD ID), keyed to `hddid`.
 
@@ -266,7 +427,14 @@ def repair_record(device, hddid, backup, write=False):
     the console through the served ID, so nothing the
     drive's loaders serve can be using it, and the PlayOnline step itself writes
     this same record whenever it routes the Viewer (FFXI's containers are keyed
-    to its four). The old sector is saved to `backup` first and read back."""
+    to its four). The old sector is saved to `backup` first and read back.
+
+    The record is shared by every PlayOnline title on the drive, so it is only
+    replaced when doing so strands none of them: every record-keyed title present
+    (FFXI, the Viewer) must already decrypt under (hddid, DEFAULT_FOUR), which is
+    the state the PlayOnline step leaves. That is verified read-only when the SE
+    disc keys are available; otherwise, or if a title is sealed elsewhere or a
+    title partition cannot be read, the repair is refused unless `force`."""
     from playonline.lib import ci_transcrypt
     lba, rec = read_record(device)
     # The console decodes the record with the ID its loader serves. Only when the
@@ -297,6 +465,55 @@ def repair_record(device, hddid, backup, write=False):
                                           ci_transcrypt.default_identity(hddid)), key)
     if len(new) != RECORD_LEN or decode_record(new, hddid) is None:
         raise SystemExit("the minted record does not decode back")
+    # The record keys every PlayOnline title on the drive, not just Minna. Before
+    # it is overwritten, confirm that no other record-keyed title (FFXI, the
+    # Viewer) would be stranded. The safe state, the one the PlayOnline step
+    # leaves, is that every such title already decrypts under the id and four
+    # the new record carries. The repair fires only when the current record
+    # decodes under no known id, so those titles are NOT currently consistent
+    # with the drive's served id, and minting a record for `hddid` is correct
+    # only if they happen to be sealed to (hddid, DEFAULT_FOUR). That is checked
+    # here when the SE keys are available; when they are not, or a title cannot
+    # be read, or one is sealed elsewhere, the repair cannot be proven safe and
+    # is refused unless --force. --force WILL strand a title sealed to another id.
+    present = playonline_titles_present(device)
+    if present and not force:
+        try:
+            result = keyed_stranding(device, hddid, ci_transcrypt.DEFAULT_FOUR)
+        except BaseException as exc:                # noqa: BLE001 - diagnostics only
+            result = None
+            _probe_err = str(exc) or exc.__class__.__name__
+        else:
+            _probe_err = None
+        title_list = "\n    ".join("%s (%s)" % (p, k) for k, p in present)
+        guidance = ("The record, the loaders and every record-keyed title must share one "
+                    "id; overwriting the record cannot make a title sealed to another id "
+                    "start. Reinstall the odd title through the PlayOnline step so it is "
+                    "re-keyed to this id, or keep the current record. Pass --force to "
+                    "replace it anyway (this WILL strand any title sealed to another id).")
+        if result is None:
+            raise SystemExit(
+                "not replacing the shared __net record: %d other PlayOnline title(s) are "
+                "on this drive and their keyed containers cannot be read here to confirm "
+                "they stay readable (no PlayOnline disc keys%s). FFXI is likely among "
+                "them.\n    %s\nTo check precisely, rerun --record-info with "
+                "PLAYONLINE_DISC_ELF set to the Viewer/FFXI boot ELF. %s"
+                % (len(present), "" if _probe_err is None else ": %s" % _probe_err,
+                   title_list, guidance))
+        stranded, unreadable = result
+        if stranded or unreadable:
+            detail = []
+            if stranded:
+                detail.append("keyed container(s) sealed to a different HDD ID or four:\n    "
+                              + "\n    ".join("%s  %s" % (p, r) for p, r in stranded))
+            if unreadable:
+                detail.append("title partition(s) that could not be read to check them:\n    "
+                              + "\n    ".join("%s (%s)" % (p, why) for p, why in unreadable))
+            raise SystemExit(
+                "not replacing the shared __net record: changing it to four %s under this "
+                "id would strand record-keyed PlayOnline titles.\n  %s\nFFXI is likely "
+                "affected. %s"
+                % (ci_transcrypt.DEFAULT_FOUR.hex(), "\n  ".join(detail), guidance))
     if not write:
         return "would replace the __net record (LBA %d + 0x%x) with four %s  (plan only)" % (
             lba, NET_RECORD_OFF, ci_transcrypt.DEFAULT_FOUR.hex())
@@ -566,6 +783,10 @@ def main(argv=None):
                          "no known ID, replace it with the one the PlayOnline step mints "
                          "for this HDD ID (dry run unless --write)")
     ap.add_argument("--backup", help="with --repair-record: where the old record sector is saved")
+    ap.add_argument("--force", action="store_true",
+                    help="with --repair-record: replace the record even when another "
+                         "PlayOnline title (FFXI, the Viewer) on the drive is keyed to a "
+                         "different id; this strands that title")
     a = ap.parse_args(argv)
     if a.probe:
         print(probe(a.device))
@@ -578,7 +799,7 @@ def main(argv=None):
         if a.repair_record:
             if not a.backup:
                 ap.error("--repair-record needs --backup")
-            print(repair_record(a.device, hddid, a.backup, a.write))
+            print(repair_record(a.device, hddid, a.backup, a.write, a.force))
         print("\n".join(record_info(a.device, hddid)))
         return 0
     if not (a.stage and a.hddid):
