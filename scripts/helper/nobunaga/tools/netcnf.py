@@ -17,11 +17,26 @@ Decoded text starts with "# <Sony Computer Entertainment Inc.>".
 Usage:
   python netcnf.py decode <file.dat> <ilink-id-hex16>
   python netcnf.py encode <plain.txt> <ilink-id-hex16> <out.dat>
+  python netcnf.py build  <ilink-id-hex16> <out.dat>   # DHCP profile for a console
 """
+import base64
 import struct
 import sys
 
 MAGIC = b"# <Sony Computer Entertainment Inc.>"
+
+# A known-good DHCP-over-Ethernet profile (auto IP + auto DNS negotiation),
+# decoded from a real PSBBN netcnf. `build` re-scrambles it for a target
+# console's i.Link so that console reads it as its own -- this is what clears
+# the game's "PlayStation BB Unit may have been connected to another
+# PlayStation 2 / redo network settings" screen without the on-console setup
+# tool. Works on any normal home router/LAN (DHCP). 287 bytes decoded.
+DHCP_PROFILE = base64.b64decode(
+    "IyA8U29ueSBDb21wdXRlciBFbnRlcnRhaW5tZW50IEluYy4+CgpbZGV2aWNlXQp0eXBlIG5pYwp2"
+    "ZW5kb3IgIlNDRSIKcHJvZHVjdCAiRXRoZXJuZXQgKE5ldHdvcmsgQWRhcHRvcikiCgpbbmV0d29y"
+    "a10KdHlwZSBuaWMKZGhjcAp3YW50LmRuczFfbmVnbwp3YW50LmRuczJfbmVnbwojIG5vYnVuYWdh"
+    "IGRldjogZGhjcCBwcm9maWxlIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMj"
+    "IyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIwo=")
 
 
 def keybuf(ilink):
@@ -66,10 +81,29 @@ def encode(plain, ilink):
     return bytes(out)
 
 
+def build(ilink):
+    """A DHCP netcnf000.dat scrambled for the given console i.Link."""
+    ct = encode(DHCP_PROFILE, ilink)
+    assert decode(ct, ilink) == DHCP_PROFILE
+    return ct
+
+
 def main():
+    if len(sys.argv) < 2:
+        raise SystemExit(__doc__)
+    cmd = sys.argv[1]
+    if cmd == "build":
+        if len(sys.argv) < 4:
+            raise SystemExit("usage: netcnf.py build <ilink-hex16> <out.dat>")
+        ilink = bytes.fromhex(sys.argv[2])
+        if len(ilink) != 8:
+            raise SystemExit("i.Link ID must be 16 hex digits (8 bytes)")
+        open(sys.argv[3], "wb").write(build(ilink))
+        print(f"wrote {sys.argv[3]} (DHCP netcnf for i.Link {sys.argv[2]})", file=sys.stderr)
+        return
     if len(sys.argv) < 4:
         raise SystemExit(__doc__)
-    cmd, src, ilink = sys.argv[1], sys.argv[2], bytes.fromhex(sys.argv[3])
+    src, ilink = sys.argv[2], bytes.fromhex(sys.argv[3])
     data = open(src, "rb").read()
     if cmd == "decode":
         pt = decode(data, ilink)
