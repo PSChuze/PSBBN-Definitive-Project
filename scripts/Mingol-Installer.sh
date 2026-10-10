@@ -582,5 +582,15 @@ else
 fi
 rmdir "${OPL_PROT_MNT}" 2>/dev/null
 
+# Add Minna no Golf to PSBBN's games menu. PSBBN lists from the sce_game table of
+# __linux.7/database/sqlite/game.db, which the BB Navigator fills from each
+# partition's /res/info.sys only when it rebuilds the table - it does not pick up
+# a partition this installer wrote after the table already existed. So register
+# the row here, on install and on update. Best-effort: a failure never fails the
+# install (the game still boots from HDD-OSD).
+bash "${HELPER_DIR}/psbbn-game-register.sh" "${DEVICE}" "PP.SCPS-15049..APPLICATION" \
+    "${HELPER_DIR}" "${LOG_FILE}" 2>> "${LOG_FILE}" \
+    || echo "[!] could not add Minna no Golf to the PSBBN game list; see the log." >> "${LOG_FILE}"
+
 read -n 1 -s -r -p "${UI_TEXT[EXIT_KEY]}" </dev/tty
 echo

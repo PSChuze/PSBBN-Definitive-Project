@@ -54,21 +54,44 @@ NAMES = {
 
 
 def retitle(image, language, write=False):
-    """A line describing what happened to /res/info.sys, or None without the
-    Minna partition."""
-    from nobunaga.retitle import info_with
+    """Lines describing what happened to the browser entry and /res/info.sys, or
+    None without the Minna partition."""
+    from nobunaga.retitle import info_with, area_with
+    from playonline import attrarea, drive
     try:
         lba, sectors = apa.find_partition(image, PARTITION)
     except KeyError:
         return None
+    lines = []
+    # The HOSDMenu browser entry (icon.sys in the attribute area). An English
+    # install written before build_attr carried uninstallmes0..2 has none, which
+    # stock HDD-OSD lists as "Corrupted Data"; add them in place, leaving the
+    # title and look as write.py set them. pop'n and Nobunaga retitle repair the
+    # same attribute-area field in the same way. Empty fields: add only the
+    # missing lines, change nothing else.
+    area = attrarea.read_area(image, lba)
+    if area is None:
+        lines.append("browser entry: none")
+    else:
+        new, changed = area_with(area, {})
+        if not changed:
+            lines.append("browser entry: already complete")
+        elif not write:
+            lines.append("browser entry: would add %s" % ", ".join(changed))
+        else:
+            drive.write_area(image, lba, new, write=True, backup=False)
+            if attrarea.read_area(image, lba)[:len(new)] != new:
+                raise SystemExit(
+                    "browser entry: readback after the write does not match")
+            lines.append("browser entry: added %s" % ", ".join(changed))
     with open(image, "r+b" if write else "rb") as f:
         f.seek(0, os.SEEK_END)
         size = f.tell()
-        line = info_with(f, size, lba, sectors, NAMES[language], write)
+        lines.append(info_with(f, size, lba, sectors, NAMES[language], write))
         if write:
             f.flush()
             os.fsync(f.fileno())
-    return line
+    return lines
 
 
 def main(argv=None):
@@ -80,11 +103,13 @@ def main(argv=None):
     ap.add_argument("language", choices=sorted(NAMES))
     ap.add_argument("--write", action="store_true")
     a = ap.parse_args(argv)
-    line = retitle(a.drive, a.language, a.write)
-    if line is None:
+    lines = retitle(a.drive, a.language, a.write)
+    if lines is None:
         print("no %s partition on this drive" % PARTITION)
         return 1
-    print("%s (%s): %s" % (PARTITION, a.language, line))
+    print("%s (%s)" % (PARTITION, a.language))
+    for line in lines:
+        print("  " + line)
     return 0
 
 

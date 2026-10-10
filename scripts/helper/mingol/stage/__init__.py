@@ -341,7 +341,12 @@ def build_attr(root, english):
     """The attribute area for partition + 0x1000 (English title with English text)."""
     if english:
         title0, title1, enc = TITLE0_EN, u"", "ascii"
-        uninstall = ()
+        # Empty, but present: stock HDD-OSD lists an entry as "Corrupted Data"
+        # when its icon.sys has no uninstallmes0..2 lines, and every retail area
+        # carries them (pop'n and Nobunaga were fixed the same way). PSBBN does
+        # not care, which is why an English area written without them still
+        # appeared in PSBBN's game list yet showed as corrupted in HDD-OSD.
+        uninstall = (u"", u"", u"")
     else:
         title0, title1, enc = TITLE0, TITLE1, "utf-8"
         uninstall = UNINSTALL

@@ -426,6 +426,32 @@ bombsudo bomb.bombinstall "${DEVICE}" \
 bomb_accessflag
 bomb_psbbn_feega
 
+# Register this title's partition in protect-parts.list (the standing pattern:
+# an installer owns its keep-list entry), so PSBBN's Game-Installer keeps it on
+# every game add. Idempotent; safe if the list already has it.
+OPL_PROT_MNT="$(mktemp -d)"
+if sudo mount "${DEVICE}3" "${OPL_PROT_MNT}" >> "${LOG_FILE}" 2>&1; then
+    sudo touch "${OPL_PROT_MNT}/protect-parts.list"
+    sudo grep -qxF "PP.SLPS-20343.NET.BOMB" "${OPL_PROT_MNT}/protect-parts.list" 2>/dev/null \
+        || echo "PP.SLPS-20343.NET.BOMB" | sudo tee -a "${OPL_PROT_MNT}/protect-parts.list" >/dev/null
+    sync
+    sudo umount "${OPL_PROT_MNT}"
+    echo "Bomberman partition registered in protect-parts.list." >> "${LOG_FILE}"
+else
+    echo "[!] could not mount exFAT to update protect-parts.list; a future PSBBN game add may drop the Bomberman partition." >> "${LOG_FILE}"
+fi
+rmdir "${OPL_PROT_MNT}" 2>/dev/null
+
+# Add Bomberman to PSBBN's games menu. PSBBN lists from the sce_game table of
+# __linux.7/database/sqlite/game.db, which the BB Navigator fills from each
+# partition's /res/info.sys only when it rebuilds the table - it does not pick up
+# a partition this installer wrote after the table already existed. So register
+# the row here, on install and on update. Best-effort: a failure never fails the
+# install (the game still boots from HDD-OSD).
+bash "${HELPER_DIR}/psbbn-game-register.sh" "${DEVICE}" "PP.SLPS-20343.NET.BOMB" \
+    "${HELPER_DIR}" "${LOG_FILE}" 2>> "${LOG_FILE}" \
+    || echo "[!] could not add Bomberman to the PSBBN game list; see the log." >> "${LOG_FILE}"
+
 echo
 center_text "${UI_TEXT[BOMB_DONE]}"
 echo
