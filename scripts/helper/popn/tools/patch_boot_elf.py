@@ -91,6 +91,27 @@ RELAY_PATCHES = [
      "P2P relay: listener role takes the connector path (both connect out)"),
 ]
 
+# DNAS console-region bypass (on by default; --no-region to skip). The game's
+# runtime DNAS container decrypt has three binding gates of the shape
+# "jalr thunk; li v1,1; bne v0,v1,fail; li $rN,-0x66(-102)" (at VA 0x29d5c8,
+# 0x29e88c, 0x2accc4), all calling one shared check thunk at VA 0x2a5858. On a
+# non-JP console the check returns != 1, so every gate defaults to -102, the
+# container decrypts to garbage, and the game black-screens (exactly what
+# Bomberman did). The three gate bodies are self-encrypted on disk, but the
+# thunk is plaintext and stays decoded, so forcing it to return 1 clears all
+# three at once. This is the same force-pass as Minna PATCH 1 / Bomberman's
+# 0x11DC78. On a JP console the check returns 1 anyway, so this is a no-op
+# there. See the Bomberman precedent in
+# Net de Bomberman/work/launcher/bombload/main-hosdmenu.c (force_check_pass).
+#   thunk @ 0x2a5858:  addiu sp,-16; sd ra,0(sp); ld ra,0(sp); j 0x2a4c48 ...
+#   -> jr ra; li v0,1  (return 1; the real check at 0x2a4c48 never runs)
+REGION_PATCHES = [
+    (0x2a5858, 0x1a58d8,
+     bytes.fromhex("f0ffbd270000bfff"),   # addiu sp,-16 ; sd ra,0(sp)
+     bytes.fromhex("0800e00301000224"),   # jr ra        ; li v0,1 (delay)
+     "DNAS region bypass: force the binding-check thunk to return 1"),
+]
+
 # English-release client behaviour (operator-approved 2026-10-04), applied only on the
 # English path (popninstall --translate). See popn/re/RE-keyboard-english.md.
 #  - every on-screen keyboard opens on the half-width English (ABC) page instead of
@@ -310,14 +331,15 @@ def carve_game_elf(kelf_plain):
     return kelf_plain[off:off + span]
 
 
-def patch_game_elf(elf, relay=True, english=False, rankings=True):
+def patch_game_elf(elf, relay=True, english=False, rankings=True, region=True):
     """Apply the guarded patches to an EXEC game ELF: the three disc-less-boot
-    patches, plus the P2P relay patch unless relay=False, plus the English-release
-    behaviour patches (ENGLISH_PATCHES) when english=True, plus the ranking URL
-    rewrite (ranking_patches) unless rankings=False. Returns
-    (patched_bytes, report) where report is a list of (desc, status) with
-    status in {"patched", "already"}. Raises PatchError if any site matches
-    neither the orig nor the new word, or if the ELF is not the expected one."""
+    patches, plus the DNAS console-region bypass unless region=False, plus the
+    P2P relay patch unless relay=False, plus the English-release behaviour
+    patches (ENGLISH_PATCHES) when english=True, plus the ranking URL rewrite
+    (ranking_patches) unless rankings=False. Returns (patched_bytes, report)
+    where report is a list of (desc, status) with status in {"patched",
+    "already"}. Raises PatchError if any site matches neither the orig nor the
+    new word, or if the ELF is not the expected one."""
     if elf[:4] != b"\x7fELF":
         raise PatchError("input is not an ELF (no magic)")
     if _u32(elf, 24) != EXEC_ENTRY:
@@ -325,7 +347,8 @@ def patch_game_elf(elf, relay=True, english=False, rankings=True):
                          % (_u32(elf, 24), EXEC_ENTRY))
     out = bytearray(elf)
     report = []
-    for va, off, orig, new, desc in (PATCHES + (RELAY_PATCHES if relay else [])
+    for va, off, orig, new, desc in (PATCHES + (REGION_PATCHES if region else [])
+                                     + (RELAY_PATCHES if relay else [])
                                      + (ENGLISH_PATCHES if english else [])
                                      + (ranking_patches(english) if rankings else [])):
         # Cross-check the documented VA->offset mapping, so a wrong table is
@@ -361,23 +384,23 @@ def carve_ioprp(kelf_plain):
     return kelf_plain[IOPRP_OFF:IOPRP_OFF + IOPRP_LEN]
 
 
-def patch_from_main(main_bin, relay=True, english=False, rankings=True):
+def patch_from_main(main_bin, relay=True, english=False, rankings=True, region=True):
     """Decrypt a disc MAIN.BIN, carve the EXEC ELF, and patch it. Returns
     (patched_bytes, report)."""
     import disc_dec
     plain = disc_dec.decrypt_disc_container(main_bin)
     elf = carve_game_elf(plain)
-    return patch_game_elf(elf, relay, english, rankings)
+    return patch_game_elf(elf, relay, english, rankings, region)
 
 
-def boot_sections_from_main(main_bin, relay=True, english=False, rankings=True):
+def boot_sections_from_main(main_bin, relay=True, english=False, rankings=True, region=True):
     """Decrypt a disc MAIN.BIN once and return (ioprp, patched_elf) -- the two
     inputs the loader fill step needs, both carved from the player's own disc.
     Nothing Konami or Sony is shipped; the disc supplies everything."""
     import disc_dec
     plain = disc_dec.decrypt_disc_container(main_bin)
     ioprp = carve_ioprp(plain)
-    patched, _report = patch_game_elf(carve_game_elf(plain), relay, english, rankings)
+    patched, _report = patch_game_elf(carve_game_elf(plain), relay, english, rankings, region)
     return ioprp, patched
 
 
@@ -392,7 +415,9 @@ def _selftest():
     if os.path.exists(ref_plain) and os.path.exists(ref_patched):
         elf = open(ref_plain, "rb").read()
         want = open(ref_patched, "rb").read()
-        got, report = patch_game_elf(elf, relay=False, rankings=False)
+        # the reference artifact carries only the 3 disc-less-boot patches, so
+        # the region bypass is excluded from this exact comparison.
+        got, report = patch_game_elf(elf, relay=False, rankings=False, region=False)
         for desc, status in report:
             print("  %-9s %s" % (status, desc))
         if got == want:
@@ -402,20 +427,30 @@ def _selftest():
             print("  FAIL patched output differs from reference artifact")
             ok = False
         # idempotence: patching the patched ELF changes nothing
-        again, rep2 = patch_game_elf(got, relay=False, rankings=False)
+        again, rep2 = patch_game_elf(got, relay=False, rankings=False, region=False)
         if again == got and all(s == "already" for _, s in rep2):
             print("  OK   re-patch is idempotent")
         else:
             print("  FAIL re-patch not idempotent")
             ok = False
         # the relay patch: exactly one word differs from the boot-only output
-        rel, _ = patch_game_elf(elf, rankings=False)
+        rel, _ = patch_game_elf(elf, rankings=False, region=False)
         diff = [i for i in range(len(rel)) if rel[i] != got[i]]
         _va, roff, _o, rnew, _d = RELAY_PATCHES[0]
         if diff and min(diff) >= roff and max(diff) < roff + 4 and rel[roff:roff + 4] == rnew:
             print("  OK   relay patch changes only the role branch at %#x" % roff)
         else:
             print("  FAIL relay patch diff unexpected: %s" % [hex(i) for i in diff[:8]])
+            ok = False
+        # the region bypass: changes only the 8-byte thunk at its file offset
+        reg, _ = patch_game_elf(elf, relay=False, rankings=False)
+        diff = [i for i in range(len(reg)) if reg[i] != got[i]]
+        _rva, goff, _ro, gnew, _rd = REGION_PATCHES[0]
+        if diff and min(diff) >= goff and max(diff) < goff + len(gnew) \
+                and reg[goff:goff + len(gnew)] == gnew:
+            print("  OK   region bypass changes only the thunk at %#x" % goff)
+        else:
+            print("  FAIL region bypass diff unexpected: %s" % [hex(i) for i in diff[:8]])
             ok = False
         # the ranking patch: only the 12 URL slots change, each to a NUL-terminated URL
         lo = RANKING_URL_VA - LOAD_VA_BASE + PHDR0_OFF
@@ -439,7 +474,8 @@ def _selftest():
         print("  skip patch test (reference artifacts missing)")
 
     if os.path.exists(main_bin):
-        got, _ = patch_from_main(open(main_bin, "rb").read(), relay=False, rankings=False)
+        got, _ = patch_from_main(open(main_bin, "rb").read(), relay=False, rankings=False,
+                                 region=False)
         if os.path.exists(ref_patched):
             want = open(ref_patched, "rb").read()
             tag = "== reference" if got == want else "!= reference"
@@ -469,6 +505,8 @@ def main():
                     help="skip the P2P relay patch (battles then need inbound TCP 5730)")
     ap.add_argument("--no-rankings", dest="rankings", action="store_false",
                     help="keep the stock ranking URLs (port 80, unreachable on prod)")
+    ap.add_argument("--no-region", dest="region", action="store_false",
+                    help="skip the DNAS console-region bypass (non-JP consoles then -102)")
     a = ap.parse_args()
 
     if a.selftest:
@@ -478,10 +516,10 @@ def main():
 
     if a.main:
         patched, report = patch_from_main(open(a.main, "rb").read(), a.relay, a.english,
-                                         a.rankings)
+                                         a.rankings, a.region)
     else:
         patched, report = patch_game_elf(open(a.elf, "rb").read(), a.relay, a.english,
-                                        a.rankings)
+                                        a.rankings, a.region)
     for desc, status in report:
         print("  %-9s %s" % (status, desc))
     if a.out:
