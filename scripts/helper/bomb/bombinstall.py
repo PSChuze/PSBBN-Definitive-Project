@@ -560,6 +560,18 @@ def write_spoof_netcnf(device, pfsshell, work):
             raise RuntimeError(proc.stdout or "")
 
 
+def _netcnf_step(a):
+    """Write the spoof-keyed network config; never fatal. Called from both the
+    fresh-install and --update paths (a reinstall is almost always an update, so
+    this must not live only in the fresh path)."""
+    try:
+        write_spoof_netcnf(a.device, a.pfsshell, a.work)
+        print("== netcnf: wrote spoof-keyed DHCP config to __sysconf (network fix)")
+    except Exception as e:
+        print("== netcnf: could not write __sysconf config (%r); run Fix network "
+              "settings from the HDD Games menu" % e)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("device")
@@ -685,6 +697,8 @@ def main():
             attr_path = os.path.join(a.work, "attr.bin")
             open(attr_path, "wb").write(build_attr(a.icon, BOOT_BLOCK, lang))
         update_partition(a, staged, attr_path)
+        if a.write:
+            _netcnf_step(a)
         return
 
     jobs = pfsshell_jobs(a.device, staged, a.game_mib, existing_to_remove)
@@ -715,12 +729,7 @@ def main():
     for cwd, script in jobs:
         print("   -- cwd=%s" % cwd)
         subprocess.run([a.pfsshell], input=script, text=True, check=True, cwd=cwd)
-    try:
-        write_spoof_netcnf(a.device, a.pfsshell, a.work)
-        print("== netcnf: wrote spoof-keyed DHCP config to __sysconf (network fix)")
-    except Exception as e:
-        print("== netcnf: could not write __sysconf config (%r); run Fix network "
-              "settings from the HDD Games menu" % e)
+    _netcnf_step(a)
     lba_game = part_lba(a.device, GAME_PART)
     if attr_path:
         print("== attr: browser entry at LBA %d + 0x1000" % lba_game)
