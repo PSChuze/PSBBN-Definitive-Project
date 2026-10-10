@@ -80,10 +80,17 @@ def main():
     if a.no_sudo:
         USE_SUDO = False
 
-    if " " in a.work:
-        raise SystemExit("--work must be a space-free path (PFS Shell splits on whitespace)")
-    os.makedirs(a.work, exist_ok=True)
-    local = os.path.join(a.work, a.name)
+    # Keep the fetched config and the staged config in separate dirs. PFS Shell
+    # runs under sudo, so the file it `get`s is owned by root; building the new
+    # config into the same path would fail with EACCES. Separate dirs also let
+    # both keep the basename `put` requires without colliding. Quoted lcd handles
+    # spaces, so a toolkit under ".../PlayOnline Project/..." is fine.
+    orig_dir = os.path.join(a.work, "orig")
+    stage_dir = os.path.join(a.work, "stage")
+    os.makedirs(orig_dir, exist_ok=True)
+    os.makedirs(stage_dir, exist_ok=True)
+    fetched = os.path.join(orig_dir, a.name)
+    staged = os.path.join(stage_dir, a.name)
 
     ilink = None
     if a.ilink:
@@ -93,22 +100,20 @@ def main():
 
     # 1) Pull the config the console wrote (unless an i.Link was supplied).
     if ilink is None:
-        if os.path.exists(local):
-            os.remove(local)
         try:
-            run_pfsshell(a.pfsshell, a.work,
-                         cd_lines(a.device, a.partition, a.remote_dir, a.work) +
+            run_pfsshell(a.pfsshell, orig_dir,
+                         cd_lines(a.device, a.partition, a.remote_dir, orig_dir) +
                          ["get %s" % a.name, "umount"])
         except RuntimeError as e:
             print(e, file=sys.stderr)
             print("could not read %s from %s on %s" % (a.name, a.remote_dir, a.partition),
                   file=sys.stderr)
             raise SystemExit(4)
-        if not os.path.exists(local) or os.path.getsize(local) == 0:
+        if not os.path.exists(fetched) or os.path.getsize(fetched) == 0:
             print("no %s on the drive" % a.name, file=sys.stderr)
             raise SystemExit(4)
-        shutil.copyfile(local, local + ".bak")
-        ilink = netcnf.recover(open(local, "rb").read())
+        shutil.copyfile(fetched, os.path.join(a.work, a.name + ".bak"))
+        ilink = netcnf.recover(open(fetched, "rb").read())
         if ilink is None:
             print("found %s but could not recover the console i.Link from it" % a.name,
                   file=sys.stderr)
@@ -116,26 +121,26 @@ def main():
 
     print(ilink.hex())  # the recovered/accepted i.Link, for the caller to show
 
-    # 2) Build a DHCP config keyed to that console and stage it.
-    with open(local, "wb") as f:
+    # 2) Build a DHCP config keyed to that console and stage it (owned by us).
+    with open(staged, "wb") as f:
         f.write(netcnf.build(ilink))
     # sanity: it must decode back to the known-good DHCP body on that console
-    assert netcnf.decode(open(local, "rb").read(), ilink) == netcnf.DHCP_PROFILE
+    assert netcnf.decode(open(staged, "rb").read(), ilink) == netcnf.DHCP_PROFILE
 
     if not a.apply:
         print("DRY RUN: staged %s (DHCP, i.Link %s). Re-run with --apply to write it."
-              % (local, ilink.hex()), file=sys.stderr)
+              % (staged, ilink.hex()), file=sys.stderr)
         return
 
     # 3) Write it back, replacing the old file in place. The rm is best-effort:
     # on the --ilink path there may be no file to remove, and put then creates it.
     try:
-        run_pfsshell(a.pfsshell, a.work,
-                     cd_lines(a.device, a.partition, a.remote_dir, a.work) + ["rm %s" % a.name, "umount"])
+        run_pfsshell(a.pfsshell, stage_dir,
+                     cd_lines(a.device, a.partition, a.remote_dir, stage_dir) + ["rm %s" % a.name, "umount"])
     except RuntimeError:
         pass
-    run_pfsshell(a.pfsshell, a.work,
-                 cd_lines(a.device, a.partition, a.remote_dir, a.work) + ["put %s" % a.name, "umount"])
+    run_pfsshell(a.pfsshell, stage_dir,
+                 cd_lines(a.device, a.partition, a.remote_dir, stage_dir) + ["put %s" % a.name, "umount"])
     print("wrote %s to %s/%s on %s" % (a.name, a.remote_dir, a.name, a.partition),
           file=sys.stderr)
 

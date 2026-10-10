@@ -292,7 +292,7 @@ option_five() {
         return 1
     fi
 
-    rm -rf "$WORK"
+    sudo rm -rf "$WORK"   # prior runs leave root-owned files (pfsshell runs under sudo)
     mkdir -p "$WORK"
 
     # Pass 1: try to recover the console i.Link from the existing config (no write).
