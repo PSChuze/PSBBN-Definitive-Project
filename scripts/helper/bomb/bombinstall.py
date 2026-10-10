@@ -68,6 +68,16 @@ sys.path.insert(0, os.path.join(HERE, "bomb"))
 import bombbundle  # noqa: E402  (dnasbundle engine, *.BIN filter)
 from dnasdec import ata_material, decrypt  # noqa: E402
 
+sys.path.insert(0, os.path.join(HERE, "..", "nobunaga", "tools"))
+import netcnf  # noqa: E402  (netcnf000.dat codec)
+
+# The i.Link the loader serves to the EE's sceCdRI read, which is what decodes
+# the BB network config. scefix spoofs it to the psbb console on every console,
+# so a netcnf keyed to it decodes everywhere and the game stops reporting
+# "connected to another PlayStation 2 / redo network settings". Must match
+# scefix's SPOOF_ID.
+NETCNF_SPOOF_ID = bytes.fromhex("0700001ad5910c10")
+
 SECTOR = 512
 ATTR_OFF = 0x1000
 GAME_PART = "PP.SLPS-20343.NET.BOMB"
@@ -532,6 +542,24 @@ def verify_seal_serve(staged, four):
     return ok[0]
 
 
+def write_spoof_netcnf(device, pfsshell, work):
+    """Write a DHCP netcnf000.dat keyed to the loader's spoof id into __sysconf,
+    so the BB network config decodes on any console (the game reads it with the
+    EE's sceCdRI, which the loader spoofs to NETCNF_SPOOF_ID). Shared across the
+    titles; best-effort -- a failure here does not fail the game install."""
+    stage = os.path.join(work, "ncstage")
+    os.makedirs(stage, exist_ok=True)
+    open(os.path.join(stage, "netcnf000.dat"), "wb").write(netcnf.build(NETCNF_SPOOF_ID))
+    base = ['device %s' % device, 'mount __sysconf', 'lcd "%s"' % stage.replace("\\", "/"),
+            'cd etc', 'cd bnnetwork']
+    for tail in (["rm netcnf000.dat"], ["put netcnf000.dat"]):   # rm is best-effort
+        script = "\n".join(base + tail + ["umount", "exit", ""])
+        proc = subprocess.run([pfsshell], input=script, text=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if tail[0].startswith("put") and ("Exit code is" in (proc.stdout or "") or proc.returncode):
+            raise RuntimeError(proc.stdout or "")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("device")
@@ -687,6 +715,12 @@ def main():
     for cwd, script in jobs:
         print("   -- cwd=%s" % cwd)
         subprocess.run([a.pfsshell], input=script, text=True, check=True, cwd=cwd)
+    try:
+        write_spoof_netcnf(a.device, a.pfsshell, a.work)
+        print("== netcnf: wrote spoof-keyed DHCP config to __sysconf (network fix)")
+    except Exception as e:
+        print("== netcnf: could not write __sysconf config (%r); run Fix network "
+              "settings from the HDD Games menu" % e)
     lba_game = part_lba(a.device, GAME_PART)
     if attr_path:
         print("== attr: browser entry at LBA %d + 0x1000" % lba_game)
