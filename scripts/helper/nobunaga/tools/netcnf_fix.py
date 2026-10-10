@@ -44,8 +44,13 @@ def run_pfsshell(pfsshell, cwd, lines):
     return out
 
 
-def cd_lines(device, partition, remote_dir):
-    lines = ["device %s" % device, "mount %s" % partition]
+def cd_lines(device, partition, remote_dir, local_dir):
+    # This PFS Shell build writes get/reads put from the dir set by `lcd`, not
+    # the process cwd (see popninstall.py), so set it explicitly. Then cd into
+    # the remote directory one level at a time (the proven idiom in
+    # bombinstall.py's pfsshell_jobs).
+    lines = ["device %s" % device, "mount %s" % partition,
+             'lcd "%s"' % local_dir.replace("\\", "/")]
     for part in remote_dir.split("/"):
         if part:
             lines.append("cd %s" % part)
@@ -82,7 +87,7 @@ def main():
             os.remove(local)
         try:
             run_pfsshell(a.pfsshell, a.work,
-                         cd_lines(a.device, a.partition, a.remote_dir) +
+                         cd_lines(a.device, a.partition, a.remote_dir, a.work) +
                          ["get %s" % a.name, "umount"])
         except RuntimeError as e:
             print(e, file=sys.stderr)
@@ -116,11 +121,11 @@ def main():
     # on the --ilink path there may be no file to remove, and put then creates it.
     try:
         run_pfsshell(a.pfsshell, a.work,
-                     cd_lines(a.device, a.partition, a.remote_dir) + ["rm %s" % a.name, "umount"])
+                     cd_lines(a.device, a.partition, a.remote_dir, a.work) + ["rm %s" % a.name, "umount"])
     except RuntimeError:
         pass
     run_pfsshell(a.pfsshell, a.work,
-                 cd_lines(a.device, a.partition, a.remote_dir) + ["put %s" % a.name, "umount"])
+                 cd_lines(a.device, a.partition, a.remote_dir, a.work) + ["put %s" % a.name, "umount"])
     print("wrote %s to %s/%s on %s" % (a.name, a.remote_dir, a.name, a.partition),
           file=sys.stderr)
 
