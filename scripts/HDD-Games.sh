@@ -338,7 +338,7 @@ option_five() {
 # cannot run the commands themselves. Reads the drive only. The zip goes next
 # to the logs the launcher already copies out (path_arg), else to logs/.
 option_six() {
-    local py="${SCRIPTS_DIR}/venv/bin/python3" out model zip shown
+    local py="${SCRIPTS_DIR}/venv/bin/python3" out model zip shown desk bs
     [[ -x "${py}" ]] || py="python3"
     out="${path_arg:-${TOOLKIT_PATH}/logs}"
 
@@ -370,12 +370,32 @@ option_six() {
         # Show a Windows path when the file landed on a Windows drive.
         shown="$zip"
         if [[ "$zip" =~ ^/mnt/([a-z])/(.*)$ ]]; then
-            shown="${BASH_REMATCH[1]^^}:\\${BASH_REMATCH[2]//\//\\}"
+            bs='\'
+            shown="${BASH_REMATCH[2]}"
+            shown="${BASH_REMATCH[1]^^}:${bs}${shown//\//$bs}"
         fi
+        # Under WSL: a copy on the Windows Desktop, and Explorer opened on the
+        # zip, so a player who cannot read a path still finds it. Players took
+        # "Send this file" for "sent"; nothing is uploaded.
+        desk=""
+        if command -v powershell.exe >/dev/null 2>&1; then
+            desk=$(powershell.exe -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" 2>/dev/null | tr -d '\r')
+            [[ -n "$desk" ]] && desk=$(wslpath -u "$desk" 2>/dev/null)
+            if [[ -n "$desk" && -d "$desk" ]] && cp "$zip" "$desk/" 2>>"${LOG_FILE}"; then
+                echo "support report: copy on the Desktop $desk" >> "${LOG_FILE}"
+            else
+                desk=""
+            fi
+        fi
+        [[ "$shown" != "$zip" ]] && command -v explorer.exe >/dev/null 2>&1 \
+            && explorer.exe "/select,$shown" >/dev/null 2>&1
         echo
         center_title "[✓] ${UI_TEXT[HDD_GAMES_REPORT_DONE]}"
         echo
+        center_text "${UI_TEXT[HDD_GAMES_REPORT_SEND]}"
+        echo
         center_text "$shown"
+        [[ -n "$desk" ]] && echo && center_text "${UI_TEXT[HDD_GAMES_REPORT_DESKTOP]}"
     else
         error_msg "${UI_TEXT[HDD_GAMES_REPORT_FAIL]}"
         return 1
