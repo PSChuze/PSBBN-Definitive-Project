@@ -1119,20 +1119,21 @@ def verdicts(m):
             add(8, "ok", "*", "netcnf000.dat decodes with %s" % who)
         else:
             # A console's own PSBBN config: the installers keep it (PSBBN needs
-            # it). Bomberman reads its own copy; Minna and pop'n still read this
-            # one with the psbb spoof and show "connected to another PS2".
-            add(8, "risk", "mingol,popn",
+            # it). Bomberman and English Minna read their own copy; Japanese
+            # Minna and pop'n still read this one with the psbb spoof and show
+            # "connected to another PS2".
+            add(8, "risk", "mingol-ja,popn",
                 "etc/bnnetwork/netcnf000.dat is the console's own PSBBN config "
-                "(keyed to %s), kept; Minna/pop'n cannot read it yet"
+                "(keyed to %s), kept; pop'n and Japanese Minna cannot read it yet"
                 % ((who or "").split(" ")[-1] or nc.get("keyed_to")))
     bc = sc.get("netcnf_bomb", {})
     if sc.get("present") and bc.get("present"):
-        add(8, "ok" if (bc.get("decodes_with") or "").startswith("psbb") else "FAIL", "bomb",
-            "etc/openlobby/netcnf000.dat (Bomberman's own) decodes with %s"
+        add(8, "ok" if (bc.get("decodes_with") or "").startswith("psbb") else "FAIL", "bomb,mingol",
+            "etc/openlobby/netcnf000.dat (Bomberman's and Minna's own) decodes with %s"
             % (bc.get("decodes_with") or "nothing known, keyed to %s" % bc.get("keyed_to")))
     elif sc.get("present"):
-        add(8, "info", "bomb", "etc/openlobby/netcnf000.dat absent (Bomberman loaders "
-            "from 2026-10-11 read it; reinstall/update Bomberman or run Fix network settings)")
+        add(8, "info", "bomb,mingol", "etc/openlobby/netcnf000.dat absent (Bomberman "
+            "and English Minna read it; update the game or run Fix network settings)")
     stray = [p for p in sc.get("netcnf_files", {})
              if p not in ("/etc/bnnetwork/netcnf000.dat", "/etc/openlobby/netcnf000.dat")]
     if stray:
@@ -1337,7 +1338,7 @@ def summary(m):
                                    if nc.get("decodes_with") else
                                    "keyed to %s" % nc.get("keyed_to")))
         bc = sc.get("netcnf_bomb", {})
-        w("  openlobby/netcnf000.dat (Bomberman): %s" % ("absent" if not bc.get("present") else
+        w("  openlobby/netcnf000.dat (Bomberman, Minna): %s" % ("absent" if not bc.get("present") else
                                                          "decodes with %s" % bc.get("decodes_with")
                                                          if bc.get("decodes_with") else
                                                          "keyed to %s" % bc.get("keyed_to")))

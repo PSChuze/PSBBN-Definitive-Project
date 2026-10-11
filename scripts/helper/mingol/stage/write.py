@@ -836,10 +836,43 @@ def main(argv=None):
                          % (game.get("four"), a.device, four.hex()))
     print("== target %s, four %s" % (a.device, four.hex()))
     if a.update:
-        return update(a, stage, tree, attr)
-    if a.reinstall:
-        return reinstall(a, stage, tree, attr)
-    return fresh(a, stage, tree, attr)
+        rc = update(a, stage, tree, attr)
+    elif a.reinstall:
+        rc = reinstall(a, stage, tree, attr)
+    else:
+        rc = fresh(a, stage, tree, attr)
+    # After every write, the update included (an update with nothing to write
+    # still needs it: installs before this one never wrote the config).
+    if a.write and not rc:
+        netcnf_step(a.device, a.pfsshell, stage.rstrip("/\\") + ".netcnf")
+    return rc
+
+
+# The game's network config (bootpatch.NETCNF_PATH_PATCHES, feega.PATCHES):
+# the English SYSTEM.BIN and FEEGAGUI.ELF read __sysconf/etc/openlobby, a
+# psbb-keyed copy with the revival's DNS, so PSBBN's own etc/bnnetwork (keyed
+# to the console's real i.Link) is left alone. The Japanese install's sealed
+# SYSTEM.BIN still reads etc/bnnetwork: the shared step writes a psbb-keyed
+# one there only when the console has none of its own.
+NETCNF_DIR = "etc/openlobby"
+NETCNF_DNS = "82.221.100.125"
+
+
+def netcnf_step(device, pfsshell, work):
+    """Best-effort: a failure prints a line and never fails the install."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                    "..", "..", "nobunaga", "tools"))
+    try:
+        import netcnf_install
+        netcnf_install.write_spoof_netcnf(device, pfsshell, work,
+                                          remote_dir=NETCNF_DIR, dns=NETCNF_DNS)
+        print("== netcnf: wrote the game's network config to __sysconf/%s (DNS %s) "
+              "and read it back" % (NETCNF_DIR, NETCNF_DNS))
+    except Exception as e:
+        print("== netcnf: could not write __sysconf/%s (%r); run Fix network "
+              "settings from the HDD Games menu" % (NETCNF_DIR, e))
+        return
+    netcnf_install.netcnf_step(device, pfsshell, work)
 
 
 def reinstall(a, stage, tree, attr):

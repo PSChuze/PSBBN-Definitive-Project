@@ -413,6 +413,8 @@ def stage_plain_overlays(root, tree, english, note=print):
                 note("--translate: Circle and Cross swapped (X confirms, O cancels)")
             except bootpatch.PatchError as e:
                 note("--translate: buttons left as on the disc (O confirms): %s" % e)
+            data = bootpatch.netcnf_path(data)
+            note("network config: the game reads etc/openlobby, PSBBN's stays its own")
         _write(_path(tree, name.upper()), data)
     return len(names)
 

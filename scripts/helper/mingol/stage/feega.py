@@ -128,6 +128,9 @@ PATCHES = (
     (0x81b380, _s(b"CNCT_SV.M2V;1", 16), _s(b"CNCT_SV.M2V", 16), "pfs names carry no ;1"),
     (0x81b390, _s(b"BGM_SV.SQ;1", 16), _s(b"BGM_SV.SQ", 16), "pfs names carry no ;1"),
     (0x81b3a0, _s(b"EFF_SV.HD;1", 16), _s(b"EFF_SV.HD", 16), "pfs names carry no ;1"),
+    (0x81d270, b"/etc/bnnetwork/netcnf000.dat", b"/etc/openlobby/netcnf000.dat",
+     "its network config from etc/openlobby (psbb-keyed, written by the "
+     "installer), not PSBBN's real-keyed etc/bnnetwork; as SYSTEM.BIN"),
 )
 
 

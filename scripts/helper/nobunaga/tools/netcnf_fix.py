@@ -78,7 +78,7 @@ def main():
     ap.add_argument("--name", default="netcnf000.dat")
     ap.add_argument("--also-dir", default="etc/openlobby",
                     help="more __sysconf dirs to write the same config to, comma "
-                    "separated (default: Bomberman's own copy); '' for none")
+                    "separated (default: Bomberman's and Minna's own copy); '' for none")
     ap.add_argument("--work", required=True, help="scratch dir")
     ap.add_argument("--ilink", help="key the config to this i.Link (16 hex) instead "
                     "of the psbb spoof")

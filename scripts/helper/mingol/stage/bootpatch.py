@@ -213,6 +213,29 @@ def button_swap(data):
     return _apply("SYSTEM.BIN", data, BUTTON_SWAP_PATCHES, SYSTEM_STOCK, SYSTEM_SWAPPED)
 
 
+# The game's own network config. SYSTEM.BIN's BB network library reads
+# __sysconf/etc/bnnetwork/netcnf000.dat (one string, .data 0x2bf060), which
+# PSBBN owns: keyed to the console's real i.Link and rewritten whenever the
+# player sets up the network there. The game decodes it with the psbb spoof
+# the loader serves, so on a console that runs PSBBN it shows "network
+# settings made on another PlayStation 2". Pointed at etc/openlobby (the
+# installer writes a psbb-keyed copy there, as for Bomberman), PSBBN's file
+# stays as it is. Same length; the NUL after it is the stock one.
+NETCNF_PATH_PATCHES = (
+    (0x15c3e0, b"/etc/bnnetwork/netcnf000.dat".hex(),
+     b"/etc/openlobby/netcnf000.dat".hex()),
+)
+
+
+def netcnf_path(data):
+    """SYSTEM.BIN reading its network config from etc/openlobby. Returned as
+    it is when the path is already changed."""
+    off, _old, new = NETCNF_PATH_PATCHES[0]
+    if data[off:off + len(new) // 2] == bytes.fromhex(new):
+        return data
+    return _apply("SYSTEM.BIN", data, NETCNF_PATH_PATCHES, None, None)
+
+
 def dnas_overlay(data):
     """ZZBIN/DNAS.BIN with the online-gate skip."""
     return _apply("DNAS.BIN", data, DNAS_PATCHES, DNAS_STOCK, DNAS_PROVEN)
