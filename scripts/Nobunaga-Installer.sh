@@ -183,6 +183,28 @@ nobu_accessflag() {
     else
         echo "[!] access_flag25 write failed; the game may not pass its boot check. See logs/nobunaga-installer.log" >> "${LOG_FILE}"
     fi
+    nobu_accessflag_etc
+}
+
+# The game finds that record through the FILE __net:/etc/access_flag25 (its
+# LBA, 4 bytes). A toolkit-made __net has no such file, so the game never read
+# the record and stayed black (tester report G5W-SJU). Put it when missing; an
+# existing one is left alone. pfsshell's lcd takes the rest of the line as is,
+# so the staged file sits in a folder with no spaces.
+nobu_accessflag_etc() {
+    local pfs="${PFS_SHELL:-${HELPER_DIR}/PFS Shell.elf}" tdir state
+    tdir="$(mktemp -d)"
+    state=$(nobusudo nobunaga.accessflag "${DEVICE}" --etc-stage "${tdir}" 2>>"${LOG_FILE}")
+    echo "access_flag25 file: ${state:-error}" >> "${LOG_FILE}"
+    if [[ "${state}" == missing ]]; then
+        printf 'device %s\nmount __net\nmkdir etc\ncd etc\nlcd %s\nput access_flag25\numount\nexit\n' \
+            "${DEVICE}" "${tdir}" | sudo "${pfs}" >> "${LOG_FILE}" 2>&1
+        sudo blockdev --flushbufs "${DEVICE}" 2>/dev/null
+    fi
+    sudo rm -rf "${tdir}"
+    if ! nobusudo nobunaga.accessflag "${DEVICE}" --etc-check >> "${LOG_FILE}" 2>&1; then
+        echo "[!] __net:/etc/access_flag25 is not in place; the game will stay on a black screen. See logs/nobunaga-installer.log" | tee -a "${LOG_FILE}"
+    fi
 }
 
 # Boot debug text, asked with the install (scripts/helper/debugtext.sh): Y

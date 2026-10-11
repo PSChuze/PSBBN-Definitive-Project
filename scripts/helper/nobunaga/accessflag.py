@@ -44,13 +44,26 @@ access_flag25 plaintext format, which is not recovered yet; until then this
 record plus the spoof is the boot path. It is Sony DNAS2 identity data, not
 Koei game code.
 
+The game does not read + 0x202000 at a fixed place: its boot program opens the
+FILE `pfs0:/etc/access_flag25` in `__net`'s filesystem, a 4-byte little-endian
+LBA (__net + 0x1010 sectors = + 0x202000), and reads the record there. With no
+such file it never reads the record and takes the failure path (SmartSaveAttr,
+then a black screen: tester report G5W-SJU, 2026-10-11). A genuine PSBBN drive
+has the file; a toolkit-made `__net` does not. `--etc-stage` writes the file
+for the installer to put with PFS Shell, only when it is missing. An existing
+one is never replaced (other software on the drive may rely on it), and
+access_flag / access_flag2 are left alone: the game opens only access_flag25.
+
     python3 -m nobunaga.accessflag DRIVE --check            # what is there now
     python3 -m nobunaga.accessflag DRIVE --save DIR         # back up + 0x202000
     python3 -m nobunaga.accessflag DRIVE --write [--save DIR]
+    python3 -m nobunaga.accessflag DRIVE --etc-stage DIR    # stage /etc/access_flag25 if missing
+    python3 -m nobunaga.accessflag DRIVE --etc-check        # exit 0 when it points at the record
 """
 import argparse
 import hashlib
 import os
+import struct
 import sys
 import time
 
@@ -145,14 +158,50 @@ def write(image, folder=None):
     return "wrote the psbb access_flag25 at +0x%x; the shared +0x201800 record is untouched" % AF25_OFFSET
 
 
+ETC_FILE = "etc/access_flag25"         # in __net's PFS, as the game opens it
+
+
+def etc_state(image):
+    """('ok' | 'missing' | 'different', the 4 bytes it must hold, what is there)."""
+    from playonline.lib import pfsupdate
+    want = struct.pack("<I", _net_lba(image) + AF25_OFFSET // 512)
+    with pfsupdate.Installed(image, "__net") as inst:
+        if ETC_FILE not in inst.files:
+            return "missing", want, None
+        have = inst.read(ETC_FILE)
+    return ("ok" if have == want else "different"), want, have
+
+
+def etc_stage(image, folder):
+    """Write `access_flag25` into folder when the drive lacks the file; print
+    the state ('missing' means the folder now holds the file to put)."""
+    state, want, have = etc_state(image)
+    if state == "missing":
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, "access_flag25"), "wb") as f:
+            f.write(want)
+    elif state == "different":
+        print("note: /%s holds %s, not %s; left as it is"
+              % (ETC_FILE, have.hex() if have else "?", want.hex()), file=sys.stderr)
+    return state
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("drive")
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--save", metavar="DIR")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--etc-stage", metavar="DIR")
+    ap.add_argument("--etc-check", action="store_true")
     args = ap.parse_args()
-    if args.write:
+    if args.etc_stage:
+        print(etc_stage(args.drive, args.etc_stage))
+    elif args.etc_check:
+        state, want, _ = etc_state(args.drive)
+        print("/%s: %s (LBA %d)" % (ETC_FILE, state, struct.unpack("<I", want)[0]))
+        sys.exit(0 if state == "ok" else 3)
+    elif args.write:
         print(write(args.drive, args.save))
     elif args.save:
         print(save(args.drive, args.save))
