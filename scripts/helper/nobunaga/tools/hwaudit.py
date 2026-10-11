@@ -820,6 +820,14 @@ def netcnf_report(data, env):
             out["fields"] = fields[:12]
             return out
     out["decodes_with"] = None
+    # Not keyed to a console we know: name the one it IS keyed to (the
+    # fixed plaintext prefix pins every i.Link byte), e.g. a config the
+    # console's own network setup rewrote with its real i.Link.
+    try:
+        il = env.netcnf.recover(data)
+        out["keyed_to"] = il.hex() if il else None
+    except Exception as exc:
+        out["keyed_to_error"] = str(exc)
     return out
 
 
@@ -879,6 +887,10 @@ def audit(path, env, args):
             m["sysconf"]["netcnf000"] = netcnf_report(read_file(part, env, nc), env) if nc else dict(present=False)
             if nc:
                 m["sysconf"]["netcnf000"]["present"] = True
+            # A netcnf anywhere else (a put after a failed `cd bnnetwork`
+            # lands in /etc or /) is not read by the games.
+            m["sysconf"]["netcnf_files"] = {p: files[p]["size"] for p in (files or {})
+                                            if "netcnf" in p.lower()}
             fe = [p for p in (files or {}) if p.lower().startswith("/etc/feega/")]
             m["sysconf"]["feega"] = {p: files[p]["size"] for p in fe}
         except Exception as exc:
@@ -1094,9 +1106,18 @@ def verdicts(m):
     if sc.get("present") and not nc.get("present"):
         add(8, "FAIL", "*", "__sysconf/etc/bnnetwork/netcnf000.dat missing (launcher error 0x81020002)")
     elif nc.get("present"):
+        # The loaders serve the psbb spoof to the games' i.Link read, so only a
+        # psbb-keyed file decodes in-game; anything else shows "connected to
+        # another PlayStation 2 / redo network settings".
         who = nc.get("decodes_with")
-        add(8, "ok" if who and who.startswith("operator") else "risk", "*",
-            "netcnf000.dat decodes with %s" % (who or "NO known i.Link (written on another console?)"))
+        add(8, "ok" if who and who.startswith("psbb") else "FAIL", "*",
+            "netcnf000.dat decodes with %s" % (
+                who or "NO known i.Link, keyed to %s (rewritten by a console's own "
+                       "network setup?)" % nc.get("keyed_to")))
+    stray = [p for p in sc.get("netcnf_files", {}) if p != "/etc/bnnetwork/netcnf000.dat"]
+    if stray:
+        add(8, "risk", "*", "netcnf outside /etc/bnnetwork (not read by the games): %s"
+            % ", ".join(sorted(stray)))
 
     for name, g in m.get("games", {}).items():
         if g.get("skipped"):
@@ -1292,7 +1313,10 @@ def summary(m):
     if sc.get("present"):
         nc = sc.get("netcnf000", {})
         w("  netcnf000.dat: %s" % ("absent" if not nc.get("present") else
-                                   "decodes with %s" % nc.get("decodes_with")))
+                                   "decodes with %s" % nc.get("decodes_with")
+                                   if nc.get("decodes_with") else
+                                   "keyed to %s" % nc.get("keyed_to")))
+        w("  netcnf files: %s" % sc.get("netcnf_files"))
         if sc.get("feega"):
             w("  feega: %s" % sc["feega"])
     for name, g in m.get("games", {}).items():

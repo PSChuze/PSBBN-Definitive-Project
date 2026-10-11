@@ -127,6 +127,18 @@ def main():
               % (staged, ilink.hex()), file=sys.stderr)
         return
 
+    # A drive whose network was never set up from PSBBN has no etc/bnnetwork,
+    # and every cd into it fails. Create each level first; mkdir of a level
+    # that exists errors, so each one is its own best-effort run.
+    parts = [p for p in a.remote_dir.split("/") if p]
+    for i in range(len(parts)):
+        try:
+            run_pfsshell(a.pfsshell, stage_dir,
+                         cd_lines(a.device, a.partition, "/".join(parts[:i]), stage_dir) +
+                         ["mkdir %s" % parts[i], "umount"])
+        except RuntimeError:
+            pass
+
     # Write it back, replacing any existing file. The rm is best-effort (there
     # may be none to remove; put then creates it).
     try:
@@ -136,6 +148,21 @@ def main():
         pass
     run_pfsshell(a.pfsshell, stage_dir,
                  cd_lines(a.device, a.partition, a.remote_dir, stage_dir) + ["put %s" % a.name, "umount"])
+
+    # Read it back from where the games look and compare.
+    verify_dir = os.path.join(a.work, "verify")
+    os.makedirs(verify_dir, exist_ok=True)
+    got_path = os.path.join(verify_dir, a.name)
+    if os.path.exists(got_path):
+        os.remove(got_path)
+    run_pfsshell(a.pfsshell, verify_dir,
+                 cd_lines(a.device, a.partition, a.remote_dir, verify_dir) +
+                 ["get %s" % a.name, "umount"])
+    want = open(staged, "rb").read()
+    got = open(got_path, "rb").read() if os.path.exists(got_path) else None
+    if got != want:
+        raise SystemExit("read-back of %s/%s %s" % (
+            a.remote_dir, a.name, "missing" if got is None else "differs from what was written"))
     print("wrote %s to %s/%s on %s" % (a.name, a.remote_dir, a.name, a.partition),
           file=sys.stderr)
 

@@ -545,19 +545,12 @@ def verify_seal_serve(staged, four):
 def write_spoof_netcnf(device, pfsshell, work):
     """Write a DHCP netcnf000.dat keyed to the loader's spoof id into __sysconf,
     so the BB network config decodes on any console (the game reads it with the
-    EE's sceCdRI, which the loader spoofs to NETCNF_SPOOF_ID). Shared across the
-    titles; best-effort -- a failure here does not fail the game install."""
-    stage = os.path.join(work, "ncstage")
-    os.makedirs(stage, exist_ok=True)
-    open(os.path.join(stage, "netcnf000.dat"), "wb").write(netcnf.build(NETCNF_SPOOF_ID))
-    base = ['device %s' % device, 'mount __sysconf', 'lcd "%s"' % stage.replace("\\", "/"),
-            'cd etc', 'cd bnnetwork']
-    for tail in (["rm netcnf000.dat"], ["put netcnf000.dat"]):   # rm is best-effort
-        script = "\n".join(base + tail + ["umount", "exit", ""])
-        proc = subprocess.run([pfsshell], input=script, text=True,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        if tail[0].startswith("put") and ("Exit code is" in (proc.stdout or "") or proc.returncode):
-            raise RuntimeError(proc.stdout or "")
+    EE's sceCdRI, which the loader spoofs to NETCNF_SPOOF_ID). Shared with the
+    other titles (netcnf_install: creates etc/bnnetwork if missing, reads the
+    file back); best-effort -- a failure here does not fail the game install."""
+    import netcnf_install
+    assert netcnf_install.NETCNF_SPOOF_ID == NETCNF_SPOOF_ID
+    netcnf_install.write_spoof_netcnf(device, pfsshell, work)
 
 
 def _netcnf_step(a):
@@ -566,7 +559,7 @@ def _netcnf_step(a):
     this must not live only in the fresh path)."""
     try:
         write_spoof_netcnf(a.device, a.pfsshell, a.work)
-        print("== netcnf: wrote spoof-keyed DHCP config to __sysconf (network fix)")
+        print("== netcnf: wrote spoof-keyed DHCP config to __sysconf and read it back (network fix)")
     except Exception as e:
         print("== netcnf: could not write __sysconf config (%r); run Fix network "
               "settings from the HDD Games menu" % e)
