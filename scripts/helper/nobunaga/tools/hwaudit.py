@@ -1115,10 +1115,16 @@ def verdicts(m):
         # psbb-keyed file decodes in-game; anything else shows "connected to
         # another PlayStation 2 / redo network settings".
         who = nc.get("decodes_with")
-        add(8, "ok" if who and who.startswith("psbb") else "FAIL", "*",
-            "netcnf000.dat decodes with %s" % (
-                who or "NO known i.Link, keyed to %s (rewritten by a console's own "
-                       "network setup?)" % nc.get("keyed_to")))
+        if who and who.startswith("psbb"):
+            add(8, "ok", "*", "netcnf000.dat decodes with %s" % who)
+        else:
+            # A console's own PSBBN config: the installers keep it (PSBBN needs
+            # it). Bomberman reads its own copy; Minna and pop'n still read this
+            # one with the psbb spoof and show "connected to another PS2".
+            add(8, "risk", "mingol,popn",
+                "etc/bnnetwork/netcnf000.dat is the console's own PSBBN config "
+                "(keyed to %s), kept; Minna/pop'n cannot read it yet"
+                % ((who or "").split(" ")[-1] or nc.get("keyed_to")))
     bc = sc.get("netcnf_bomb", {})
     if sc.get("present") and bc.get("present"):
         add(8, "ok" if (bc.get("decodes_with") or "").startswith("psbb") else "FAIL", "bomb",

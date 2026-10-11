@@ -65,9 +65,43 @@ def write_spoof_netcnf(device, pfsshell, work, partition="__sysconf",
             remote_dir, name, "missing" if got is None else "differs", out[-400:]))
 
 
+def console_owned(device, pfsshell, work, partition="__sysconf",
+                  remote_dir="etc/bnnetwork", name="netcnf000.dat", runner=None):
+    """The i.Link (hex) a console's own network setup keyed the existing file
+    to, or None when there is no file, it is ours (psbb-keyed) or unreadable.
+
+    PSBBN reads etc/bnnetwork/netcnf000.dat with the console's real i.Link and
+    rewrites it whenever the player sets up the network there. Overwriting
+    that file with our psbb-keyed copy breaks PSBBN's own network and sends
+    the player back through its network setup, so the installers leave a
+    console's own config alone. `runner(pfsshell, lines)` runs a PFS Shell
+    script (default: this module's, which adds umount/exit)."""
+    run = runner or _pfs
+    back = os.path.join(work, "ncexisting")
+    os.makedirs(back, exist_ok=True)
+    got_path = os.path.join(back, name)
+    if os.path.exists(got_path):
+        os.remove(got_path)
+    cd = ["device %s" % device, "mount %s" % partition] +          ["cd %s" % p for p in remote_dir.split("/") if p]
+    run(pfsshell, cd + ['lcd "%s"' % back.replace("\\", "/"), "get %s" % name])
+    if not os.path.exists(got_path):
+        return None
+    data = open(got_path, "rb").read()
+    il = netcnf.recover(data)
+    if il is None or il == NETCNF_SPOOF_ID:
+        return None
+    return il.hex()
+
+
 def netcnf_step(device, pfsshell, work):
-    """write_spoof_netcnf, but never fatal: prints a line and swallows errors."""
+    """write_spoof_netcnf, but never fatal: prints a line and swallows errors.
+    A console's own config (set up in PSBBN) is kept, never overwritten."""
     try:
+        owner = console_owned(device, pfsshell, work)
+        if owner:
+            print("== netcnf: kept the console's own network settings "
+                  "(etc/bnnetwork, set up on console %s); not changed" % owner)
+            return
         write_spoof_netcnf(device, pfsshell, work)
         print("== netcnf: wrote spoof-keyed DHCP config to __sysconf and read it back (network fix)")
     except Exception as e:

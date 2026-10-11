@@ -135,6 +135,24 @@ def main():
     # PSBBN's real-keyed file can stay as it is).
     dirs = [a.remote_dir] + [d for d in a.also_dir.split(",") if d and d != a.remote_dir]
     for remote_dir in dirs:
+        # PSBBN's own config (keyed to this console's i.Link by its network
+        # setup) stays: overwriting it breaks PSBBN's network and sends the
+        # player back through that setup. --ilink is an explicit re-key.
+        if remote_dir == "etc/bnnetwork" and not a.ilink:
+            import netcnf_install
+
+            def quiet(pfs, lines):          # a missing file is not an error here
+                try:
+                    return run_pfsshell(pfs, a.work, lines + ["umount"])
+                except RuntimeError:
+                    return ""
+            owner = netcnf_install.console_owned(a.device, a.pfsshell, a.work,
+                                                 a.partition, remote_dir, a.name,
+                                                 runner=quiet)
+            if owner:
+                print("kept %s/%s: the console's own network settings (console %s)"
+                      % (remote_dir, a.name, owner), file=sys.stderr)
+                continue
         # A drive whose network was never set up from PSBBN has no etc/bnnetwork,
         # and every cd into it fails. Create each level first; mkdir of a level
         # that exists errors, so each one is its own best-effort run.
