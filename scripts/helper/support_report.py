@@ -34,6 +34,10 @@ The drive is opened read-only. The caller flushes the block device first.
   support_report.py --device /dev/sdX --helper scripts/helper --logs logs
                     --out DIR [--model SCPH-xxxxx]
 prints the zip's path on success.
+
+  support_report.py --send ZIP [--label TEXT]
+uploads it to the OpenLobby site (only after the player said yes) and prints
+the short code the site answers with, e.g. HBU-DBE.
 """
 import argparse
 import datetime
@@ -42,7 +46,10 @@ import os
 import subprocess
 import sys
 import tempfile
+import urllib.request
 import zipfile
+
+REPORT_URL = os.environ.get("SUPPORT_REPORT_URL", "https://openlobby.fyi/api/report")
 
 
 def run(cmd):
@@ -50,14 +57,41 @@ def run(cmd):
     return p.returncode, p.stdout.decode("utf-8", "replace")
 
 
+def send(zpath, label):
+    """POST the zip; returns the code the site gives it. Raises on failure."""
+    with open(zpath, "rb") as f:
+        body = f.read()
+    req = urllib.request.Request(REPORT_URL, data=body, method="POST", headers={
+        "Content-Type": "application/zip",
+        "User-Agent": "psbbn-support-report",
+        "X-Report-Label": label[:80]})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        code = json.load(r).get("code") or ""
+    if not code:
+        raise RuntimeError("no code in the answer")
+    return code
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--device", required=True)
-    ap.add_argument("--helper", required=True, help="scripts/helper")
-    ap.add_argument("--logs", required=True, help="the toolkit's logs folder")
-    ap.add_argument("--out", required=True, help="folder the zip goes to")
+    ap.add_argument("--send", metavar="ZIP", help="upload this report and print its code")
+    ap.add_argument("--label", default="", help="with --send: a short note (console model)")
+    ap.add_argument("--device")
+    ap.add_argument("--helper", help="scripts/helper")
+    ap.add_argument("--logs", help="the toolkit's logs folder")
+    ap.add_argument("--out", help="folder the zip goes to")
     ap.add_argument("--model", default="", help="console model the player typed")
     args = ap.parse_args()
+
+    if args.send:
+        try:
+            print(send(args.send, args.label))
+        except Exception as exc:                           # noqa: BLE001
+            print("send failed: %s" % exc, file=sys.stderr)
+            return 1
+        return 0
+    if not (args.device and args.helper and args.logs and args.out):
+        ap.error("--device, --helper, --logs and --out are required (or --send ZIP)")
 
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     work = tempfile.mkdtemp(prefix="support-report-")

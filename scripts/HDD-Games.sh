@@ -340,7 +340,7 @@ option_five() {
 # cannot run the commands themselves. Reads the drive only. The zip goes next
 # to the logs the launcher already copies out (path_arg), else to logs/.
 option_six() {
-    local py="${SCRIPTS_DIR}/venv/bin/python3" out model zip shown desk bs
+    local py="${SCRIPTS_DIR}/venv/bin/python3" out model zip shown desk bs code
     [[ -x "${py}" ]] || py="python3"
     out="${path_arg:-${TOOLKIT_PATH}/logs}"
 
@@ -369,7 +369,32 @@ option_six() {
             --helper "${HELPER_DIR}" --logs "${TOOLKIT_PATH}/logs" --out "$out" \
             --model "$model" 2>>"${LOG_FILE}") && [[ -n "$zip" ]]; then
         echo "support report: $zip" >> "${LOG_FILE}"
-        # Show a Windows path when the file landed on a Windows drive.
+        # Send it (the player is asked; Enter = yes). The site answers with a
+        # short code the player reads out; the file stays on this PC as well.
+        echo
+        center_text "${UI_TEXT[HDD_GAMES_REPORT_ASK_SEND]}"
+        read -n 1 -s -r -p "" key </dev/tty
+        echo
+        if [[ "$key" != [nN] ]]; then
+            center_text "${UI_TEXT[HDD_GAMES_REPORT_SENDING]}"
+            if code=$("${py}" "${HELPER_DIR}/support_report.py" --send "$zip" \
+                    --label "$model" 2>>"${LOG_FILE}") && [[ -n "$code" ]]; then
+                echo "support report: sent, code $code" >> "${LOG_FILE}"
+                echo
+                center_title "[✓] ${UI_TEXT[HDD_GAMES_REPORT_SENT]}"
+                echo
+                center_text "$code"
+                echo
+                center_text "${UI_TEXT[HDD_GAMES_REPORT_TELL]}"
+                echo
+                center_text "${UI_TEXT[CONTINUE]}"
+                read -n 1 -s -r -p "" </dev/tty
+                return 0
+            fi
+            echo
+            center_text "${UI_TEXT[HDD_GAMES_REPORT_SEND_FAIL]}"
+        fi
+        # Not sent: show a Windows path when the file landed on a Windows drive.
         shown="$zip"
         if [[ "$zip" =~ ^/mnt/([a-z])/(.*)$ ]]; then
             bs='\'
@@ -377,8 +402,7 @@ option_six() {
             shown="${BASH_REMATCH[1]^^}:${bs}${shown//\//$bs}"
         fi
         # Under WSL: a copy on the Windows Desktop, and Explorer opened on the
-        # zip, so a player who cannot read a path still finds it. Players took
-        # "Send this file" for "sent"; nothing is uploaded.
+        # zip, so a player who cannot read a path still finds it.
         desk=""
         if command -v powershell.exe >/dev/null 2>&1; then
             desk=$(powershell.exe -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" 2>/dev/null | tr -d '\r')
