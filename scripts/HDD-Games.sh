@@ -39,6 +39,7 @@ STORAGE_DIR="${SCRIPTS_DIR}/storage"
 LOG_FILE="${TOOLKIT_PATH}/logs/hddgames.log"
 
 FIX_TOOL="${HELPER_DIR}/nobunaga/tools/netcnf_fix.py"
+FEEGA_TOOL="${HELPER_DIR}/feega/feega_login.py"
 
 arch="$(uname -m)"
 
@@ -252,6 +253,7 @@ display_menu() {
     printf "%*s%s\n\n" "$padding" "4) " "${UI_TEXT[HDD_GAMES_MENU_OPTION_4]}"
     printf "%*s%s\n\n" "$padding" "5) " "${UI_TEXT[HDD_GAMES_MENU_OPTION_5]}"
     printf "%*s%s\n\n" "$padding" "6) " "${UI_TEXT[HDD_GAMES_MENU_OPTION_6]}"
+    printf "%*s%s\n\n" "$padding" "7) " "${UI_TEXT[HDD_GAMES_MENU_OPTION_7]}"
     printf "%*s%s\n\n" "$padding" "b) " "${UI_TEXT[MENU_BACK]}"
     printf "%*s%s " "$((padding - 3))" "" "${UI_TEXT[MENU_PROMPT]}"
 }
@@ -405,6 +407,56 @@ option_six() {
     read -n 1 -s -r -p "" </dev/tty
 }
 
+# Save feega login: write __sysconf/etc/feega/feega.dat, the file Net de Bomberman's Load button
+# reads (the game never writes it; Sony's PSBBN feega client did). Keyed to the psbb spoof the
+# loaders serve, so it works on any console. The password goes to the tool on stdin only.
+option_seven() {
+    local WORK="${SCRIPTS_DIR}/tmp/feega" py="${SCRIPTS_DIR}/venv/bin/python3" fid pw
+
+    [[ -x "${py}" ]] || py="python3"
+    HDD_GAMES_SPLASH
+    center_title "${UI_TEXT[HDD_GAMES_FEEGA_TITLE]}"
+    echo
+
+    if [ ! -f "$FEEGA_TOOL" ]; then
+        error_msg "${UI_TEXT[HDD_GAMES_FEEGA_FAIL]}"
+        return 1
+    fi
+
+    center_text "${UI_TEXT[HDD_GAMES_FEEGA_INFO]}"
+    echo
+    center_text "${UI_TEXT[HDD_GAMES_FEEGA_ID]}"
+    read -rp "" fid </dev/tty
+    center_text "${UI_TEXT[HDD_GAMES_FEEGA_PW]}"
+    read -rsp "" pw </dev/tty
+    echo
+    if [[ -z "$fid" || -z "$pw" || ! "$fid" =~ ^[[:graph:]]{1,63}$ || ! "$pw" =~ ^[[:graph:]]{1,31}$ ]]; then
+        error_msg "${UI_TEXT[HDD_GAMES_FEEGA_BAD]}"
+        return 1
+    fi
+
+    sudo rm -rf "$WORK"   # prior runs leave root-owned files (pfsshell runs under sudo)
+    mkdir -p "$WORK"
+
+    "${py}" -c "import Crypto" 2>/dev/null || "${py}" -m pip install pycryptodome >>"${LOG_FILE}" 2>&1
+
+    if printf '%s\n' "$pw" | "${py}" "$FEEGA_TOOL" --device "$DEVICE" --pfsshell "$PFS_SHELL" \
+            --work "$WORK" --id "$fid" --apply >>"${LOG_FILE}" 2>&1; then
+        center_title "[✓] ${UI_TEXT[HDD_GAMES_FEEGA_DONE]}"
+    else
+        error_msg "${UI_TEXT[HDD_GAMES_FEEGA_FAIL]}"
+        sudo rm -rf "$WORK"
+        clean_up
+        return 1
+    fi
+    pw=""
+    sudo rm -rf "$WORK"
+    clean_up
+    echo
+    center_text "${UI_TEXT[CONTINUE]}"
+    read -n 1 -s -r -p "" </dev/tty
+}
+
 clear
 trap 'echo; exit 130' INT
 trap exit_script EXIT
@@ -449,6 +501,7 @@ while true; do
         HDD_GAMES_MENU_OPTION_4
         HDD_GAMES_MENU_OPTION_5
         HDD_GAMES_MENU_OPTION_6
+        HDD_GAMES_MENU_OPTION_7
     )
     center_menu
     display_menu
@@ -461,6 +514,7 @@ while true; do
         4) option_four ;;
         5) option_five ;;
         6) option_six ;;
+        7) option_seven ;;
         b|B) break ;;
         *)
             printf "%*s%s " "$((padding - 3))" "" "${UI_TEXT[MENU_INVALID]}"
