@@ -251,6 +251,7 @@ display_menu() {
     printf "%*s%s\n\n" "$padding" "3) " "${UI_TEXT[HDD_GAMES_MENU_OPTION_3]}"
     printf "%*s%s\n\n" "$padding" "4) " "${UI_TEXT[HDD_GAMES_MENU_OPTION_4]}"
     printf "%*s%s\n\n" "$padding" "5) " "${UI_TEXT[HDD_GAMES_MENU_OPTION_5]}"
+    printf "%*s%s\n\n" "$padding" "6) " "${UI_TEXT[HDD_GAMES_MENU_OPTION_6]}"
     printf "%*s%s\n\n" "$padding" "b) " "${UI_TEXT[MENU_BACK]}"
     printf "%*s%s " "$((padding - 3))" "" "${UI_TEXT[MENU_PROMPT]}"
 }
@@ -332,6 +333,58 @@ option_five() {
     read -n 1 -s -r -p "" </dev/tty
 }
 
+# Make a support report: one zip with the drive report (hwaudit), each game's
+# boot record (/trace.bin's sector) and the toolkit logs, for a player who
+# cannot run the commands themselves. Reads the drive only. The zip goes next
+# to the logs the launcher already copies out (path_arg), else to logs/.
+option_six() {
+    local py="${SCRIPTS_DIR}/venv/bin/python3" out model zip shown
+    [[ -x "${py}" ]] || py="python3"
+    out="${path_arg:-${TOOLKIT_PATH}/logs}"
+
+    HDD_GAMES_SPLASH
+    center_title "${UI_TEXT[HDD_GAMES_REPORT_TITLE]}"
+    echo
+    center_text "${UI_TEXT[HDD_GAMES_REPORT_INFO]}"
+    echo
+    center_text "${UI_TEXT[CONTINUE_PROMPT]}"
+    echo
+    read -n 1 -s -r -p "" key </dev/tty
+    echo
+    case "$key" in
+        [yY]) ;;
+        *) return 0 ;;
+    esac
+
+    echo
+    center_text "${UI_TEXT[HDD_GAMES_REPORT_MODEL]}"
+    read -rp "" model </dev/tty
+    echo
+    center_text "${UI_TEXT[HDD_GAMES_REPORT_WAIT]}"
+
+    sudo blockdev --flushbufs "$DEVICE" 2>>"${LOG_FILE}"
+    if zip=$(sudo "${py}" "${HELPER_DIR}/support_report.py" --device "$DEVICE" \
+            --helper "${HELPER_DIR}" --logs "${TOOLKIT_PATH}/logs" --out "$out" \
+            --model "$model" 2>>"${LOG_FILE}") && [[ -n "$zip" ]]; then
+        echo "support report: $zip" >> "${LOG_FILE}"
+        # Show a Windows path when the file landed on a Windows drive.
+        shown="$zip"
+        if [[ "$zip" =~ ^/mnt/([a-z])/(.*)$ ]]; then
+            shown="${BASH_REMATCH[1]^^}:\\${BASH_REMATCH[2]//\//\\}"
+        fi
+        echo
+        center_title "[✓] ${UI_TEXT[HDD_GAMES_REPORT_DONE]}"
+        echo
+        center_text "$shown"
+    else
+        error_msg "${UI_TEXT[HDD_GAMES_REPORT_FAIL]}"
+        return 1
+    fi
+    echo
+    center_text "${UI_TEXT[CONTINUE]}"
+    read -n 1 -s -r -p "" </dev/tty
+}
+
 clear
 trap 'echo; exit 130' INT
 trap exit_script EXIT
@@ -375,6 +428,7 @@ while true; do
         HDD_GAMES_MENU_OPTION_3
         HDD_GAMES_MENU_OPTION_4
         HDD_GAMES_MENU_OPTION_5
+        HDD_GAMES_MENU_OPTION_6
     )
     center_menu
     display_menu
@@ -386,6 +440,7 @@ while true; do
         3) option_three ;;
         4) option_four ;;
         5) option_five ;;
+        6) option_six ;;
         b|B) break ;;
         *)
             printf "%*s%s " "$((padding - 3))" "" "${UI_TEXT[MENU_INVALID]}"
