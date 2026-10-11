@@ -31,19 +31,20 @@ def _pfs(pfsshell, lines):
 
 
 def write_spoof_netcnf(device, pfsshell, work, partition="__sysconf",
-                       remote_dir="etc/bnnetwork", name="netcnf000.dat"):
+                       remote_dir="etc/bnnetwork", name="netcnf000.dat", dns=None):
     """Write the spoof-keyed DHCP netcnf into __sysconf, then read it back.
 
     Creates etc/bnnetwork when the drive has none (a drive whose network was
     never set up from PSBBN): without it a failed `cd` left the put in the
     parent directory, where no game looks, and the step still reported
     success. Raises unless the file read back from <remote_dir>/<name> is
-    byte-identical and decodes with NETCNF_SPOOF_ID."""
+    byte-identical and decodes with NETCNF_SPOOF_ID. With `dns` the profile
+    uses that static DNS server instead of the router's."""
     stage = os.path.join(work, "ncstage")
     back = os.path.join(work, "ncverify")
     os.makedirs(stage, exist_ok=True)
     os.makedirs(back, exist_ok=True)
-    want = netcnf.build(NETCNF_SPOOF_ID)
+    want = netcnf.build(NETCNF_SPOOF_ID, dns=dns)
     with open(os.path.join(stage, name), "wb") as f:
         f.write(want)
     path = ["device %s" % device, "mount %s" % partition]

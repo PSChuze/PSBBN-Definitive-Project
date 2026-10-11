@@ -542,15 +542,26 @@ def verify_seal_serve(staged, four):
     return ok[0]
 
 
+# The loader points the game at its own network config (stub string at MAIN
+# 0x74d988): __sysconf/etc/openlobby/netcnf000.dat. PSBBN owns
+# etc/bnnetwork/netcnf000.dat, keyed to the console's real i.Link and rewritten
+# whenever the player redoes network settings there; the game decodes with the
+# psbb spoof, so it gets a file of its own and PSBBN's is left alone. The
+# game's copy uses our DNS, so the service names resolve to the revival
+# servers whatever the router hands out.
+NETCNF_DIR = "etc/openlobby"
+NETCNF_DNS = "82.221.100.125"
+
+
 def write_spoof_netcnf(device, pfsshell, work):
-    """Write a DHCP netcnf000.dat keyed to the loader's spoof id into __sysconf,
-    so the BB network config decodes on any console (the game reads it with the
-    EE's sceCdRI, which the loader spoofs to NETCNF_SPOOF_ID). Shared with the
-    other titles (netcnf_install: creates etc/bnnetwork if missing, reads the
-    file back); best-effort -- a failure here does not fail the game install."""
+    """Write the game's psbb-keyed DHCP config (static DNS NETCNF_DNS) to
+    __sysconf/NETCNF_DIR/netcnf000.dat and read it back (netcnf_install:
+    creates the directory); best-effort -- a failure here does not fail the
+    game install."""
     import netcnf_install
     assert netcnf_install.NETCNF_SPOOF_ID == NETCNF_SPOOF_ID
-    netcnf_install.write_spoof_netcnf(device, pfsshell, work)
+    netcnf_install.write_spoof_netcnf(device, pfsshell, work,
+                                      remote_dir=NETCNF_DIR, dns=NETCNF_DNS)
 
 
 def _netcnf_step(a):
@@ -559,7 +570,7 @@ def _netcnf_step(a):
     this must not live only in the fresh path)."""
     try:
         write_spoof_netcnf(a.device, a.pfsshell, a.work)
-        print("== netcnf: wrote spoof-keyed DHCP config to __sysconf and read it back (network fix)")
+        print("== netcnf: wrote the game's network config to __sysconf/%s (DNS %s) and read it back" % (NETCNF_DIR, NETCNF_DNS))
     except Exception as e:
         print("== netcnf: could not write __sysconf config (%r); run Fix network "
               "settings from the HDD Games menu" % e)

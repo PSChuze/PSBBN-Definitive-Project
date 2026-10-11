@@ -76,6 +76,9 @@ def main():
     ap.add_argument("--partition", default="__sysconf")
     ap.add_argument("--remote-dir", default="etc/bnnetwork")
     ap.add_argument("--name", default="netcnf000.dat")
+    ap.add_argument("--also-dir", default="etc/openlobby",
+                    help="more __sysconf dirs to write the same config to, comma "
+                    "separated (default: Bomberman's own copy); '' for none")
     ap.add_argument("--work", required=True, help="scratch dir")
     ap.add_argument("--ilink", help="key the config to this i.Link (16 hex) instead "
                     "of the psbb spoof")
@@ -127,44 +130,49 @@ def main():
               % (staged, ilink.hex()), file=sys.stderr)
         return
 
-    # A drive whose network was never set up from PSBBN has no etc/bnnetwork,
-    # and every cd into it fails. Create each level first; mkdir of a level
-    # that exists errors, so each one is its own best-effort run.
-    parts = [p for p in a.remote_dir.split("/") if p]
-    for i in range(len(parts)):
+    # The configured dir (PSBBN's etc/bnnetwork, read by Minna and pop'n) and
+    # Bomberman's own copy (its loader points the game at etc/openlobby, so
+    # PSBBN's real-keyed file can stay as it is).
+    dirs = [a.remote_dir] + [d for d in a.also_dir.split(",") if d and d != a.remote_dir]
+    for remote_dir in dirs:
+        # A drive whose network was never set up from PSBBN has no etc/bnnetwork,
+        # and every cd into it fails. Create each level first; mkdir of a level
+        # that exists errors, so each one is its own best-effort run.
+        parts = [p for p in remote_dir.split("/") if p]
+        for i in range(len(parts)):
+            try:
+                run_pfsshell(a.pfsshell, stage_dir,
+                             cd_lines(a.device, a.partition, "/".join(parts[:i]), stage_dir) +
+                             ["mkdir %s" % parts[i], "umount"])
+            except RuntimeError:
+                pass
+
+        # Write it back, replacing any existing file. The rm is best-effort (there
+        # may be none to remove; put then creates it).
         try:
             run_pfsshell(a.pfsshell, stage_dir,
-                         cd_lines(a.device, a.partition, "/".join(parts[:i]), stage_dir) +
-                         ["mkdir %s" % parts[i], "umount"])
+                         cd_lines(a.device, a.partition, remote_dir, stage_dir) + ["rm %s" % a.name, "umount"])
         except RuntimeError:
             pass
-
-    # Write it back, replacing any existing file. The rm is best-effort (there
-    # may be none to remove; put then creates it).
-    try:
         run_pfsshell(a.pfsshell, stage_dir,
-                     cd_lines(a.device, a.partition, a.remote_dir, stage_dir) + ["rm %s" % a.name, "umount"])
-    except RuntimeError:
-        pass
-    run_pfsshell(a.pfsshell, stage_dir,
-                 cd_lines(a.device, a.partition, a.remote_dir, stage_dir) + ["put %s" % a.name, "umount"])
+                     cd_lines(a.device, a.partition, remote_dir, stage_dir) + ["put %s" % a.name, "umount"])
 
-    # Read it back from where the games look and compare.
-    verify_dir = os.path.join(a.work, "verify")
-    os.makedirs(verify_dir, exist_ok=True)
-    got_path = os.path.join(verify_dir, a.name)
-    if os.path.exists(got_path):
-        os.remove(got_path)
-    run_pfsshell(a.pfsshell, verify_dir,
-                 cd_lines(a.device, a.partition, a.remote_dir, verify_dir) +
-                 ["get %s" % a.name, "umount"])
-    want = open(staged, "rb").read()
-    got = open(got_path, "rb").read() if os.path.exists(got_path) else None
-    if got != want:
-        raise SystemExit("read-back of %s/%s %s" % (
-            a.remote_dir, a.name, "missing" if got is None else "differs from what was written"))
-    print("wrote %s to %s/%s on %s" % (a.name, a.remote_dir, a.name, a.partition),
-          file=sys.stderr)
+        # Read it back from where the games look and compare.
+        verify_dir = os.path.join(a.work, "verify")
+        os.makedirs(verify_dir, exist_ok=True)
+        got_path = os.path.join(verify_dir, a.name)
+        if os.path.exists(got_path):
+            os.remove(got_path)
+        run_pfsshell(a.pfsshell, verify_dir,
+                     cd_lines(a.device, a.partition, remote_dir, verify_dir) +
+                     ["get %s" % a.name, "umount"])
+        want = open(staged, "rb").read()
+        got = open(got_path, "rb").read() if os.path.exists(got_path) else None
+        if got != want:
+            raise SystemExit("read-back of %s/%s %s" % (
+                remote_dir, a.name, "missing" if got is None else "differs from what was written"))
+        print("wrote %s to %s/%s on %s" % (a.name, remote_dir, a.name, a.partition),
+              file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -887,6 +887,11 @@ def audit(path, env, args):
             m["sysconf"]["netcnf000"] = netcnf_report(read_file(part, env, nc), env) if nc else dict(present=False)
             if nc:
                 m["sysconf"]["netcnf000"]["present"] = True
+            # Bomberman's own copy (its loader points the game here so PSBBN's
+            # real-keyed etc/bnnetwork file can stay as it is).
+            bc = (files or {}).get("/etc/openlobby/netcnf000.dat")
+            m["sysconf"]["netcnf_bomb"] = (dict(netcnf_report(read_file(part, env, bc), env),
+                                                present=True) if bc else dict(present=False))
             # A netcnf anywhere else (a put after a failed `cd bnnetwork`
             # lands in /etc or /) is not read by the games.
             m["sysconf"]["netcnf_files"] = {p: files[p]["size"] for p in (files or {})
@@ -1114,7 +1119,16 @@ def verdicts(m):
             "netcnf000.dat decodes with %s" % (
                 who or "NO known i.Link, keyed to %s (rewritten by a console's own "
                        "network setup?)" % nc.get("keyed_to")))
-    stray = [p for p in sc.get("netcnf_files", {}) if p != "/etc/bnnetwork/netcnf000.dat"]
+    bc = sc.get("netcnf_bomb", {})
+    if sc.get("present") and bc.get("present"):
+        add(8, "ok" if (bc.get("decodes_with") or "").startswith("psbb") else "FAIL", "bomb",
+            "etc/openlobby/netcnf000.dat (Bomberman's own) decodes with %s"
+            % (bc.get("decodes_with") or "nothing known, keyed to %s" % bc.get("keyed_to")))
+    elif sc.get("present"):
+        add(8, "info", "bomb", "etc/openlobby/netcnf000.dat absent (Bomberman loaders "
+            "from 2026-10-11 read it; reinstall/update Bomberman or run Fix network settings)")
+    stray = [p for p in sc.get("netcnf_files", {})
+             if p not in ("/etc/bnnetwork/netcnf000.dat", "/etc/openlobby/netcnf000.dat")]
     if stray:
         add(8, "risk", "*", "netcnf outside /etc/bnnetwork (not read by the games): %s"
             % ", ".join(sorted(stray)))
@@ -1316,6 +1330,11 @@ def summary(m):
                                    "decodes with %s" % nc.get("decodes_with")
                                    if nc.get("decodes_with") else
                                    "keyed to %s" % nc.get("keyed_to")))
+        bc = sc.get("netcnf_bomb", {})
+        w("  openlobby/netcnf000.dat (Bomberman): %s" % ("absent" if not bc.get("present") else
+                                                         "decodes with %s" % bc.get("decodes_with")
+                                                         if bc.get("decodes_with") else
+                                                         "keyed to %s" % bc.get("keyed_to")))
         w("  netcnf files: %s" % sc.get("netcnf_files"))
         if sc.get("feega"):
             w("  feega: %s" % sc["feega"])
