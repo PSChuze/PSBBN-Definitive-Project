@@ -30,7 +30,9 @@ Spec (JSON, translation/images.en.json): {"styles": {name: {edit keys}}, "textur
                     mode_x [a, b] takes the modes from those columns instead, and lo/hi drop
                     pixels outside that luma range (text ink) from the count
             "bestcol" every column replaced by one column of the clip: src_x if given, else the
-                    most typical column (fewest light pixels and row-mode mismatches)
+                    most typical column (fewest light pixels and row-mode mismatches); src_y
+                    reads that column from another row band (top row of the source, default
+                    the clip's y0), e.g. a clean button face elsewhere on the sheet
             "tile"  repeating pattern: each row rebuilt from the period-px strip just left of the
                     clip (src_l) and just right of it (src_r), blended across the clip; keys
                     period (default 12), src_l, src_r; src_tex = read the strips from another
@@ -430,7 +432,8 @@ def edit_texture(d, t, edits):
                 mode = np.array([np.bincount(r).argmax() for r in sub])
                 score = (lu > e.get("hi", 170)).sum(axis=0) * 2 + (sub != mode[:, None]).sum(axis=0)
                 sx = x0 + int(score.argmin())
-            col = idx0[y0:y1, sx]
+            sy = int(e.get("src_y", y0))
+            col = idx0[sy:sy + (y1 - y0), sx]
             reg[...] = pal[col][:, None, :]
             forced[y0:y1, x0:x1] = col[:, None]
         elif bg == "tile":

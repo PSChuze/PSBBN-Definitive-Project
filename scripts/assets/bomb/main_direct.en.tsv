@@ -430,5 +430,6 @@ dec/MAIN.BIN	va 0x74a458 / off 0x44a458	水	Wed	7
 dec/MAIN.BIN	va 0x74a460 / off 0x44a460	木	Thu	7	
 dec/MAIN.BIN	va 0x74a468 / off 0x44a468	金	Fri	7	
 dec/MAIN.BIN	va 0x74a470 / off 0x44a470	土	Sat	7	
+dec/MAIN.BIN	va 0x74a478 / off 0x44a478	%s/%s/%s（ %s曜日 ）	%s/%s/%s ( %s )	23	
 dec/MAIN.BIN	va 0x74a4b8 / off 0x44a4b8	%s/%sページ	Page %s/%s	19	
 dec/MAIN.BIN	va 0x74a6f0 / off 0x44a6f0	てすとてすと		15	
