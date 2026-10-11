@@ -184,6 +184,32 @@ nobu_accessflag() {
         echo "[!] access_flag25 write failed; the game may not pass its boot check. See logs/nobunaga-installer.log" >> "${LOG_FILE}"
     fi
     nobu_accessflag_etc
+    nobu_netcnf
+}
+
+# Nobunaga's own network config: the loader redirects NBONLINE's netcnf path
+# to /etc/openlobby/netcnf000.dat and serves the psbb spoof to the read that
+# decodes it, so write that file spoof-keyed (revival DNS) and read it back.
+# PSBBN's own etc/bnnetwork is never touched. Without it the game says "Could
+# not load network settings" (0x81020001) on any console whose bnnetwork is
+# keyed to another id. Best-effort: a failure is logged, the install goes on.
+nobu_netcnf() {
+    local pfs="${PFS_SHELL:-${HELPER_DIR}/PFS Shell.elf}" work
+    work="$(mktemp -d)"
+    if sudo env PYTHONPATH="${HELPER_DIR}/nobunaga/tools" "${NOBU_PY}" - "${DEVICE}" "${pfs}" "${work}" \
+            >> "${LOG_FILE}" 2>&1 <<'PY'
+import sys
+import netcnf_install
+dev, pfs, work = sys.argv[1:4]
+netcnf_install.write_spoof_netcnf(dev, pfs, work, remote_dir="etc/openlobby", dns="82.221.100.125")
+print("== netcnf: wrote Nobunaga's network config to __sysconf/etc/openlobby and read it back")
+PY
+    then
+        :
+    else
+        echo "[!] Could not write the network config (__sysconf/etc/openlobby). Run Fix network settings from the HDD Games menu. See logs/nobunaga-installer.log" | tee -a "${LOG_FILE}"
+    fi
+    sudo rm -rf "${work}"
 }
 
 # The game finds that record through the FILE __net:/etc/access_flag25 (its
