@@ -1241,6 +1241,29 @@ if [[ ${#UPDATE_SET[@]} -gt 0 ]]; then
     done
 fi
 
+# The Viewer's usr/ gets the files of the disc's default/usr/ template it
+# lacks. Square Enix's installer copies them in; installs made by this package
+# before 2026-10-14 did not, so those Viewers had no usr/all/url/ (the download
+# cache) and hung on any page with streamed music, and on wallpaper downloads.
+# Here it runs every time; on a drive that has them it writes nothing. See
+# usrtemplate.py.
+TOC=$(sudo "${HDL_DUMP}" toc "$DEVICE" 2>>"${LOG_FILE}")
+if on_drive "$VIEWER_KEY"; then
+    ucmds="${WORK_DIR}/usrtemplate.txt"
+    uwork="${WORK_DIR}/usrtemplate"
+    sudo rm -rf "$ucmds" "$uwork"
+    polsudo usrtemplate "$DEVICE" --title "$VIEWER_KEY" --work "$uwork" \
+        --out "$ucmds" >> "${LOG_FILE}" 2>&1
+    if [[ $? -eq 0 && -s "$ucmds" ]]; then
+        echo "${UI_TEXT[POL_DOING_WRITE]} $VIEWER_KEY"
+        sudo "${PFS_SHELL}" < "$ucmds" >> "${LOG_FILE}" 2>&1
+        polsudo usrtemplate "$DEVICE" --title "$VIEWER_KEY" --work "$uwork" \
+            --verify >> "${LOG_FILE}" 2>&1 \
+            || echo "  ${UI_TEXT[POL_ERROR_VERIFY]} $VIEWER_KEY"
+    fi
+    sudo rm -rf "$ucmds" "$uwork"
+fi
+
 # Every run ends with the plain modules on the drive in step with the updates
 # beside them, the Viewer's first. The Viewer and the titles update themselves
 # on the console, and on a plaintext drive that replaces only the keyed

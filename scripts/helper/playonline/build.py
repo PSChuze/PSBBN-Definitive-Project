@@ -190,10 +190,15 @@ def make_extras(title, src_dir, tmp):
 
         installed            a zero-byte marker
         pub/all/install.inf  a copy of the disc's default/pub/all/install.inf
-        usr/all/             where the Viewer writes its own settings
+        usr/                 a copy of the disc's default/usr/ template
 
-    Without `install.inf` the Viewer stops with error POL-1155. `usr/all` is
-    created empty to match an installed drive.
+    Without `install.inf` the Viewer stops with error POL-1155. The `usr`
+    template holds `usr/all/url/` (cert.db, rdthosts.bin, cache/dcfat0.bin),
+    the Viewer's download cache. The Viewer never creates that directory
+    itself: without it, every streamed `<bgsound>` .at3 reads about 144 KB,
+    stops reading the socket and hangs the page. Every donor drive Square
+    Enix's installer made has it. An empty `usr/all/` is still made when the
+    disc has no template.
     """
     # Only the Viewer partition has these. Square Enix's partitions for the
     # other titles carry no `installed` marker and no `usr/all`.
@@ -211,7 +216,14 @@ def make_extras(title, src_dir, tmp):
         with open(default_inf, "rb") as a, open(os.path.join(dst, "install.inf"), "wb") as b:
             b.write(a.read())
         made.append("pub/all/install.inf")
-    os.makedirs(os.path.join(tmp, "usr", "all"))
+    default_usr = os.path.join(src_dir, "POL", "install", "PS2", "default", "usr")
+    if os.path.isdir(default_usr):
+        shutil.copytree(default_usr, os.path.join(tmp, "usr"))
+        for dirpath, _dirs, names in os.walk(default_usr):
+            for name in names:
+                rel = os.path.relpath(os.path.join(dirpath, name), os.path.dirname(default_usr))
+                made.append(rel.replace(os.sep, "/"))
+    os.makedirs(os.path.join(tmp, "usr", "all"), exist_ok=True)
     made.append("usr/all/")
     return made
 
