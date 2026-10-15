@@ -446,6 +446,9 @@ def universal_to_plain(blob, what):
     if len(plain) != want:
         raise SystemExit("%s: decompressed to %d bytes, the container says %d"
                          % (what, len(plain), want))
+    from . import ffxiheap
+    if ffxiheap.is_boot_module(what):
+        plain = ffxiheap.apply(plain)       # FFXI 2016: heap patch, see ffxiheap.py
     return plain
 
 

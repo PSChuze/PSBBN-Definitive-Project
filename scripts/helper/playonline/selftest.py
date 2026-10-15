@@ -335,6 +335,37 @@ def check_ffxi_overlay():
     return out
 
 
+def check_ffxi_heap():
+    """Check the FFXI boot module heap patch's table and its refusals.
+
+    The retail module is not part of the installer, so this checks what can be
+    checked without it: every run lies inside the module and none overlap, and
+    a module that is not the retail one (wrong size, or right size with other
+    bytes) comes back unchanged.
+    """
+    from . import ffxiheap as fh
+    out = []
+    try:
+        spans = sorted((off, off + len(bytes.fromhex(h))) for off, h in fh.RUNS)
+        inside = all(0 <= a < b <= fh.SIZE for a, b in spans)
+        apart = all(spans[i][1] <= spans[i + 1][0] for i in range(len(spans) - 1))
+        aligned = all(a % 4 == 0 and (b - a) % 4 == 0 for a, b in spans)
+        out.append(("ffxi heap: patch runs fit the module", inside and apart and aligned,
+                    "%d runs, %d bytes" % (len(spans), sum(b - a for a, b in spans))))
+        other = bytes(fh.SIZE)
+        short = b"\0" * 64
+        out.append(("ffxi heap: a module that is not retail is left alone",
+                    fh.apply(other) is other and fh.apply(short) is short
+                    and fh.state(other) == "other", "unchanged"))
+        names = (fh.is_boot_module("image/ffxi/prog/ps2/ffxi_pol.pex.enc.tmp2")
+                 and fh.is_boot_module("ffxi_pol.pex")
+                 and not fh.is_boot_module("image/ffxi/prog/ps2/dancer.enc"))
+        out.append(("ffxi heap: only FFXI's boot module is matched", names, "by name"))
+    except Exception as exc:                      # a broken check must show
+        out.append(("ffxi heap", False, repr(exc)))
+    return out
+
+
 def check_patch_host():
     """The patch-host rewrite, on made-up data: no disc is needed.
 
@@ -476,6 +507,12 @@ def run(paths, disc_paths=()):
 
     print("  ffxi overlay")
     for name, ok, detail in check_ffxi_overlay():
+        mark = {True: "ok  ", False: "FAIL", None: "skip"}[ok]
+        print("    %s %-46s %s" % (mark, name, detail))
+        results.append(ok)
+
+    print("  ffxi heap patch")
+    for name, ok, detail in check_ffxi_heap():
         mark = {True: "ok  ", False: "FAIL", None: "skip"}[ok]
         print("    %s %-46s %s" % (mark, name, detail))
         results.append(ok)
